@@ -1,0 +1,12 @@
+{
+  "name": "twitch-dl",
+  "version": "0.1.0",
+  "author": "DmitryScaletta",
+  "description": "Simple script for downloading twitch VODs from start during live broadcast.",
+  "keywords": [],
+  "license": "MIT",
+  "bin": "twitch-dl.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
