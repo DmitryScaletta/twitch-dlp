@@ -118,10 +118,13 @@ const fetchGql = async (body, resultKey, description = 'metadata') => {
 };
 
 const getAccessToken = (type, id) => {
-  const paramName = type === 'video' ? 'id' : 'channelName';
+  const PARAM_NAMES = {
+    video: 'id',
+    stream: 'channelName',
+  };
   const query = `{
     ${type}PlaybackAccessToken(
-      ${paramName}: "${id}"
+      ${PARAM_NAMES[type]}: "${id}"
       params: {
         platform: "web"
         playerBackend: "mediaplayer"
@@ -440,6 +443,7 @@ const downloadVideo = async (videoId, args) => {
   let outputFilename;
   let video;
   let frags;
+  let fragsCount = 0;
   const fragsMetadata = [];
   let isFinalCycle = null;
   while (true) {
@@ -453,12 +457,23 @@ const downloadVideo = async (videoId, args) => {
         getVideoInfo(video),
       );
     }
-    if (isFinalCycle === null) {
-      isFinalCycle =
-        !getIsVodLive(video) &&
-        getSecondsAfterStreamEnded(video) > WAIT_AFTER_STREAM_ENDED_SECONDS;
+
+    const isLive = getIsVodLive(video);
+    const hasNewFrags = frags.length > fragsCount;
+    fragsCount = frags.length;
+    if (!hasNewFrags) {
+      if (isLive) {
+        console.log(
+          `Waiting for new segments, retrying every ${WAIT_BETWEEN_CYCLES_SECONDS} second(s)`,
+        );
+        await setTimeout(WAIT_BETWEEN_CYCLES_SECONDS * 1000);
+      } else {
+        isFinalCycle = true;
+        await waitAfterStreamEnded(video, WAIT_AFTER_STREAM_ENDED_SECONDS);
+      }
+      continue;
     }
-    let fragsDownloaded = 0;
+
     for (const [i, fragUrl] of frags.entries()) {
       const fragFilename = path.resolve(
         '.',
@@ -480,22 +495,10 @@ const downloadVideo = async (videoId, args) => {
       await fsp.rename(fragFilenameTmp, fragFilename);
       const { size } = await fsp.stat(fragFilename);
       fragsMetadata.push({ size, time: endTime - startTime });
-      fragsDownloaded += 1;
     }
-    if (fragsDownloaded) process.stdout.write('\n');
+    process.stdout.write('\n');
 
     if (isFinalCycle) break;
-
-    const isLive = getIsVodLive(video);
-    if (isLive) {
-      console.log(
-        `Waiting for new segments, retrying every ${WAIT_BETWEEN_CYCLES_SECONDS} second(s)`,
-      );
-      await setTimeout(WAIT_BETWEEN_CYCLES_SECONDS * 1000);
-    } else {
-      isFinalCycle = true;
-      await waitAfterStreamEnded(video, WAIT_AFTER_STREAM_ENDED_SECONDS);
-    }
   }
 
   const fragFilenames = frags.map((_, i) => getFragFilename(outputFilename, i));
@@ -605,9 +608,8 @@ const main = async () => {
         );
         await setTimeout(retryStreamsDelay * 1000);
         continue;
-      } else {
-        throw new Error('The channel is not currently live');
       }
+      throw new Error('The channel is not currently live');
     }
 
     if (isLiveFromStart) {
@@ -622,9 +624,8 @@ const main = async () => {
           );
           await setTimeout(retryStreamsDelay * 1000);
           continue;
-        } else {
-          throw new Error(VIDEO_NOT_FOUND_MESSAGE);
         }
+        throw new Error(VIDEO_NOT_FOUND_MESSAGE);
       }
       await downloadVideo(broadcast.stream.archiveVideo.id, args);
     }
