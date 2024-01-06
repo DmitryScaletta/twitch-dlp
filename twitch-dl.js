@@ -9,6 +9,7 @@ const childProcess = require('node:child_process');
 const { parseArgs } = require('node:util');
 const { setTimeout } = require('timers/promises');
 
+const CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko';
 const HELP = `
 Simple script for downloading twitch VODs from start during live broadcast.
 
@@ -22,10 +23,9 @@ LINK                        Link to the VOD or channel
 
 Options:
 -h, --help                  Show this help message and exit
--f, --format FORMAT         Select format to download.
+-f, --format FORMAT         Select format to download
                             Available formats:
-                            - best: best quality
-                            - Audio_Only: audio only
+                            - best: best quality (default)
                             - FORMAT: select format by format_id
 -F, --list-formats          List available formats and exit
 -o, --output OUTPUT         Output filename template
@@ -40,12 +40,18 @@ Options:
                             - %(upload_date)s
                             - %(release_date)s
                             - %(view_count)s
+--live-from-start           Download live streams from the start
+--retry-streams DELAY       Retry fetching the list of available
+                            streams until streams are found
+                            while waiting DELAY second(s)
+                            between each attempt.
 -r, --limit-rate RATE       Limit download rate to RATE
 --keep-fragments            Keep fragments after downloading
 
 Requires:
 - ffmpeg
 - curl (if using --limit-rate option)
+- streamlink (if downloading by channel link without --live-from-start)
 `;
 
 const spawn = (command, args, silent = false) =>
@@ -101,7 +107,7 @@ const fetchGql = async (body, resultKey, description = 'metadata') => {
     const res = await fetch('https://gql.twitch.tv/gql', {
       method: 'POST',
       body: JSON.stringify(body),
-      headers: { 'Client-Id': 'kimne78kx3ncx6brgo4mv6wki5h1ko' },
+      headers: { 'Client-Id': CLIENT_ID },
     });
     const json = await res.json();
     return json.data[resultKey];
@@ -172,7 +178,7 @@ const getVideoMetadata = (videoId) =>
     'video metadata',
   );
 
-const getBroadcastId = (channelId) =>
+const getBroadcast = (channelId) =>
   fetchGql(
     {
       operationName: 'FFZ_BroadcastID',
@@ -226,6 +232,14 @@ const parseFormats = (manifest) => {
       url: m[3],
     });
   }
+  return formats;
+};
+
+const getVideoFormats = async (videoId) => {
+  const accessToken = await getAccessToken('video', videoId);
+  const manifest = await getManifest(videoId, accessToken);
+  const formats = parseFormats(manifest);
+  formats.sort((a, b) => b.width - a.width);
   return formats;
 };
 
@@ -322,8 +336,12 @@ const waitAfterStreamEnded = async (video, secondsToSleep = 0) => {
   console.log(`We need to wait ${minutesLeft} more minutes.`);
   console.log('Press any key to skip waiting.');
   const ac = new AbortController();
-  const handleKeypress = () => ac.abort();
-  readline.emitKeypressEvents(process.stdin);
+  const handleKeypress = (s, key) => {
+    if (key.ctrl == true && key.name == 'c') process.exit();
+    ac.abort();
+  };
+  const interface = readline.createInterface({ input: process.stdin });
+  readline.emitKeypressEvents(process.stdin, interface);
   process.stdin.setRawMode(true);
   process.stdin.on('keypress', handleKeypress);
   try {
@@ -331,21 +349,32 @@ const waitAfterStreamEnded = async (video, secondsToSleep = 0) => {
   } catch {}
   process.stdin.setRawMode(false);
   process.stdin.off('keypress', handleKeypress);
+  interface.close();
 };
 
-const getOutputFilename = (template, video) => {
-  const info = {
-    id: `v${video.id}`,
-    title: video.title || 'Untitled Broadcast',
-    description: video.description,
-    duration: video.lengthSeconds,
-    uploader: video.owner.displayName,
-    uploader_id: video.owner.login,
-    upload_date: video.createdAt,
-    release_date: video.publishedAt,
-    view_count: video.viewCount,
-    ext: 'mp4',
-  };
+const getStreamInfo = (channel, channelLogin) => ({
+  id: channel.stream.id,
+  title: channel.lastBroadcast.title || 'Untitled Broadcast',
+  uploader: channelLogin,
+  uploader_id: channel.id,
+  upload_date: channel.stream.createdAt,
+  ext: 'mp4',
+});
+
+const getVideoInfo = (video) => ({
+  id: `v${video.id}`,
+  title: video.title || 'Untitled Broadcast',
+  description: video.description,
+  duration: video.lengthSeconds,
+  uploader: video.owner.displayName,
+  uploader_id: video.owner.login,
+  upload_date: video.createdAt,
+  release_date: video.publishedAt,
+  view_count: video.viewCount,
+  ext: 'mp4',
+});
+
+const getOutputFilename = (template, info) => {
   let outputFilename = template;
   for (const [name, value] of Object.entries(info)) {
     let newValue = value;
@@ -355,77 +384,36 @@ const getOutputFilename = (template, video) => {
   return path.resolve('.', outputFilename.replace(/[/\\?%*:|"<>]/g, ''));
 };
 
-const getVodId = async (link) => {
-  const VOD_REGEX = /^https:\/\/(?:www\.)?twitch\.tv\/videos\/(\d+)/;
-  const CHANNEL_REGEX = /^https:\/\/(?:www\.)?twitch\.tv\/([^/#?]+)/;
-
-  let m = VOD_REGEX.exec(link);
-  if (m) return m[1];
-  m = CHANNEL_REGEX.exec(link);
-  if (!m) throw new Error('Wrong link');
-  const channelLogin = m[1];
-  const channel = await getStreamMetadata(channelLogin);
-  const broadcast = await getBroadcastId(channel.id);
-  if (!broadcast.stream.archiveVideo) {
-    throw new Error(
-      "Sorry, we couldn't find an archived video for the current broadcast.",
-    );
+const downloadWithStreamlink = async (link, channel, channelLogin, args) => {
+  if (args.values['list-formats']) {
+    await spawn('streamlink', ['-v', link]);
+    process.exit();
   }
-  return broadcast.stream.archiveVideo.id;
+
+  const info = getStreamInfo(channel, channelLogin);
+  const now = new Date()
+    .toISOString()
+    .slice(0, 16)
+    .replace('T', ' ')
+    .replace(':', '_');
+  const outputTemplate = `%(uploader)s (live) ${now} [%(id)s].%(ext)s`;
+  const outputFilename = getOutputFilename(outputTemplate, info);
+  const streamlinkArgs = [
+    '-o',
+    outputFilename,
+    link,
+    args.values.format,
+    '--twitch-disable-ads',
+  ];
+  return spawn('streamlink', streamlinkArgs);
 };
 
-const main = async () => {
-  const args = parseArgs({
-    args: process.argv.slice(2),
-    options: {
-      help: {
-        type: 'boolean',
-        short: 'h',
-      },
-      format: {
-        type: 'string',
-        short: 'f',
-        default: 'best',
-      },
-      'list-formats': {
-        type: 'boolean',
-        short: 'F',
-        default: false,
-      },
-      output: {
-        type: 'string',
-        short: 'o',
-        default: '%(title)s [%(id)s].%(ext)s',
-      },
-      'keep-fragments': {
-        type: 'boolean',
-        default: false,
-      },
-      'limit-rate': {
-        type: 'string',
-        short: 'r',
-      },
-    },
-    allowPositionals: true,
-  });
-
-  if (args.values.help || args.positionals.length === 0) {
-    console.log(HELP);
-    return;
-  }
-
-  if (args.positionals.length > 1) throw new Error('Expected only one link');
-  const [link] = args.positionals;
-
-  const vodId = await getVodId(link);
-  const accessToken = await getAccessToken('video', vodId);
-  const manifest = await getManifest(vodId, accessToken);
-  const formats = parseFormats(manifest);
-  formats.sort((a, b) => b.width - a.width);
+const downloadVideo = async (videoId, args) => {
+  const formats = await getVideoFormats(videoId);
 
   if (args.values['list-formats']) {
     console.table(formats.map(({ url, ...rest }) => rest));
-    return;
+    process.exit();
   }
 
   const downloadFormat =
@@ -449,10 +437,11 @@ const main = async () => {
   while (true) {
     [frags, video] = await Promise.all([
       getFragments(downloadFormat.url),
-      getVideoMetadata(vodId),
+      getVideoMetadata(videoId),
     ]);
     if (!outputFilename) {
-      outputFilename = getOutputFilename(args.values.output, video);
+      const info = getVideoInfo(video);
+      outputFilename = getOutputFilename(args.values.output, info);
     }
     if (isFinalCycle === null) {
       isFinalCycle =
@@ -489,7 +478,9 @@ const main = async () => {
 
     const isLive = getIsVodLive(video);
     if (isLive) {
-      console.log(`Sleeping for ${WAIT_BETWEEN_CYCLES_SECONDS} seconds...`);
+      console.log(
+        `Waiting for new segments, retrying every ${WAIT_BETWEEN_CYCLES_SECONDS} second(s)`,
+      );
       await setTimeout(WAIT_BETWEEN_CYCLES_SECONDS * 1000);
     } else {
       isFinalCycle = true;
@@ -520,6 +511,121 @@ const main = async () => {
   fsp.unlink(ffmpegListFilename);
   if (!args.values['keep-fragments']) {
     await Promise.all(fragFilenames.map(fsp.unlink));
+  }
+};
+
+const parseLink = (link) => {
+  const VOD_REGEX = /^https:\/\/(?:www\.)?twitch\.tv\/videos\/(\d+)/;
+  const CHANNEL_REGEX = /^https:\/\/(?:www\.)?twitch\.tv\/([^/#?]+)/;
+
+  let m = VOD_REGEX.exec(link);
+  if (m) return { linkType: 'video', linkId: m[1] };
+  m = CHANNEL_REGEX.exec(link);
+  if (m) return { linkType: 'channel', linkId: m[1] };
+  throw new Error('Wrong link');
+};
+
+const main = async () => {
+  const args = parseArgs({
+    args: process.argv.slice(2),
+    options: {
+      help: {
+        type: 'boolean',
+        short: 'h',
+      },
+      format: {
+        type: 'string',
+        short: 'f',
+        default: 'best',
+      },
+      'list-formats': {
+        type: 'boolean',
+        short: 'F',
+        default: false,
+      },
+      output: {
+        type: 'string',
+        short: 'o',
+        default: '%(title)s [%(id)s].%(ext)s',
+      },
+      'keep-fragments': {
+        type: 'boolean',
+        default: false,
+      },
+      'limit-rate': {
+        type: 'string',
+        short: 'r',
+      },
+      'live-from-start': {
+        type: 'boolean',
+      },
+      'retry-streams': {
+        type: 'string',
+      },
+    },
+    allowPositionals: true,
+  });
+
+  if (args.values.help || args.positionals.length === 0) {
+    console.log(HELP);
+    return;
+  }
+
+  if (args.values['retry-streams']) {
+    const delay = Number.parseInt(args.values['retry-streams']);
+    args.values['retry-streams'] = delay;
+    if (!delay || delay < 0) throw new Error('Wrong retry streams delay');
+  }
+  if (args.positionals.length > 1) throw new Error('Expected only one link');
+
+  const [link] = args.positionals;
+  const { linkType, linkId } = parseLink(link);
+
+  if (linkType === 'video') return downloadVideo(linkId, args);
+
+  const channelLogin = linkId;
+  const retryStreamsDelay = args.values['retry-streams'];
+  const isLiveFromStart = args.values['live-from-start'];
+  while (true) {
+    const channel = await getStreamMetadata(channelLogin);
+
+    if (!channel.stream) {
+      if (retryStreamsDelay) {
+        console.log(
+          `Waiting for streams, retrying every ${retryStreamsDelay} second(s)`,
+        );
+        await setTimeout(retryStreamsDelay * 1000);
+        continue;
+      } else {
+        throw new Error('The channel is not currently live');
+      }
+    }
+
+    if (isLiveFromStart) {
+      const broadcast = await getBroadcast(channel.id);
+      if (!broadcast.stream.archiveVideo) {
+        const VIDEO_NOT_FOUND_MESSAGE =
+          "Sorry, we couldn't find an archived video for the current broadcast";
+        if (retryStreamsDelay) {
+          console.warn(VIDEO_NOT_FOUND_MESSAGE);
+          console.log(
+            `Waiting for VOD, retrying every ${retryStreamsDelay} second(s)`,
+          );
+          await setTimeout(retryStreamsDelay * 1000);
+          continue;
+        } else {
+          throw new Error(VIDEO_NOT_FOUND_MESSAGE);
+        }
+      }
+      await downloadVideo(broadcast.stream.archiveVideo.id, args);
+    }
+
+    if (!isLiveFromStart) {
+      const channelLink = `https://www.twitch.tv/${channelLogin}`;
+      await downloadWithStreamlink(channelLink, channel, channelLogin, args);
+    }
+
+    if (!retryStreamsDelay) break;
   }
 };
 

@@ -4,9 +4,10 @@ Simple script for downloading twitch VODs from start during live broadcast.
 
 ## Features
 
-- Similar to `yt-dlp` (`youtube-dl`) syntax
-- Download live VODs from start (like `--live-from-start` in `yt-dlp`)
+- Download live VODs from start (`--live-from-start`)
+- Watch channel status. If it becomes live, start downloading (`--retry-streams DELAY`)
 - Supports VOD links and channel links
+- Similar to `yt-dlp` (`youtube-dl`) syntax
 - Zero dependencies
 
 ## Usage
@@ -27,13 +28,24 @@ yarn dlx twitch-dl LINK
 ### Examples
 
 ```bash
-# Download live stream from start using channel link
-npx twitch-dl https://www.twitch.tv/xqc
+# Download a VOD from start using channel link, continue until stream ends
+npx twitch-dl https://www.twitch.tv/xqc --live-from-start
 
-# Download VOD. If it's live, wait until stream ends
+# Download a VOD. If it's live, continue until stream ends
 npx twitch-dl https://www.twitch.tv/videos/2022789761
 
-# Check available formats
+# Download live stream from the current time using streamlink
+npx twitch-dl https://www.twitch.tv/xqc
+
+# Check every 60 seconds is channel live
+# If it's live, start to download it using streamlink
+npx twitch-dl https://www.twitch.tv/xqc --retry-streams 60
+
+# Check every 60 seconds is channel live
+# If it's live, start to download it's VOD from start (if available)
+npx twitch-dl https://www.twitch.tv/xqc --retry-streams 60 --live-from-start
+
+# Display available formats
 npx twitch-dl https://www.twitch.tv/videos/2022789761 -F
 
 # Download specified format
@@ -50,10 +62,9 @@ npx twitch-dl https://www.twitch.tv/videos/2022789761 -r 720k
 
 ```text
 -h, --help                  Show this help message and exit
--f, --format FORMAT         Select format to download.
+-f, --format FORMAT         Select format to download
                             Available formats:
-                            - best: best quality
-                            - Audio_Only: audio only
+                            - best: best quality (default)
                             - FORMAT: select format by format_id
 -F, --list-formats          List available formats and exit
 -o, --output OUTPUT         Output filename template
@@ -68,11 +79,18 @@ npx twitch-dl https://www.twitch.tv/videos/2022789761 -r 720k
                             - %(upload_date)s
                             - %(release_date)s
                             - %(view_count)s
+--live-from-start           Download live streams from the start
+--retry-streams DELAY       Retry fetching the list of available
+                            streams until streams are found
+                            while waiting DELAY second(s)
+                            between each attempt.
 -r, --limit-rate RATE       Limit download rate to RATE
 --keep-fragments            Keep fragments after downloading
 ```
 
 ## Formats example
+
+For VODs
 
 ```bash
 ┌─────────┬──────────────┬────────┬────────┐
@@ -88,7 +106,18 @@ npx twitch-dl https://www.twitch.tv/videos/2022789761 -r 720k
 └─────────┴──────────────┴────────┴────────┘
 ```
 
+For live streams (streamlink)
+
+```bash
+Available streams: audio_only, 160p (worst), 360p, 480p, 720p, 720p60, 1080p60 (best)
+```
+
+```bash
+Available streams: audio_only, 160p (worst), 360p, 480p, 720p, 720p60_alt, 720p60 (best)
+```
+
 ## Requires
 
-- ffmpeg
-- curl (if using `--limit-rate` option)
+- **ffmpeg**
+- **curl** (if using `--limit-rate` option)
+- **streamlink** (if downloading by channel link without `--live-from-start`)
