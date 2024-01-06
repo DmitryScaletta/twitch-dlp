@@ -257,6 +257,12 @@ const getFragments = async (url) => {
 };
 
 const showProgress = (frags, fragsMetadata, i) => {
+  const COLOR = {
+    reset: '\x1b[0m',
+    green: '\x1b[32m',
+    yellow: '\x1b[33m',
+    cyan: '\x1b[36m',
+  };
   const fragsFullSize = fragsMetadata.reduce((acc, f) => acc + f.size, 0);
   const avgFragSize = fragsFullSize / fragsMetadata.length;
   const last5frags = fragsMetadata.slice(-5);
@@ -282,7 +288,7 @@ const showProgress = (frags, fragsMetadata, i) => {
 
   const LOCALE = 'en-US';
   const progress = [
-    '[download]',
+    `[download]${COLOR.cyan}`,
     new Intl.NumberFormat(LOCALE, {
       style: 'percent',
       minimumFractionDigits: 1,
@@ -290,7 +296,7 @@ const showProgress = (frags, fragsMetadata, i) => {
     })
       .format(downloadedPercent || 0)
       .padStart(6, ' '),
-    'of ~',
+    `${COLOR.reset}of ~`,
     new Intl.NumberFormat(LOCALE, {
       notation: 'compact',
       style: 'unit',
@@ -299,7 +305,7 @@ const showProgress = (frags, fragsMetadata, i) => {
     })
       .format(estSize.value)
       .padStart(9, ' '),
-    'at',
+    `at${COLOR.green}`,
     new Intl.NumberFormat(LOCALE, {
       notation: 'compact',
       style: 'unit',
@@ -308,14 +314,14 @@ const showProgress = (frags, fragsMetadata, i) => {
     })
       .format(currentSpeed.value)
       .padStart(11, ' '),
-    'ETA',
+    `${COLOR.reset}ETA${COLOR.yellow}`,
     new Intl.DateTimeFormat('en-GB', {
       hour: 'numeric',
       minute: 'numeric',
       second: 'numeric',
       timeZone: 'GMT',
     }).format((estTimeLeftSec || 0) * 1000),
-    `(frag ${i}/${frags.length})\r`,
+    `${COLOR.reset}(frag ${i}/${frags.length})\r`,
   ].join(' ');
   process.stdout.write(progress);
 };
