@@ -259,17 +259,16 @@ const getFragments = async (url) => {
 const showProgress = (frags, fragsMetadata, i) => {
   const fragsFullSize = fragsMetadata.reduce((acc, f) => acc + f.size, 0);
   const avgFragSize = fragsFullSize / fragsMetadata.length;
-  const avgSpeedBytePerSec =
-    fragsMetadata
-      .map((f) => (f.size / f.time) * 1000)
-      .reduce((a, b) => a + b, 0) / fragsMetadata.length;
+  const last5frags = fragsMetadata.slice(-5);
+  const currentSpeedBps =
+    last5frags.map((f) => (f.size / f.time) * 1000).reduce((a, b) => a + b, 0) /
+    last5frags.length;
 
   const estFullSize = avgFragSize * frags.length;
-  const estDownloadedSize = avgFragSize * (frags.length - i);
+  const estDownloadedSize = avgFragSize * (i + 1);
   const estSizeLeft = estFullSize - estDownloadedSize;
-  // TODO: fix this
-  const estTimeLeftSec = estSizeLeft / avgSpeedBytePerSec;
-  const downloadedPercent = 1 - estDownloadedSize / estFullSize;
+  const estTimeLeftSec = estSizeLeft / currentSpeedBps;
+  const downloadedPercent = estDownloadedSize / estFullSize;
 
   const getValueAndUnit = (n) => {
     const units = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte'];
@@ -279,7 +278,7 @@ const showProgress = (frags, fragsMetadata, i) => {
   };
 
   const estSize = getValueAndUnit(estFullSize || 0);
-  const avgSpeed = getValueAndUnit(avgSpeedBytePerSec || 0);
+  const currentSpeed = getValueAndUnit(currentSpeedBps || 0);
 
   const LOCALE = 'en-US';
   const progress = [
@@ -304,10 +303,10 @@ const showProgress = (frags, fragsMetadata, i) => {
     new Intl.NumberFormat(LOCALE, {
       notation: 'compact',
       style: 'unit',
-      unit: `${avgSpeed.unit}-per-second`,
+      unit: `${currentSpeed.unit}-per-second`,
       unitDisplay: 'narrow',
     })
-      .format(avgSpeed.value)
+      .format(currentSpeed.value)
       .padStart(11, ' '),
     'ETA',
     new Intl.DateTimeFormat('en-GB', {
