@@ -95,7 +95,7 @@ const fetchText = async (url, description = 'metadata') => {
   }
 };
 
-const gqlRequest = async (body, resultKey, description = 'metadata') => {
+const fetchGql = async (body, resultKey, description = 'metadata') => {
   console.log(`Downloading ${description}`);
   try {
     const res = await fetch('https://gql.twitch.tv/gql', {
@@ -111,29 +111,30 @@ const gqlRequest = async (body, resultKey, description = 'metadata') => {
   }
 };
 
-const getAccessToken = (videoId) =>
-  gqlRequest(
-    {
-      query: `{
-        videoPlaybackAccessToken(
-          id: "${videoId}"
-          params: {
-            platform: "web"
-            playerBackend: "mediaplayer"
-            playerType: "site"
-          }
-        ) {
-          value
-          signature
-        }
-      }`,
-    },
-    'videoPlaybackAccessToken',
-    'access token',
+const getAccessToken = (type, id) => {
+  const paramName = type === 'video' ? 'id' : 'channelName';
+  const query = `{
+    ${type}PlaybackAccessToken(
+      ${paramName}: "${id}"
+      params: {
+        platform: "web"
+        playerBackend: "mediaplayer"
+        playerType: "site"
+      }
+    ) {
+      value
+      signature
+    }
+  }`;
+  return fetchGql(
+    { query },
+    `${type}PlaybackAccessToken`,
+    `${type} access token`,
   );
+};
 
 const getStreamMetadata = (channelLogin) =>
-  gqlRequest(
+  fetchGql(
     {
       operationName: 'StreamMetadata',
       variables: {
@@ -152,7 +153,7 @@ const getStreamMetadata = (channelLogin) =>
   );
 
 const getVideoMetadata = (videoId) =>
-  gqlRequest(
+  fetchGql(
     {
       operationName: 'VideoMetadata',
       variables: {
@@ -172,7 +173,7 @@ const getVideoMetadata = (videoId) =>
   );
 
 const getBroadcastId = (channelId) =>
-  gqlRequest(
+  fetchGql(
     {
       operationName: 'FFZ_BroadcastID',
       variables: {
@@ -417,7 +418,7 @@ const main = async () => {
   const [link] = args.positionals;
 
   const vodId = await getVodId(link);
-  const accessToken = await getAccessToken(vodId);
+  const accessToken = await getAccessToken('video', vodId);
   const manifest = await getManifest(vodId, accessToken);
   const formats = parseFormats(manifest);
   formats.sort((a, b) => b.width - a.width);
