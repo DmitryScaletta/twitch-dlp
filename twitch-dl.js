@@ -358,6 +358,7 @@ const getStreamInfo = (channel, channelLogin) => ({
   uploader: channelLogin,
   uploader_id: channel.id,
   upload_date: channel.stream.createdAt,
+  release_date: channel.stream.createdAt,
   ext: 'mp4',
 });
 
@@ -385,19 +386,25 @@ const getOutputFilename = (template, info) => {
 };
 
 const downloadWithStreamlink = async (link, channel, channelLogin, args) => {
+  const getDefaultOutputTemplate = () => {
+    const now = new Date()
+      .toISOString()
+      .slice(0, 16)
+      .replace('T', ' ')
+      .replace(':', '_');
+    return `%(uploader)s (live) ${now} [%(id)s].%(ext)s`;
+  };
+
   if (args.values['list-formats']) {
     await spawn('streamlink', ['-v', link]);
     process.exit();
   }
 
-  const info = getStreamInfo(channel, channelLogin);
-  const now = new Date()
-    .toISOString()
-    .slice(0, 16)
-    .replace('T', ' ')
-    .replace(':', '_');
-  const outputTemplate = `%(uploader)s (live) ${now} [%(id)s].%(ext)s`;
-  const outputFilename = getOutputFilename(outputTemplate, info);
+  const outputFilename = getOutputFilename(
+    args.values.output || getDefaultOutputTemplate(),
+    getStreamInfo(channel, channelLogin),
+  );
+
   const streamlinkArgs = [
     '-o',
     outputFilename,
@@ -409,6 +416,10 @@ const downloadWithStreamlink = async (link, channel, channelLogin, args) => {
 };
 
 const downloadVideo = async (videoId, args) => {
+  const DEFAULT_OUTPUT_TEMPLATE = '%(title)s [%(id)s].%(ext)s';
+  const WAIT_AFTER_STREAM_ENDED_SECONDS = 5 * 60;
+  const WAIT_BETWEEN_CYCLES_SECONDS = 60;
+
   const formats = await getVideoFormats(videoId);
 
   if (args.values['list-formats']) {
@@ -426,9 +437,6 @@ const downloadVideo = async (videoId, args) => {
     video.previewThumbnailURL.match(/\/404_processing_[^.?#]+\.png/);
   const getFragFilename = (filename, i) => `${filename}.part-Frag${i}`;
 
-  const WAIT_AFTER_STREAM_ENDED_SECONDS = 5 * 60;
-  const WAIT_BETWEEN_CYCLES_SECONDS = 60;
-
   let outputFilename;
   let video;
   let frags;
@@ -440,8 +448,10 @@ const downloadVideo = async (videoId, args) => {
       getVideoMetadata(videoId),
     ]);
     if (!outputFilename) {
-      const info = getVideoInfo(video);
-      outputFilename = getOutputFilename(args.values.output, info);
+      outputFilename = getOutputFilename(
+        args.values.output || DEFAULT_OUTPUT_TEMPLATE,
+        getVideoInfo(video),
+      );
     }
     if (isFinalCycle === null) {
       isFinalCycle =
@@ -546,7 +556,6 @@ const main = async () => {
       output: {
         type: 'string',
         short: 'o',
-        default: '%(title)s [%(id)s].%(ext)s',
       },
       'keep-fragments': {
         type: 'boolean',
