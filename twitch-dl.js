@@ -476,9 +476,9 @@ const downloadVideo = async (videoId, args) => {
         isFinalCycle = true;
         await waitAfterStreamEnded(video, WAIT_AFTER_STREAM_ENDED_SECONDS);
       }
-      continue;
     }
 
+    let downloadedFragments = 0;
     for (const [i, fragUrl] of frags.entries()) {
       const fragFilename = path.resolve(
         '.',
@@ -500,8 +500,9 @@ const downloadVideo = async (videoId, args) => {
       await fsp.rename(fragFilenameTmp, fragFilename);
       const { size } = await fsp.stat(fragFilename);
       fragsMetadata.push({ size, time: endTime - startTime });
+      downloadedFragments += 1;
     }
-    process.stdout.write('\n');
+    if (downloadedFragments) process.stdout.write('\n');
 
     if (isFinalCycle) break;
   }
