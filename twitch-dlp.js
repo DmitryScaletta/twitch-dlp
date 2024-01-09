@@ -273,8 +273,11 @@ const showProgress = (frags, fragsMetadata, i) => {
   const estFullSize = avgFragSize * frags.length;
   const estDownloadedSize = avgFragSize * (i + 1);
   const estSizeLeft = estFullSize - estDownloadedSize;
-  const estTimeLeftSec = estSizeLeft / currentSpeedBps;
-  const downloadedPercent = estDownloadedSize / estFullSize;
+  let estTimeLeftSec = estSizeLeft / currentSpeedBps;
+  let downloadedPercent = estDownloadedSize / estFullSize;
+
+  if (estTimeLeftSec < 0 || Number.isNaN(estTimeLeftSec)) estTimeLeftSec = 0;
+  if (downloadedPercent > 1) downloadedPercent = 1;
 
   const getValueAndUnit = (n) => {
     const units = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte'];
