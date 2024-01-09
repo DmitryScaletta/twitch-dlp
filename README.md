@@ -1,4 +1,4 @@
-# twitch-dl
+# twitch-dlp
 
 Simple script for downloading twitch VODs from start during live broadcast.
 
@@ -8,7 +8,6 @@ Simple script for downloading twitch VODs from start during live broadcast.
 - Watch channel status. If it becomes live, start downloading (`--retry-streams DELAY`)
 - Supports VOD links and channel links
 - Similar to `yt-dlp` (`youtube-dl`) syntax
-- Zero dependencies
 
 ## Usage
 
@@ -16,46 +15,46 @@ Install [Node.js](https://nodejs.org/) v20 or newer.
 
 ```bash
 # npm
-npx twitch-dl LINK
+npx twitch-dlp LINK
 
 # pnpm
-pnpm dlx twitch-dl LINK
+pnpm dlx twitch-dlp LINK
 
 # yarn v2+
-yarn dlx twitch-dl LINK
+yarn dlx twitch-dlp LINK
 ```
 
 ### Examples
 
 ```bash
 # Download a VOD from start using channel link, continue until stream ends
-npx twitch-dl https://www.twitch.tv/xqc --live-from-start
+npx twitch-dlp https://www.twitch.tv/xqc --live-from-start
 
 # Download a VOD. If it's live, continue until stream ends
-npx twitch-dl https://www.twitch.tv/videos/2022789761
+npx twitch-dlp https://www.twitch.tv/videos/2022789761
 
 # Download live stream from the current time using streamlink
-npx twitch-dl https://www.twitch.tv/xqc
+npx twitch-dlp https://www.twitch.tv/xqc
 
 # Check every 60 seconds is channel live
 # If it's live, start to download it using streamlink
-npx twitch-dl https://www.twitch.tv/xqc --retry-streams 60
+npx twitch-dlp https://www.twitch.tv/xqc --retry-streams 60
 
 # Check every 60 seconds is channel live
 # If it's live, start to download it's VOD from start (if available)
-npx twitch-dl https://www.twitch.tv/xqc --retry-streams 60 --live-from-start
+npx twitch-dlp https://www.twitch.tv/xqc --retry-streams 60 --live-from-start
 
 # Display available formats
-npx twitch-dl https://www.twitch.tv/videos/2022789761 -F
+npx twitch-dlp https://www.twitch.tv/videos/2022789761 -F
 
 # Download specified format
-npx twitch-dl https://www.twitch.tv/videos/2022789761 -f 480p30
+npx twitch-dlp https://www.twitch.tv/videos/2022789761 -f 480p30
 
 # Change output template
-npx twitch-dl https://www.twitch.tv/videos/2022789761 -o "%(title)s [%(id)s].%(ext)s"
+npx twitch-dlp https://www.twitch.tv/videos/2022789761 -o "%(title)s [%(id)s].%(ext)s"
 
 # Limit download rate
-npx twitch-dl https://www.twitch.tv/videos/2022789761 -r 720k
+npx twitch-dlp https://www.twitch.tv/videos/2022789761 -r 720k
 ```
 
 ## Options

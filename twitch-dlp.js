@@ -13,10 +13,10 @@ const CLIENT_ID = 'kimne78kx3ncx6brgo4mv6wki5h1ko';
 const HELP = `
 Simple script for downloading twitch VODs from start during live broadcast.
 
-GitHub Repo: https://github.com/DmitryScaletta/twitch-dl
+GitHub Repo: https://github.com/DmitryScaletta/twitch-dlp
 
 Usage:
-npx twitch-dl LINK
+npx twitch-dlp LINK
 
 Positional arguments:
 LINK                        Link to the VOD or channel
