@@ -207,8 +207,8 @@ const getManifest = (videoId, accessToken) => {
     allow_spectre: 'true',
     player: 'twitchweb',
     playlist_include_framerate: 'true',
-    nauth: accessToken.value,
-    nauthsig: accessToken.signature,
+    sig: accessToken.signature,
+    token: accessToken.value,
   });
   const url = `https://usher.ttvnw.net/vod/${videoId}.m3u8?${params}`;
   return fetchText(url, 'video manifest');
