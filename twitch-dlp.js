@@ -428,7 +428,7 @@ const downloadWithStreamlink = async (link, channel, channelLogin, args) => {
 
 const downloadVideo = async (videoId, args) => {
   const DEFAULT_OUTPUT_TEMPLATE = '%(title)s [%(id)s].%(ext)s';
-  const WAIT_AFTER_STREAM_ENDED_SECONDS = 5 * 60;
+  const WAIT_AFTER_STREAM_ENDED_SECONDS = 8 * 60;
   const WAIT_BETWEEN_CYCLES_SECONDS = 60;
 
   const formats = await getVideoFormats(videoId);
