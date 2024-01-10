@@ -428,7 +428,7 @@ const downloadWithStreamlink = async (link, channel, channelLogin, args) => {
 
 const downloadVideo = async (videoId, args) => {
   const DEFAULT_OUTPUT_TEMPLATE = '%(title)s [%(id)s].%(ext)s';
-  const WAIT_AFTER_STREAM_ENDED_SECONDS = 8 * 60;
+  const WAIT_AFTER_STREAM_ENDED_SECONDS = 5 * 60;
   const WAIT_BETWEEN_CYCLES_SECONDS = 60;
 
   const formats = await getVideoFormats(videoId);
@@ -469,16 +469,17 @@ const downloadVideo = async (videoId, args) => {
     const isLive = getIsVodLive(video);
     const hasNewFrags = frags.length > fragsCount;
     fragsCount = frags.length;
-    if (!hasNewFrags) {
-      if (isLive) {
-        console.log(
-          `Waiting for new segments, retrying every ${WAIT_BETWEEN_CYCLES_SECONDS} second(s)`,
-        );
-        await setTimeout(WAIT_BETWEEN_CYCLES_SECONDS * 1000);
-      } else {
-        isFinalCycle = true;
-        await waitAfterStreamEnded(video, WAIT_AFTER_STREAM_ENDED_SECONDS);
-      }
+    if (!hasNewFrags && isLive) {
+      console.log(
+        `Waiting for new segments, retrying every ${WAIT_BETWEEN_CYCLES_SECONDS} second(s)`,
+      );
+      await setTimeout(WAIT_BETWEEN_CYCLES_SECONDS * 1000);
+      continue;
+    }
+    if (!hasNewFrags && !isLive && !isFinalCycle) {
+      await waitAfterStreamEnded(video, WAIT_AFTER_STREAM_ENDED_SECONDS);
+      isFinalCycle = true;
+      continue;
     }
 
     let downloadedFragments = 0;
