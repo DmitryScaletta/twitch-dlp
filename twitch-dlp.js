@@ -83,7 +83,7 @@ const downloadAndRetry = async (url, destPath, rateLimit, retryCount = 10) => {
   const downloader = rateLimit ? downloadWithCurl : downloadWithFetch;
   for (const i of Array.from({ length: retryCount })) {
     try {
-      await downloader(url, destPath, rateLimit);
+      return await downloader(url, destPath, rateLimit);
     } catch (e) {
       console.error(e.message);
       console.warn(`Can't download a url. Retry ${i + 1}`);
