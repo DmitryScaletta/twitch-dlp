@@ -83,7 +83,7 @@ const downloadAndRetry = async (url, destPath, rateLimit, retryCount = 10) => {
   const downloader = rateLimit ? downloadWithCurl : downloadWithFetch;
   for (const i of Array.from({ length: retryCount })) {
     try {
-      return downloader(url, destPath, rateLimit);
+      await downloader(url, destPath, rateLimit);
     } catch (e) {
       console.error(e.message);
       console.warn(`Can't download a url. Retry ${i + 1}`);
@@ -95,10 +95,11 @@ const fetchText = async (url, description = 'metadata') => {
   console.log(`Downloading ${description}`);
   try {
     const res = await fetch(url);
+    if (!res.ok) return null;
     return res.text();
   } catch (e) {
     console.error(`Unable to download ${description}`);
-    throw e;
+    return null;
   }
 };
 
@@ -110,11 +111,12 @@ const fetchGql = async (body, resultKey, description = 'metadata') => {
       body: JSON.stringify(body),
       headers: { 'Client-Id': CLIENT_ID },
     });
+    if (!res.ok) return null;
     const json = await res.json();
     return json.data[resultKey];
   } catch (e) {
     console.error(`Unable to download ${description}`);
-    throw e;
+    return null;
   }
 };
 
@@ -249,6 +251,7 @@ const getVideoFormats = async (videoId) => {
 
 const getFragments = async (url) => {
   const playlist = await fetchText(url, 'fragments list');
+  if (!playlist) return null;
   const baseUrl = url.split('/').slice(0, -1).join('/');
   return playlist
     .split('\n')
@@ -460,6 +463,13 @@ const downloadVideo = async (videoId, args) => {
       getFragments(downloadFormat.url),
       getVideoMetadata(videoId),
     ]);
+    if (!frags || !video) {
+      console.log(
+        `Can't fetch fragments or video metadata. Retry after ${WAIT_BETWEEN_CYCLES_SECONDS} second(s)`,
+      );
+      await setTimeout(WAIT_BETWEEN_CYCLES_SECONDS * 1000);
+      continue;
+    }
     if (!outputFilename) {
       outputFilename = getOutputFilename(
         args.values.output || DEFAULT_OUTPUT_TEMPLATE,
@@ -612,7 +622,7 @@ const main = async () => {
   while (true) {
     const channel = await getStreamMetadata(channelLogin);
 
-    if (!channel.stream) {
+    if (!channel?.stream) {
       if (retryStreamsDelay) {
         console.log(
           `Waiting for streams, retrying every ${retryStreamsDelay} second(s)`,
