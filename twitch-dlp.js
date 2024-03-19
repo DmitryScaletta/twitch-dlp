@@ -81,7 +81,7 @@ const downloadWithCurl = async (url, destPath, rateLimit) => {
 
 const downloadAndRetry = async (url, destPath, rateLimit, retryCount = 10) => {
   const downloader = rateLimit ? downloadWithCurl : downloadWithFetch;
-  for (const i of Array.from({ length: retryCount })) {
+  for (const [i] of Object.entries(Array.from({ length: retryCount }))) {
     try {
       return await downloader(url, destPath, rateLimit);
     } catch (e) {
@@ -449,7 +449,7 @@ const downloadVideo = async (videoId, args) => {
   if (!downloadFormat) throw new Error('Wrong format');
 
   const getIsVodLive = (video) =>
-    video.previewThumbnailURL.match(/\/404_processing_[^.?#]+\.png/);
+    video.previewThumbnailURL.test(/\/404_processing_[^.?#]+\.png/);
   const getFragFilename = (filename, i) => `${filename}.part-Frag${i}`;
 
   let outputFilename;
@@ -463,9 +463,9 @@ const downloadVideo = async (videoId, args) => {
       getFragments(downloadFormat.url),
       getVideoMetadata(videoId),
     ]);
-    if (!frags || !video) {
+    if (!frags) {
       console.log(
-        `Can't fetch fragments or video metadata. Retry after ${WAIT_BETWEEN_CYCLES_SECONDS} second(s)`,
+        `Can't fetch fragments. Retry after ${WAIT_BETWEEN_CYCLES_SECONDS} second(s)`,
       );
       await setTimeout(WAIT_BETWEEN_CYCLES_SECONDS * 1000);
       continue;
@@ -477,7 +477,12 @@ const downloadVideo = async (videoId, args) => {
       );
     }
 
-    const isLive = getIsVodLive(video);
+    let isLive = true;
+    if (video) {
+      isLive = getIsVodLive(video);
+    } else {
+      console.warn("Warning: Can't get video metadata");
+    }
     const hasNewFrags = frags.length > fragsCount;
     fragsCount = frags.length;
     if (!hasNewFrags && isLive) {
@@ -497,7 +502,7 @@ const downloadVideo = async (videoId, args) => {
     for (const [i, fragUrl] of frags.entries()) {
       const fragFilename = path.resolve(
         '.',
-        getFragFilename(outputFilename, i),
+        getFragFilename(outputFilename, i + 1),
       );
       const fragFilenameTmp = `${fragFilename}.part`;
       if (fs.existsSync(fragFilename)) continue;
