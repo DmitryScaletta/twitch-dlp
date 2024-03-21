@@ -1,0 +1,4 @@
+{
+  "main": "twitch-dlp.js",
+  "output": "sea-prep.blob"
+}

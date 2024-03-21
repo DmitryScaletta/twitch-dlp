@@ -449,7 +449,7 @@ const downloadVideo = async (videoId, args) => {
   if (!downloadFormat) throw new Error('Wrong format');
 
   const getIsVodLive = (video) =>
-    video.previewThumbnailURL.test(/\/404_processing_[^.?#]+\.png/);
+    /\/404_processing_[^.?#]+\.png/.test(video.previewThumbnailURL);
   const getFragFilename = (filename, i) => `${filename}.part-Frag${i}`;
 
   let outputFilename;
