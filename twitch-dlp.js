@@ -527,7 +527,9 @@ const downloadVideo = async (videoId, args) => {
     if (isFinalCycle) break;
   }
 
-  const fragFilenames = frags.map((_, i) => getFragFilename(outputFilename, i));
+  const fragFilenames = frags.map((_, i) =>
+    getFragFilename(outputFilename, i + 1),
+  );
   const ffmpegList = fragFilenames
     .map((filename) => `file '${filename}'`)
     .join('\n');
