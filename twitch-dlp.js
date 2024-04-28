@@ -430,6 +430,20 @@ const downloadWithStreamlink = async (link, channel, channelLogin, args) => {
   return spawn('streamlink', streamlinkArgs);
 };
 
+const mergeFrags = (fragsListFilename, outputFilename) =>
+  spawn('ffmpeg', [
+    '-n',
+    '-f',
+    'concat',
+    '-safe',
+    '0',
+    '-i',
+    fragsListFilename,
+    '-c',
+    'copy',
+    outputFilename,
+  ]);
+
 const downloadVideo = async (videoId, args) => {
   const DEFAULT_OUTPUT_TEMPLATE = '%(title)s [%(id)s].%(ext)s';
   const WAIT_AFTER_STREAM_ENDED_SECONDS = 5 * 60;
@@ -530,26 +544,15 @@ const downloadVideo = async (videoId, args) => {
   const fragFilenames = frags.map((_, i) =>
     getFragFilename(outputFilename, i + 1),
   );
-  const ffmpegList = fragFilenames
+  const fragsList = fragFilenames
     .map((filename) => `file '${filename}'`)
     .join('\n');
-  const ffmpegListFilename = `${outputFilename}-list.txt`;
-  await fsp.writeFile(ffmpegListFilename, ffmpegList);
-  const ffmpegArgs = [
-    '-n',
-    '-f',
-    'concat',
-    '-safe',
-    '0',
-    '-i',
-    ffmpegListFilename,
-    '-c',
-    'copy',
-    outputFilename,
-  ];
-  await spawn('ffmpeg', ffmpegArgs);
+  const fragsListFilename = `${outputFilename}-list.txt`;
+  await fsp.writeFile(fragsListFilename, fragsList);
 
-  fsp.unlink(ffmpegListFilename);
+  await mergeFrags(fragsListFilename, outputFilename);
+
+  fsp.unlink(fragsListFilename);
   if (!args.values['keep-fragments']) {
     await Promise.all(fragFilenames.map(fsp.unlink));
   }
