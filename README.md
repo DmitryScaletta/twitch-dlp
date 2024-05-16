@@ -5,6 +5,7 @@ Simple script for downloading twitch VODs from start during live broadcast.
 ## Features
 
 - Download live VODs from start (`--live-from-start`)
+- Download private VODs (or if they were hidden during the broadcast)
 - Watch channel status. If it becomes live, start downloading (`--retry-streams DELAY`)
 - Supports VOD links and channel links
 - Similar to `yt-dlp` (`youtube-dl`) syntax
@@ -41,7 +42,7 @@ npx twitch-dlp https://www.twitch.tv/xqc
 npx twitch-dlp https://www.twitch.tv/xqc --retry-streams 60
 
 # Check every 60 seconds is channel live
-# If it's live, start to download it's VOD from start (if available)
+# If it's live, start to download it's VOD from start
 npx twitch-dlp https://www.twitch.tv/xqc --retry-streams 60 --live-from-start
 
 # Display available formats
