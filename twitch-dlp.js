@@ -669,14 +669,26 @@ const main = async () => {
   const { linkType, linkId } = parseLink(link);
 
   if (linkType === 'video') {
-    const [formats, videoInfo] = await Promise.all([
+    let formats;
+    let video;
+    [formats, video] = await Promise.all([
       getVideoFormats(linkId),
-      getVideoMetadata(linkId).then(getVideoInfo),
+      getVideoMetadata(linkId),
     ]);
-    return downloadVideo(formats, videoInfo, () => false, args);
+    if (formats.length === 0) {
+      console.warn(
+        "Couldn't find playlist url. Trying to recover it from video metadata",
+      );
+      formats = await getVideoFormatsFromRecoveredVod(
+        video.owner.login,
+        video.id,
+        new Date(video.createdAt).getTime() / 1000,
+      );
+    }
+    return downloadVideo(formats, getVideoInfo(video), () => false, args);
   }
 
-  const WAIT_AFTER_STREAM_ENDED_SECONDS = 5 * 60;
+  const WAIT_AFTER_STREAM_ENDED_SECONDS = 8 * 60;
 
   const channelLogin = linkId;
   const retryStreamsDelay = args.values['retry-streams'];
@@ -711,7 +723,7 @@ const main = async () => {
       } else {
         // private VOD
         console.warn(
-          "Couldn't find an archived video for the current broadcast. Trying to recover VOD url.",
+          "Couldn't find an archived video for the current broadcast. Trying to recover VOD url",
         );
         let contentMetadata;
         [formats, contentMetadata] = await Promise.all([
@@ -754,13 +766,13 @@ const main = async () => {
           const isLive = getIsVodLive(video);
           if (isLive) return true;
           const secondsAfterEnd = getSecondsAfterStreamEnded(video);
-          return WAIT_AFTER_STREAM_ENDED_SECONDS - secondsAfterEnd < 0;
+          return WAIT_AFTER_STREAM_ENDED_SECONDS - secondsAfterEnd > 0;
         }
         if (!videoId || !video) {
           const broadcast = await getBroadcast(channel.id);
           if (!broadcast.stream || broadcast.stream.id !== streamId) {
             const secondsAfterEnd = (Date.now() - lastLiveTimestamp) / 1000;
-            return WAIT_AFTER_STREAM_ENDED_SECONDS - secondsAfterEnd < 0;
+            return WAIT_AFTER_STREAM_ENDED_SECONDS - secondsAfterEnd > 0;
           } else {
             lastLiveTimestamp = Date.now();
             return true;
@@ -793,4 +805,7 @@ const main = async () => {
   }
 };
 
-main().catch((e) => console.error(e.message));
+// main().catch((e) => console.error(e.message));
+main().catch((e) => {
+  throw e;
+});
