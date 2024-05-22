@@ -720,7 +720,9 @@ const main = async () => {
           getVideoFormats(videoId),
           getVideoMetadata(videoId).then(getVideoInfo),
         ]);
-      } else {
+      }
+
+      if (!broadcast.stream.archiveVideo || formats.length === 0) {
         // private VOD
         console.warn(
           "Couldn't find an archived video for the current broadcast. Trying to recover VOD url",
