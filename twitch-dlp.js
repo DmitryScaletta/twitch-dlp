@@ -718,7 +718,7 @@ const main = async () => {
         videoId = broadcast.stream.archiveVideo.id;
         [formats, videoInfo] = await Promise.all([
           getVideoFormats(videoId),
-          getVideoMetadata(videoId).then(getVideoInfo),
+          videoInfo || getVideoMetadata(videoId).then(getVideoInfo),
         ]);
       }
 
@@ -765,7 +765,7 @@ const main = async () => {
         let video;
         if (videoId) {
           video = await getVideoMetadata(videoId);
-          const isLive = getIsVodLive(video);
+          const isLive = !video || getIsVodLive(video);
           if (isLive) return true;
           const secondsAfterEnd = getSecondsAfterStreamEnded(video);
           return WAIT_AFTER_STREAM_ENDED_SECONDS - secondsAfterEnd > 0;
