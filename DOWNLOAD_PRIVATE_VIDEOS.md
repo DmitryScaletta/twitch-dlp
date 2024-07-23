@@ -6,7 +6,6 @@ Go to one of these websites.
 
 ```bash
 https://twitchtracker.com/%channel_name%/streams
-
 https://streamscharts.com/channels/%channel_name%/streams
 
 # examples
@@ -16,10 +15,10 @@ https://streamscharts.com/channels/lirik/streams
 
 ## Step 2
 
-Find the VOD that you want to download.
+Find the stream page for which you want to download the VOD.
 
 > [!NOTE]  
-> If the VOD is older than 2 month, chances of downloading such a VOD are close to 0.
+> If the VOD is older than 2 months, chances of downloading such a VOD are close to 0.
 
 ```bash
 # examples
@@ -29,11 +28,11 @@ https://streamscharts.com/channels/lirik/streams/51579711693
 
 ## Step 3
 
-Open the Developer Tools in your browser (press `F12` or `Ctrl+Shift+I` or Right Click -> Inspect)
+Open the Developer Tools in your browser on that page (press `F12` or `Ctrl+Shift+I` or Right Click -> Inspect)
 
 Switch to the Console tab.
 
-Copy and paste this code to the console.
+Copy and paste the following code to the console.
 
 ```js
 let startDate, startTimestamp, videoId, channelLogin;
@@ -73,4 +72,4 @@ Q: Is it automatable?
 A: Unfortunately no. Both twitchtracker.com and streamscharts.com are using anti DDOS protection, so it's not easy to retrieve the HTML content of these pages.
 
 Q: Can you add support for sullygnome.com?  
-A: It's not possible because they don't show seconds (only hours and minutes) when the stream started.
+A: It's not possible because they don't show seconds when the stream started (only hours and minutes).
