@@ -73,7 +73,7 @@ Requires:
 - streamlink (if downloading by channel link without --live-from-start)
 `;
 const SUB_ONLY_INSTRUCTIONS =
-  'This video might be sub-only. Follow this article to download sub-only videos: https://github.com/DmitryScaletta/twitch-dlp/SUB_ONLY_VIDEOS.md';
+  'This video might be sub-only. Follow this article to download sub-only videos: https://github.com/DmitryScaletta/twitch-dlp/blob/master/SUB_ONLY_VIDEOS.md';
 
 const spawn = (command, args, silent = false) =>
   new Promise((resolve, reject) => {
