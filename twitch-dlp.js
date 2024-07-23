@@ -72,6 +72,8 @@ Requires:
 - curl (if using --limit-rate option)
 - streamlink (if downloading by channel link without --live-from-start)
 `;
+const SUB_ONLY_INSTRUCTIONS =
+  'This video might be sub-only. Follow this article to download sub-only videos: https://github.com/DmitryScaletta/twitch-dlp/SUB_ONLY_VIDEOS.md';
 
 const spawn = (command, args, silent = false) =>
   new Promise((resolve, reject) => {
@@ -293,12 +295,7 @@ const getVideoFormats = async (videoId) => {
   return formats;
 };
 
-const getVideoFormatsFromRecoveredVod = async (
-  channelLogin,
-  videoId,
-  startTimestamp,
-) => {
-  const vodPath = `${channelLogin}_${videoId}_${startTimestamp}`;
+const getVideoFormatsFromRecoveredVod = async (vodPath) => {
   const hashedVodPath = crypto
     .createHash('sha1')
     .update(vodPath)
@@ -309,8 +306,10 @@ const getVideoFormatsFromRecoveredVod = async (
   for (const domain of VOD_DOMAINS) {
     const url = `${domain}/${hashedVodPath}_${vodPath}/chunked/index-dvr.m3u8`;
     const res = await fetch(url);
+    // console.log(`${res.status} ${url}`);
     if (res.ok) {
       vodDomain = domain;
+      // console.log(url);
       break;
     }
   }
@@ -666,6 +665,16 @@ const main = async () => {
   if (args.positionals.length > 1) throw new Error('Expected only one link');
 
   const [link] = args.positionals;
+  if (link.startsWith('video:')) {
+    const vodInfo = link.replace('video:', '');
+    const formats = await getVideoFormatsFromRecoveredVod(vodInfo);
+    const [channelLogin, videoId, startTimestamp] = vodInfo.split('_');
+    const videoInfo = {
+      id: videoId,
+      title: `${channelLogin}_${startTimestamp}`,
+    };
+    return downloadVideo(formats, videoInfo, () => false, args);
+  }
   const { linkType, linkId } = parseLink(link);
 
   if (linkType === 'video') {
@@ -679,11 +688,10 @@ const main = async () => {
       console.warn(
         "Couldn't find playlist url. Trying to recover it from video metadata",
       );
-      formats = await getVideoFormatsFromRecoveredVod(
-        video.owner.login,
-        video.id,
-        new Date(video.createdAt).getTime() / 1000,
-      );
+      const startTimestamp = new Date(video.createdAt).getTime() / 1000;
+      const vodInfo = `${video.owner.login}_${video.id}_${startTimestamp}`;
+      formats = await getVideoFormatsFromRecoveredVod(vodInfo);
+      if (formats.length === 0) return console.log(SUB_ONLY_INSTRUCTIONS);
     }
     return downloadVideo(formats, getVideoInfo(video), () => false, args);
   }
@@ -728,12 +736,11 @@ const main = async () => {
           "Couldn't find an archived video for the current broadcast. Trying to recover VOD url",
         );
         let contentMetadata;
+        const startTimestamp =
+          new Date(channel.stream.createdAt).getTime() / 1000;
+        const vodInfo = `${channelLogin}_${channel.stream.id}_${startTimestamp}`;
         [formats, contentMetadata] = await Promise.all([
-          getVideoFormatsFromRecoveredVod(
-            channelLogin,
-            channel.stream.id,
-            new Date(channel.stream.createdAt).getTime() / 1000,
-          ),
+          getVideoFormatsFromRecoveredVod(vodInfo),
           getContentMetadata(channelLogin),
         ]);
         videoInfo = {
@@ -749,6 +756,7 @@ const main = async () => {
           view_count: 0,
           ext: 'mp4',
         };
+        if (formats.length === 0) return console.log(SUB_ONLY_INSTRUCTIONS);
       }
 
       // To be able to download full vod we need to wait about 5 minutes after the end of the stream
