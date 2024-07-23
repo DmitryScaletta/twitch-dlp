@@ -62,3 +62,11 @@ npx twitch-dlp video:%channel_login%_%video_id%_%start_timestamp%
 npx twitch-dlp video:xqc_51582913581_1721686515
 npx twitch-dlp video:lirik_51579711693_1721664413
 ```
+
+## FAQ
+
+Q: Is it automatable?
+A: Unfortunately no. Both twitchtracker.com and streamscharts.com are using anti DDOS protection, so it's not easy to retrieve the HTML content of these pages.
+
+Q: Can you add support for sullygnome.com?
+A: It's not possible because they don't show seconds (only hours and minutes) when the stream started.
