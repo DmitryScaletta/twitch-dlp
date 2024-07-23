@@ -7,7 +7,7 @@ Simple script for downloading twitch VODs from start during live broadcast.
 - Download live VODs from start (`--live-from-start`)
 - Download private VODs (or if they were hidden during the broadcast)
 - Download sub-only VODs (ongoing streams)
-- Download hidden or finished sub-only VODs (see the [instructions](https://github.com/DmitryScaletta/twitch-dlp/blob/master/SUB_ONLY_VIDEOS.md))
+- Download hidden or finished sub-only VODs (see the [instructions](https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md))
 - Watch channel status. If it becomes live, start downloading (`--retry-streams DELAY`)
 - Supports VOD links and channel links
 - Similar to `yt-dlp` (`youtube-dl`) syntax
