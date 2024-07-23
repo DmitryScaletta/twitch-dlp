@@ -1,4 +1,4 @@
-# Downloading Twitch Sub Only Videos
+# Download Twitch Private Videos (Sub Only or Hidden)
 
 ## Step 1
 

@@ -72,8 +72,8 @@ Requires:
 - curl (if using --limit-rate option)
 - streamlink (if downloading by channel link without --live-from-start)
 `;
-const SUB_ONLY_INSTRUCTIONS =
-  'This video might be sub-only. Follow this article to download sub-only videos: https://github.com/DmitryScaletta/twitch-dlp/blob/master/SUB_ONLY_VIDEOS.md';
+const PRIVATE_VIDEO_INSTRUCTIONS =
+  'This video might be hidden or sub-only. Follow this article to download it: https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md';
 
 const spawn = (command, args, silent = false) =>
   new Promise((resolve, reject) => {
@@ -691,7 +691,7 @@ const main = async () => {
       const startTimestamp = new Date(video.createdAt).getTime() / 1000;
       const vodInfo = `${video.owner.login}_${video.id}_${startTimestamp}`;
       formats = await getVideoFormatsFromRecoveredVod(vodInfo);
-      if (formats.length === 0) return console.log(SUB_ONLY_INSTRUCTIONS);
+      if (formats.length === 0) return console.log(PRIVATE_VIDEO_INSTRUCTIONS);
     }
     return downloadVideo(formats, getVideoInfo(video), () => false, args);
   }
@@ -756,7 +756,8 @@ const main = async () => {
           view_count: 0,
           ext: 'mp4',
         };
-        if (formats.length === 0) return console.log(SUB_ONLY_INSTRUCTIONS);
+        if (formats.length === 0)
+          return console.log(PRIVATE_VIDEO_INSTRUCTIONS);
       }
 
       // To be able to download full vod we need to wait about 5 minutes after the end of the stream
