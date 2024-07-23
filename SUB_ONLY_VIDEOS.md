@@ -51,6 +51,10 @@ startTimestamp = new Date(startDate).getTime() / 1000;
 
 Press `Enter`.
 
+Example:
+
+![twitchtracker console](images/twitchtracker-console.png)
+
 ## Step 4
 
 Use the result from the previous step to download the VOD with [twitch-dlp](https://github.com/DmitryScaletta/twitch-dlp).
@@ -65,8 +69,8 @@ npx twitch-dlp video:lirik_51579711693_1721664413
 
 ## FAQ
 
-Q: Is it automatable?
+Q: Is it automatable?  
 A: Unfortunately no. Both twitchtracker.com and streamscharts.com are using anti DDOS protection, so it's not easy to retrieve the HTML content of these pages.
 
-Q: Can you add support for sullygnome.com?
+Q: Can you add support for sullygnome.com?  
 A: It's not possible because they don't show seconds (only hours and minutes) when the stream started.
