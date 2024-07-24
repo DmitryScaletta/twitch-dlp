@@ -306,10 +306,8 @@ const getVideoFormatsFromRecoveredVod = async (vodPath) => {
   for (const domain of VOD_DOMAINS) {
     const url = `${domain}/${hashedVodPath}_${vodPath}/chunked/index-dvr.m3u8`;
     const res = await fetch(url);
-    // console.log(`${res.status} ${url}`);
     if (res.ok) {
       vodDomain = domain;
-      // console.log(url);
       break;
     }
   }
@@ -556,7 +554,7 @@ const downloadVideo = async (formats, videoInfo, getIsLive, args) => {
     }
 
     let downloadedFragments = 0;
-    for (const [i, fragUrl] of frags.entries()) {
+    for (let [i, fragUrl] of frags.entries()) {
       const fragFilename = path.resolve(
         '.',
         getFragFilename(outputFilename, i + 1),
@@ -567,6 +565,11 @@ const downloadVideo = async (formats, videoInfo, getIsLive, args) => {
       if (fs.existsSync(fragFilenameTmp)) {
         await fsp.unlink(fragFilenameTmp);
       }
+
+      if (fragUrl.endsWith('-unmuted.ts')) {
+        fragUrl = fragUrl.replace('-unmuted.ts', '-muted.ts');
+      }
+
       const startTime = Date.now();
       await downloadAndRetry(
         fragUrl,
