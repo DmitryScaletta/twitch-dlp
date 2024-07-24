@@ -672,6 +672,7 @@ const main = async () => {
     const videoInfo = {
       id: videoId,
       title: `${channelLogin}_${startTimestamp}`,
+      ext: 'mp4',
     };
     return downloadVideo(formats, videoInfo, () => false, args);
   }
