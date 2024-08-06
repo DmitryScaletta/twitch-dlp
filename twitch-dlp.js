@@ -760,8 +760,6 @@ const main = async () => {
           view_count: 0,
           ext: 'mp4',
         };
-        if (formats.length === 0)
-          return console.log(PRIVATE_VIDEO_INSTRUCTIONS);
       }
 
       // To be able to download full vod we need to wait about 5 minutes after the end of the stream
