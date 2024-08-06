@@ -1,5 +1,16 @@
 # Download Twitch Private Videos (Sub Only or Hidden)
 
+> [!IMPORTANT]
+> This tutorial is only relevant for finished streams.
+>
+> If You want to download sub-only/hidden VOD which is currently live, just use a channel link and `--live-from-start` option.
+>
+> It's not possible to download if:
+>
+> - A VOD is older than 7 days (14 days for Affiliates, 60 days for Partners, Turbo and Prime users);
+> - A VOD was manually deleted via Video Producer in the Twitch Dashboard;
+> - A channel didn't enable "Store past broadcasts" option.
+
 ## Step 1
 
 Go to one of these websites.
@@ -16,9 +27,6 @@ https://streamscharts.com/channels/lirik/streams
 ## Step 2
 
 Find the stream page for which you want to download the VOD.
-
-> [!NOTE]  
-> If the VOD is older than 2 months, chances of downloading such a VOD are close to 0.
 
 ```bash
 # examples
@@ -73,3 +81,6 @@ A: Unfortunately no. Both twitchtracker.com and streamscharts.com are using anti
 
 Q: Can you add support for sullygnome.com?  
 A: It's not possible because they don't show seconds when the stream started (only hours and minutes).
+
+Q: Why is VOD only partially downloaded?
+A: It can happen if there was a disconnect during the broadcast or if a streamer ended the broadcast and started it again in a few minutes. Twitchtracker combine these streams into one and only store information about the first one. So use streamscharts instead.
