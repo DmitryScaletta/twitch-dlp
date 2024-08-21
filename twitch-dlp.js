@@ -659,7 +659,7 @@ const downloadVideo = async (formats, videoInfo, getIsLive, args) => {
       );
       const fragFilenameTmp = `${fragFilename}.part`;
       if (fs.existsSync(fragFilename)) continue;
-      showProgress(frags, fragsMetadata, i + 1);
+      showProgress(frags, fragsMetadata, frag.idx + 1);
       if (fs.existsSync(fragFilenameTmp)) {
         await fsp.unlink(fragFilenameTmp);
       }
