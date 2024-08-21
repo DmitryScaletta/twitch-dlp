@@ -652,14 +652,14 @@ const downloadVideo = async (formats, videoInfo, getIsLive, args) => {
     }
 
     let downloadedFragments = 0;
-    for (let frag of frags) {
+    for (let [i, frag] of frags.entries()) {
       const fragFilename = path.resolve(
         '.',
         getFragFilename(outputFilename, frag.idx + 1),
       );
       const fragFilenameTmp = `${fragFilename}.part`;
       if (fs.existsSync(fragFilename)) continue;
-      showProgress(frags, fragsMetadata, frag.idx + 1);
+      showProgress(frags, fragsMetadata, i + 1);
       if (fs.existsSync(fragFilenameTmp)) {
         await fsp.unlink(fragFilenameTmp);
       }
