@@ -341,15 +341,21 @@ const getVideoFormatsFromRecoveredVod = async (vodPath) => {
   return formats;
 };
 
-const getFragments = async (url) => {
-  const playlist = await fetchText(url, 'fragments list');
-  if (!playlist) return null;
-  const baseUrl = url.split('/').slice(0, -1).join('/');
-  return playlist
+const parseFrags = (url, content) => {
+  const EXTINF = '#EXTINF:';
+  const lines = content
     .split('\n')
-    .filter((line) => !line.startsWith('#'))
-    .filter(Boolean)
-    .map((name) => `${baseUrl}/${name}`);
+    .filter((line) => line.startsWith(EXTINF) || !line.startsWith('#'))
+    .filter(Boolean);
+  const baseUrl = url.split('/').slice(0, -1).join('/');
+  const frags = [];
+  for (let i = 0; i < lines.length; i += 2) {
+    frags.push({
+      duration: lines[i].slice(EXTINF.length).split(',')[0],
+      path: `${baseUrl}/${lines[i + 1]}`,
+    });
+  }
+  return frags;
 };
 
 const showProgress = (frags, fragsMetadata, i) => {
@@ -488,17 +494,19 @@ const downloadWithStreamlink = async (link, channel, channelLogin, args) => {
   return spawn('streamlink', streamlinkArgs);
 };
 
-const mergeFrags = (fragsListFilename, outputFilename) =>
+// https://github.com/ScrubN/TwitchDownloader/blob/master/TwitchDownloaderCore/VideoDownloader.cs#L337
+const mergeFrags = (ffconcatFilename, outputFilename) =>
+  // prettier-ignore
   spawn('ffmpeg', [
+    '-avoid_negative_ts', 'make_zero',
+    '-analyzeduration', '2147483647',
+    '-probesize', '2147483647',
+    '-max_streams', '2147483647',
     '-n',
-    '-f',
-    'concat',
-    '-safe',
-    '0',
-    '-i',
-    fragsListFilename,
-    '-c',
-    'copy',
+    '-f', 'concat',
+    '-safe', '0',
+    '-i', ffconcatFilename,
+    '-c', 'copy',
     outputFilename,
   ]);
 
@@ -520,28 +528,33 @@ const downloadVideo = async (formats, videoInfo, getIsLive, args) => {
   const getFragFilename = (filename, i) => `${filename}.part-Frag${i}`;
 
   let outputFilename;
+  let playlistFilename;
   let isLive;
   let frags;
   let fragsCount = 0;
   const fragsMetadata = [];
   while (true) {
-    [frags, isLive] = await Promise.all([
-      getFragments(downloadFormat.url),
+    let playlist;
+    [playlist, isLive] = await Promise.all([
+      fetchText(downloadFormat.url, 'playlist'),
       getIsLive(),
     ]);
-    if (!frags) {
+    if (!playlist) {
       console.log(
-        `Can't fetch fragments. Retry after ${WAIT_BETWEEN_CYCLES_SECONDS} second(s)`,
+        `Can't fetch playlist. Retry after ${WAIT_BETWEEN_CYCLES_SECONDS} second(s)`,
       );
       await setTimeout(WAIT_BETWEEN_CYCLES_SECONDS * 1000);
       continue;
     }
+    frags = parseFrags(downloadFormat.url, playlist);
     if (!outputFilename) {
       outputFilename = getOutputFilename(
         args.values.output || DEFAULT_OUTPUT_TEMPLATE,
         videoInfo,
       );
+      playlistFilename = `${outputFilename}-playlist.txt`;
     }
+    await fsp.writeFile(playlistFilename, playlist);
 
     const hasNewFrags = frags.length > fragsCount;
     fragsCount = frags.length;
@@ -554,7 +567,7 @@ const downloadVideo = async (formats, videoInfo, getIsLive, args) => {
     }
 
     let downloadedFragments = 0;
-    for (let [i, fragUrl] of frags.entries()) {
+    for (let [i, frag] of frags.entries()) {
       const fragFilename = path.resolve(
         '.',
         getFragFilename(outputFilename, i + 1),
@@ -566,13 +579,13 @@ const downloadVideo = async (formats, videoInfo, getIsLive, args) => {
         await fsp.unlink(fragFilenameTmp);
       }
 
-      if (fragUrl.endsWith('-unmuted.ts')) {
-        fragUrl = fragUrl.replace('-unmuted.ts', '-muted.ts');
+      if (frag.path.endsWith('-unmuted.ts')) {
+        frag.path = frag.path.replace('-unmuted.ts', '-muted.ts');
       }
 
       const startTime = Date.now();
       await downloadAndRetry(
-        fragUrl,
+        frag.path,
         fragFilenameTmp,
         args.values['limit-rate'],
       );
@@ -590,17 +603,30 @@ const downloadVideo = async (formats, videoInfo, getIsLive, args) => {
   const fragFilenames = frags.map((_, i) =>
     getFragFilename(outputFilename, i + 1),
   );
-  const fragsList = fragFilenames
-    .map((filename) => `file '${filename}'`)
+  // https://github.com/ScrubN/TwitchDownloader/blob/master/TwitchDownloaderCore/Tools/FfmpegConcatList.cs#L30-L35
+  let ffconcat = 'ffconcat version 1.0\n';
+  ffconcat += fragFilenames
+    .map((filename, i) =>
+      [
+        `file '${filename}'`,
+        'stream',
+        'exact_stream_id 0x100', // audio
+        'stream',
+        'exact_stream_id 0x101', // video
+        'stream',
+        'exact_stream_id 0x102', // subtitles
+        `duration ${frags[i].duration}`,
+      ].join('\n'),
+    )
     .join('\n');
-  const fragsListFilename = `${outputFilename}-list.txt`;
-  await fsp.writeFile(fragsListFilename, fragsList);
+  const ffconcatFilename = `${outputFilename}-ffconcat.txt`;
+  await fsp.writeFile(ffconcatFilename, ffconcat);
 
-  await mergeFrags(fragsListFilename, outputFilename);
+  await mergeFrags(ffconcatFilename, outputFilename);
 
-  fsp.unlink(fragsListFilename);
+  fsp.unlink(ffconcatFilename);
   if (!args.values['keep-fragments']) {
-    await Promise.all(fragFilenames.map(fsp.unlink));
+    await Promise.all([...fragFilenames, playlistFilename].map(fsp.unlink));
   }
 };
 
