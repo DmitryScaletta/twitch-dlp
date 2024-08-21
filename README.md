@@ -1,13 +1,13 @@
 # twitch-dlp
 
-Simple script for downloading twitch VODs from start during live broadcast.
+Download regular/sub-only/hidden twitch VODs from start during live broadcast.
 
 ## Features
 
 - Download live VODs from start (`--live-from-start`)
-- Download private VODs (or if they were hidden during the broadcast)
-- Download sub-only VODs (ongoing streams)
-- Download hidden or finished sub-only VODs (see the [instructions](https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md))
+- Download ongoing sub-only/hidden VODs (or if they were hidden during the broadcast)
+- Download finished sub-only/hidden VODs (see the [instructions](https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md))
+- Download only part of the video (`--download-sections`)
 - Watch channel status. If it becomes live, start downloading (`--retry-streams DELAY`)
 - Supports VOD links and channel links
 - Similar to `yt-dlp` (`youtube-dl`) syntax
@@ -55,6 +55,9 @@ npx twitch-dlp https://www.twitch.tv/xqc --retry-streams 60 --live-from-start
 # Display available formats
 npx twitch-dlp https://www.twitch.tv/videos/2022789761 -F
 
+# Download 15 minutes in the middle of the VOD
+npx twitch-dlp https://www.twitch.tv/videos/2022789761 --download-sections "*15:00-30:00"
+
 # Download specified format
 npx twitch-dlp https://www.twitch.tv/videos/2022789761 -f 480p30
 
@@ -93,6 +96,12 @@ npx twitch-dlp https://www.twitch.tv/videos/2022789761 -r 720k
                             between each attempt.
 -r, --limit-rate RATE       Limit download rate to RATE
 --keep-fragments            Keep fragments after downloading
+--download-sections TEXT    Download only part of the video.
+                            Syntax: "*start_time-end_time".
+                            Examples: "*0-12:34", "*3:14:15-inf"
+                            A "*" prefix is for yt-dlp compatibility.
+                            Negative timestamps and multiple
+                            sections are not supported.
 ```
 
 ## Formats example
