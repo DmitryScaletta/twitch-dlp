@@ -7,7 +7,7 @@ Download regular/sub-only/hidden twitch VODs from start during live broadcast.
 - Download live VODs from start (`--live-from-start`)
 - Download ongoing sub-only/hidden VODs (or if they were hidden during the broadcast)
 - Download finished sub-only/hidden VODs (see the [instructions](https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md))
-- Download only part of the video (`--download-sections`)
+- Download specific part of the video (`--download-sections`)
 - Watch channel status. If it becomes live, start downloading (`--retry-streams DELAY`)
 - Supports VOD links and channel links
 - Similar to `yt-dlp` (`youtube-dl`) syntax
@@ -66,6 +66,11 @@ npx twitch-dlp https://www.twitch.tv/videos/2022789761 -o "%(title)s [%(id)s].%(
 
 # Limit download rate
 npx twitch-dlp https://www.twitch.tv/videos/2022789761 -r 720k
+
+# Merge already downloaded fragments (if something went wrong)
+# Filename must match the fragment names but without ".part-FragN"
+# Use `--download-sections` if you want to merge only specific part of the video
+npx twitch-dlp "./Chillin [v2222470239].mp4" --merge-fragments
 ```
 
 ## Options
@@ -93,15 +98,20 @@ npx twitch-dlp https://www.twitch.tv/videos/2022789761 -r 720k
 --retry-streams DELAY       Retry fetching the list of available
                             streams until streams are found
                             while waiting DELAY second(s)
-                            between each attempt.
+                            between each attempt
 -r, --limit-rate RATE       Limit download rate to RATE
 --keep-fragments            Keep fragments after downloading
---download-sections TEXT    Download only part of the video.
+--download-sections TEXT    Download specific part of the video.
                             Syntax: "*start_time-end_time".
                             Examples: "*0-12:34", "*3:14:15-inf"
                             A "*" prefix is for yt-dlp compatibility.
                             Negative timestamps and multiple
-                            sections are not supported.
+                            sections are not supported
+--merge-fragments FILENAME  Merge already downloaded fragments.
+                            FILENAME must match the fragment
+                            names but without ".part-FragN".
+                            Can't be used with other options
+                            (except --download-sections)
 ```
 
 ## Formats example
