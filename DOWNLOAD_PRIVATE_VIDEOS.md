@@ -82,5 +82,5 @@ A: Unfortunately no. Both twitchtracker.com and streamscharts.com are using anti
 Q: Can you add support for sullygnome.com?  
 A: It's not possible because they don't show seconds when the stream started (only hours and minutes).
 
-Q: Why is VOD only partially downloaded?
+Q: Why is VOD only partially downloaded?  
 A: It can happen if there was a disconnect during the broadcast or if a streamer ended the broadcast and started it again in a few minutes. Twitchtracker combine these streams into one and only store information about the first one. So use streamscharts instead.
