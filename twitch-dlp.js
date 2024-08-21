@@ -66,6 +66,12 @@ Options:
                             between each attempt.
 -r, --limit-rate RATE       Limit download rate to RATE
 --keep-fragments            Keep fragments after downloading
+--download-sections TEXT    Download only part of the video.
+                            Syntax: "*start_time-end_time".
+                            Examples: "*0-12:34", "*3:14:15-inf"
+                            A "*" prefix is for yt-dlp compatibility.
+                            Negative timestamps and multiple
+                            sections are not supported.
 
 Requires:
 - ffmpeg
@@ -341,7 +347,33 @@ const getVideoFormatsFromRecoveredVod = async (vodPath) => {
   return formats;
 };
 
-const parseFrags = (url, content) => {
+const parseDownloadSectionsArg = (downloadSectionsArg) => {
+  if (!downloadSectionsArg) return null;
+  const DOWNLOAD_SECTIONS_ERROR = 'Wrong --download-sections syntax';
+  // https://regex101.com/r/d0kteE/1
+  const DOWNLOAD_SECTIONS_REGEX =
+    /^\*(?:(?:(?<startH>\d{1,2}):)?(?<startM>\d{1,2}):)?(?:(?<startS>\d{1,2}))-(?:(?:(?:(?<endH>\d{1,2}):)?(?<endM>\d{1,2}):)?(?:(?<endS>\d{1,2}))|(?<inf>inf))$/;
+  const m = downloadSectionsArg.match(DOWNLOAD_SECTIONS_REGEX);
+  if (!m) throw new Error(DOWNLOAD_SECTIONS_ERROR);
+  const {
+    groups: { startH, startM, startS, endH, endM, endS, inf },
+  } = m;
+  const startHN = startH ? Number.parseInt(startH) : 0;
+  const startMN = startM ? Number.parseInt(startM) : 0;
+  const startSN = startS ? Number.parseInt(startS) : 0;
+  const endHN = endH ? Number.parseInt(endH) : 0;
+  const endMN = endM ? Number.parseInt(endM) : 0;
+  const endSN = endS ? Number.parseInt(endS) : 0;
+  if (startMN >= 60 || startSN >= 60 || endMN >= 60 || endSN >= 60) {
+    throw new Error(DOWNLOAD_SECTIONS_ERROR);
+  }
+  const startTime = startSN + startMN * 60 + startHN * 60 * 60;
+  const endTime = inf ? Infinity : endSN + endMN * 60 + endHN * 60 * 60;
+  if (startTime >= endTime) throw new Error(DOWNLOAD_SECTIONS_ERROR);
+  return { startTime, endTime };
+};
+
+const parseFrags = (url, content, downloadSections) => {
   const EXTINF = '#EXTINF:';
   const lines = content
     .split('\n')
@@ -349,13 +381,21 @@ const parseFrags = (url, content) => {
     .filter(Boolean);
   const baseUrl = url.split('/').slice(0, -1).join('/');
   const frags = [];
+  let offset = 0;
   for (let i = 0; i < lines.length; i += 2) {
-    frags.push({
-      duration: lines[i].slice(EXTINF.length).split(',')[0],
-      path: `${baseUrl}/${lines[i + 1]}`,
-    });
+    const duration = lines[i].slice(EXTINF.length).split(',')[0];
+    const url = `${baseUrl}/${lines[i + 1]}`;
+    frags.push({ offset, duration, url });
+    offset += Number.parseFloat(duration);
   }
-  return frags;
+  if (!downloadSections) return frags;
+  const firstFragIdx = frags.findLastIndex(
+    (frag) => frag.offset <= downloadSections.startTime,
+  );
+  const lastFragIdx = frags.findIndex(
+    (frag) => frag.offset >= downloadSections.endTime,
+  );
+  return frags.slice(firstFragIdx, lastFragIdx + 1);
 };
 
 const showProgress = (frags, fragsMetadata, i) => {
@@ -524,6 +564,9 @@ const downloadVideo = async (formats, videoInfo, getIsLive, args) => {
       ? formats[0]
       : formats.find((f) => f.format_id === args.values.format);
   if (!downloadFormat) throw new Error('Wrong format');
+  const downloadSections = parseDownloadSectionsArg(
+    args.values['download-sections'],
+  );
 
   const getFragFilename = (filename, i) => `${filename}.part-Frag${i}`;
 
@@ -546,7 +589,7 @@ const downloadVideo = async (formats, videoInfo, getIsLive, args) => {
       await setTimeout(WAIT_BETWEEN_CYCLES_SECONDS * 1000);
       continue;
     }
-    frags = parseFrags(downloadFormat.url, playlist);
+    frags = parseFrags(downloadFormat.url, playlist, downloadSections);
     if (!outputFilename) {
       outputFilename = getOutputFilename(
         args.values.output || DEFAULT_OUTPUT_TEMPLATE,
@@ -579,13 +622,13 @@ const downloadVideo = async (formats, videoInfo, getIsLive, args) => {
         await fsp.unlink(fragFilenameTmp);
       }
 
-      if (frag.path.endsWith('-unmuted.ts')) {
-        frag.path = frag.path.replace('-unmuted.ts', '-muted.ts');
+      if (frag.url.endsWith('-unmuted.ts')) {
+        frag.url = frag.url.replace('-unmuted.ts', '-muted.ts');
       }
 
       const startTime = Date.now();
       await downloadAndRetry(
-        frag.path,
+        frag.url,
         fragFilenameTmp,
         args.values['limit-rate'],
       );
@@ -675,6 +718,9 @@ const main = async () => {
         type: 'boolean',
       },
       'retry-streams': {
+        type: 'string',
+      },
+      'download-sections': {
         type: 'string',
       },
     },
