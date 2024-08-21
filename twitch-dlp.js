@@ -752,13 +752,19 @@ const main = async () => {
 
   if (args.values['merge-fragments']) {
     const [filename] = args.positionals;
-    const playlist = await fsp.readFile(getPlaylistFilename(filename), 'utf8');
+    const [playlist, allFiles] = await Promise.all([
+      fsp.readFile(getPlaylistFilename(filename), 'utf8'),
+      fsp.readdir(path.parse(filename).dir || '.'),
+    ]);
     const frags = parseFrags(
       '',
       playlist,
       parseDownloadSectionsArg(args.values['download-sections']),
     );
-    await mergeFrags(frags, filename, true);
+    const existingFrags = frags.filter((frag) =>
+      allFiles.includes(getFragFilename(filename, frag.idx + 1)),
+    );
+    await mergeFrags(existingFrags, filename, true);
     return;
   }
 
