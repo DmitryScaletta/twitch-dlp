@@ -52,11 +52,11 @@ npx twitch-dlp https://www.twitch.tv/xqc --retry-streams 60
 # If it's live, start to download it's VOD from start
 npx twitch-dlp https://www.twitch.tv/xqc --retry-streams 60 --live-from-start
 
+# Download 10 minutes in the middle of the VOD
+npx twitch-dlp https://www.twitch.tv/videos/2022789761 --download-sections "*15:00-25:00"
+
 # Display available formats
 npx twitch-dlp https://www.twitch.tv/videos/2022789761 -F
-
-# Download 15 minutes in the middle of the VOD
-npx twitch-dlp https://www.twitch.tv/videos/2022789761 --download-sections "*15:00-30:00"
 
 # Download specified format
 npx twitch-dlp https://www.twitch.tv/videos/2022789761 -f 480p30
