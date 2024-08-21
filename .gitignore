@@ -131,3 +131,5 @@ dist
 
 *.part-Frag*
 *.mp4
+*-playlist.txt
+*-ffconcat.txt
