@@ -30,7 +30,7 @@ const VOD_DOMAINS = [
   'https://vod-pop-secure.twitch.tv',
 ];
 const HELP = `
-Simple script for downloading twitch VODs from start during live broadcast.
+Download regular/sub-only/hidden twitch VODs from start during live broadcast
 
 GitHub Repo: https://github.com/DmitryScaletta/twitch-dlp
 
@@ -72,11 +72,12 @@ Options:
                             A "*" prefix is for yt-dlp compatibility.
                             Negative timestamps and multiple
                             sections are not supported
---merge-fragments FILENAME  Merge already downloaded fragments.
-                            FILENAME must match the fragment
-                            names but without ".part-FragN".
-                            Can't be used with other options
-                            (except --download-sections)
+--merge-fragments           Merge already downloaded fragments.
+                            Example: "npx twitch-dlp FILENAME
+                            --merge-fragments". FILENAME must match
+                            the fragment names but without
+                            ".part-FragN". Can't be used with other
+                            options (except --download-sections)
 
 Requires:
 - ffmpeg

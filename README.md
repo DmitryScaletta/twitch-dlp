@@ -1,6 +1,6 @@
 # twitch-dlp
 
-Download regular/sub-only/hidden twitch VODs from start during live broadcast.
+Download regular/sub-only/hidden twitch VODs from start during live broadcast
 
 ## Features
 
@@ -107,11 +107,12 @@ npx twitch-dlp "./Chillin [v2222470239].mp4" --merge-fragments
                             A "*" prefix is for yt-dlp compatibility.
                             Negative timestamps and multiple
                             sections are not supported
---merge-fragments FILENAME  Merge already downloaded fragments.
-                            FILENAME must match the fragment
-                            names but without ".part-FragN".
-                            Can't be used with other options
-                            (except --download-sections)
+--merge-fragments           Merge already downloaded fragments.
+                            Example: "npx twitch-dlp FILENAME
+                            --merge-fragments". FILENAME must match
+                            the fragment names but without
+                            ".part-FragN". Can't be used with other
+                            options (except --download-sections)
 ```
 
 ## Formats example
