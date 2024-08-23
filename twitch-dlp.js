@@ -790,9 +790,10 @@ const main = async () => {
       playlist,
       parseDownloadSectionsArg(args.values['download-sections']),
     );
-    const existingFrags = frags.filter((frag) =>
-      allFiles.includes(getFragFilename(filename, frag.idx + 1)),
-    );
+    const existingFrags = frags.filter((frag) => {
+      const fragFilename = getFragFilename(filename, frag.idx + 1);
+      return allFiles.includes(path.parse(fragFilename).base);
+    });
     await mergeFrags(existingFrags, filename, true);
     return;
   }
