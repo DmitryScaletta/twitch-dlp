@@ -347,14 +347,17 @@ const getAvailableFormats = async (
 };
 
 const getVideoFormatsByThumbUrl = (broadcastType, videoId, thumbUrl) => {
-  const THUMB_REGEX = /cf_vods\/(?<subdomain>[^\/]+)\/(?<vodPath>.+)\/thumb\//;
+  // https://regex101.com/r/t8lsxY/1
+  const THUMB_REGEX =
+    /cf_vods\/(?<subdomain>[^\/]+)\/(?<vodPath>(?:[^\/]+|[^\/]+\/[^\/]+\/[^\/]+))\/?\/thumb\//;
   const m = thumbUrl.match(THUMB_REGEX);
   if (!m) return [];
-  const vodPath = m.groups.vodPath.endsWith('/')
-    ? m.groups.vodPath.slice(0, -1)
-    : m.groups.vodPath;
-  const vodDomain = `https://${m.groups.subdomain}.cloudfront.net`;
-  return getAvailableFormats(vodDomain, vodPath, broadcastType, videoId);
+  return getAvailableFormats(
+    `https://${m.groups.subdomain}.cloudfront.net`,
+    m.groups.vodPath,
+    broadcastType,
+    videoId,
+  );
 };
 
 const getVideoFormatsByVodPath = async (vodPath) => {
