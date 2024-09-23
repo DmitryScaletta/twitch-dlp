@@ -209,7 +209,7 @@ const getVideoMetadata = (videoId) =>
         persistedQuery: {
           version: 1,
           sha256Hash:
-            'c25707c1e5176320ceac6b447d052480887e23bc794ca1d02becd0bcc91844fe',
+            '45111672eea2e507f8ba44d101a61862f9c56b11dee09a15634cb75cb9b9084d',
         },
       },
     },
