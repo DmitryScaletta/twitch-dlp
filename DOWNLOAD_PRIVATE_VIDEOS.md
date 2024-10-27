@@ -45,14 +45,15 @@ Copy and paste the following code to the console.
 ```js
 let startDate, startTimestamp, videoId, channelLogin;
 if (location.hostname === 'twitchtracker.com') {
-  startDate = document.querySelector('meta[name="description"]').content.match(/\w+ stream on (.+) -/)[1] + '+00:00';
+  startDate = document.querySelector('meta[name="description"]').content.match(/\w+ stream on (.+) -/)[1];
   [, channelLogin, , videoId] = location.pathname.split('/');
 }
 if (location.hostname === 'streamscharts.com') {
-  startDate = JSON.parse(document.querySelector('[x-data="twitchClipsBlock()"]').dataset.requests)[0].started_at;
+  const comp = livewire.components.components().find((c) => c.serverMemo.data.stream); 
+  startDate = comp.serverMemo.data.stream.stream_created_at;
   [, , channelLogin, , videoId] = location.pathname.split('/');
 }
-startTimestamp = new Date(startDate).getTime() / 1000;
+startTimestamp = new Date(startDate + '+00:00').getTime() / 1000;
 `video:${channelLogin}_${videoId}_${startTimestamp}`;
 ```
 
