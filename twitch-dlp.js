@@ -599,7 +599,7 @@ const mergeFrags = async (frags, outputFilename, keepFragments) => {
   ffconcat += frags
     .map((frag) =>
       [
-        `file '${getFragFilename(outputFilename, frag.idx + 1)}`,
+        `file '${getFragFilename(outputFilename, frag.idx + 1)}'`,
         'stream',
         'exact_stream_id 0x100', // audio
         'stream',
