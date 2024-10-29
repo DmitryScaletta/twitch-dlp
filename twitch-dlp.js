@@ -428,12 +428,12 @@ const parseFrags = (url, content, downloadSections) => {
     idx += 1;
   }
   if (!downloadSections) return frags;
-  const firstFragIdx = frags.findLastIndex(
-    (frag) => frag.offset <= downloadSections.startTime,
-  );
-  const lastFragIdx = frags.findIndex(
-    (frag) => frag.offset >= downloadSections.endTime,
-  );
+  const { startTime, endTime } = downloadSections;
+  const firstFragIdx = frags.findLastIndex((frag) => frag.offset <= startTime);
+  const lastFragIdx =
+    endTime === Infinity
+      ? frags.length - 1
+      : frags.findIndex((frag) => frag.offset >= endTime);
   return frags.slice(firstFragIdx, lastFragIdx + 1);
 };
 
