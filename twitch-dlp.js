@@ -25,9 +25,6 @@ const VOD_DOMAINS = [
   'https://d1mhjrowxxagfy.cloudfront.net',
   'https://ddacn6pr5v0tl.cloudfront.net',
   'https://d3aqoihi2n8ty8.cloudfront.net',
-  'https://vod-secure.twitch.tv',
-  'https://vod-metro.twitch.tv',
-  'https://vod-pop-secure.twitch.tv',
 ];
 const HELP = `
 Download regular/sub-only/hidden twitch VODs from start during live broadcast
@@ -309,16 +306,35 @@ const getVideoFormats = async (videoId) => {
   return formats;
 };
 
+const getFullVodPath = (vodPath) => {
+  const hashedVodPath = crypto
+    .createHash('sha1')
+    .update(vodPath)
+    .digest('hex')
+    .slice(0, 20);
+  return `${hashedVodPath}_${vodPath}`;
+};
+
+const getVodUrl = (
+  vodDomain,
+  fullVodPath,
+  broadcastType = 'ARCHIVE',
+  videoId = '',
+  resolution = 'chunked',
+) => {
+  const playlistName =
+    broadcastType === 'HIGHLIGHT' ? `highlight-${videoId}` : 'index-dvr';
+  return `${vodDomain}/${fullVodPath}/${resolution}/${playlistName}.m3u8`;
+};
+
 const getAvailableFormats = async (
   vodDomain,
-  vodPath,
+  fullVodPath,
   broadcastType,
   videoId,
 ) => {
   const RESOLUTIONS = [
     'chunked',
-    '1080p60',
-    '1080p30',
     '720p60',
     '720p30',
     '480p30',
@@ -326,17 +342,21 @@ const getAvailableFormats = async (
     '160p30',
     'audio_only',
   ];
-  const playlistName =
-    broadcastType === 'HIGHLIGHT' ? `highlight-${videoId}` : 'index-dvr';
-  const getVodUrl = (resolution = 'chunked') =>
-    `${vodDomain}/${vodPath}/${resolution}/${playlistName}.m3u8`;
-
   const formats = [];
-  const responses = await Promise.allSettled(
-    RESOLUTIONS.map((resolution) => fetch(getVodUrl(resolution))),
+  const responses = await Promise.all(
+    RESOLUTIONS.map((resolution) => {
+      const url = getVodUrl(
+        vodDomain,
+        fullVodPath,
+        broadcastType,
+        videoId,
+        resolution,
+      );
+      return fetch(url, { method: 'HEAD' });
+    }),
   );
-  for (const [i, response] of responses.entries()) {
-    if (!response.value || !response.value.ok) continue;
+  for (const [i, res] of responses.entries()) {
+    if (!res.ok) continue;
     const resolution = RESOLUTIONS[i];
     formats.push({
       format_id: FORMATS_MAP[resolution] || resolution,
@@ -346,41 +366,38 @@ const getAvailableFormats = async (
   return formats;
 };
 
-const getVideoFormatsByThumbUrl = (broadcastType, videoId, thumbUrl) => {
-  // https://regex101.com/r/t8lsxY/1
-  const THUMB_REGEX =
-    /cf_vods\/(?<subdomain>[^\/]+)\/(?<vodPath>(?:[^\/]+|[^\/]+\/[^\/]+\/[^\/]+))\/?\/thumb\//;
-  const m = thumbUrl.match(THUMB_REGEX);
-  if (!m) return [];
+const getVideoFormatsByFullVodPath = async (
+  fullVodPath,
+  broadcastType,
+  videoId,
+) => {
+  const responses = await Promise.all(
+    VOD_DOMAINS.map((domain) => {
+      const url = getVodUrl(domain, fullVodPath, broadcastType, videoId);
+      return fetch(url, { method: 'HEAD' });
+    }),
+  );
+  const vodDomainIdx = responses.findIndex((res) => res.ok);
+  if (vodDomainIdx === -1) return [];
   return getAvailableFormats(
-    `https://${m.groups.subdomain}.cloudfront.net`,
-    m.groups.vodPath,
+    VOD_DOMAINS[vodDomainIdx],
+    fullVodPath,
     broadcastType,
     videoId,
   );
 };
 
-const getVideoFormatsByVodPath = async (vodPath) => {
-  const hashedVodPath = crypto
-    .createHash('sha1')
-    .update(vodPath)
-    .digest('hex')
-    .slice(0, 20);
-
-  let vodDomain;
-  for (const domain of VOD_DOMAINS) {
-    const url = `${domain}/${hashedVodPath}_${vodPath}/chunked/index-dvr.m3u8`;
-    const res = await fetch(url);
-    if (res.ok) {
-      vodDomain = domain;
-      break;
-    }
-  }
-  if (!vodDomain) return [];
-  return getAvailableFormats(
-    vodDomain,
-    `${hashedVodPath}_${vodPath}`,
-    'ARCHIVE',
+const getVideoFormatsByThumbUrl = (broadcastType, videoId, thumbUrl) => {
+  // thumb subdomain is not always the same as playlist subdomain
+  // https://regex101.com/r/t8lsxY/1
+  const THUMB_REGEX =
+    /cf_vods\/(?<subdomain>[^\/]+)\/(?<fullVodPath>(?:[^\/]+|[^\/]+\/[^\/]+\/[^\/]+))\/?\/thumb\//;
+  const m = thumbUrl.match(THUMB_REGEX);
+  if (!m) return [];
+  return getVideoFormatsByFullVodPath(
+    m.groups.fullVodPath,
+    broadcastType,
+    videoId,
   );
 };
 
@@ -810,9 +827,9 @@ const main = async () => {
 
   const [link] = args.positionals;
   if (link.startsWith('video:')) {
-    const vodInfo = link.replace('video:', '');
-    const formats = await getVideoFormatsByVodPath(vodInfo);
-    const [channelLogin, videoId, startTimestamp] = vodInfo.split('_');
+    const vodPath = link.replace('video:', '');
+    const formats = await getVideoFormatsByFullVodPath(getFullVodPath(vodPath));
+    const [channelLogin, videoId, startTimestamp] = vodPath.split('_');
     const videoInfo = {
       id: videoId,
       title: `${channelLogin}_${startTimestamp}`,
@@ -830,21 +847,14 @@ const main = async () => {
       getVideoMetadata(linkId),
     ]);
 
-    const GET_PLAYLIST_URL_MESSAGE =
-      'Trying to get playlist url from video metadata';
+    // should work for sub only VODs and highlights
     if (formats.length === 0 && video !== null) {
-      console.log(GET_PLAYLIST_URL_MESSAGE);
+      console.log('Trying to get playlist url from video metadata');
       formats = await getVideoFormatsByThumbUrl(
         video.broadcastType,
         video.id,
         video.previewThumbnailURL,
       );
-    }
-    if (formats.length === 0 && video !== null) {
-      console.log(`${GET_PLAYLIST_URL_MESSAGE}. Method 2`);
-      const startTimestamp = new Date(video.createdAt).getTime() / 1000;
-      const vodInfo = `${video.owner.login}_${video.id}_${startTimestamp}`;
-      formats = await getVideoFormatsByVodPath(vodInfo);
     }
     if (formats.length === 0) return console.log(PRIVATE_VIDEO_INSTRUCTIONS);
     return downloadVideo(formats, getVideoInfo(video), () => false, args);
@@ -894,7 +904,7 @@ const main = async () => {
           new Date(channel.stream.createdAt).getTime() / 1000;
         const vodPath = `${channelLogin}_${channel.stream.id}_${startTimestamp}`;
         [formats, contentMetadata] = await Promise.all([
-          getVideoFormatsByVodPath(vodPath),
+          getVideoFormatsByFullVodPath(getFullVodPath(vodPath)),
           getContentMetadata(channelLogin),
         ]);
         videoInfo = {
