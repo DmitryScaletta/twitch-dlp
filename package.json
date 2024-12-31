@@ -1,6 +1,6 @@
 {
   "name": "twitch-dlp",
-  "version": "0.2.18",
+  "version": "0.3.0",
   "author": "DmitryScaletta",
   "description": "Download regular/sub-only/hidden twitch VODs from start during live broadcast",
   "license": "MIT",
@@ -8,9 +8,16 @@
     "type": "git",
     "url": "git+https://github.com/DmitryScaletta/twitch-dlp.git"
   },
+  "type": "module",
   "files": [],
   "bin": "twitch-dlp.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  }
+    "start": "node --experimental-strip-types ./src/main.ts",
+    "build": "pnpm dlx rolldown src/main.ts --file twitch-dlp.js",
+    "test": "node --experimental-strip-types --test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2"
+  },
+  "packageManager": "pnpm@9.15.2"
 }
