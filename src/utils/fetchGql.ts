@@ -12,6 +12,7 @@ export const fetchGql = async <T = unknown>(
       body: JSON.stringify(body),
       headers: { 'Client-Id': CLIENT_ID },
     });
+    if (!res.ok) throw new Error();
     const json = await res.json();
     return json.data[resultKey] as T;
   } catch (e) {

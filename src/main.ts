@@ -530,4 +530,7 @@ const main = async () => {
   }
 };
 
-main().catch((e) => console.error(e.message));
+main().catch((e) => {
+  // throw e;
+  console.error(e.message);
+});

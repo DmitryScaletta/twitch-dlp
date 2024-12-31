@@ -115,6 +115,7 @@ const fetchGql = async (body, resultKey, description = "metadata") => {
 			body: JSON.stringify(body),
 			headers: { "Client-Id": CLIENT_ID }
 		});
+		if (!res.ok) throw new Error();
 		const json = await res.json();
 		return json.data[resultKey];
 	} catch (e) {
@@ -129,6 +130,7 @@ const fetchText = async (url, description = "metadata") => {
 	console.log(`Downloading ${description}`);
 	try {
 		const res = await fetch(url);
+		if (!res.ok) throw new Error();
 		return res.text();
 	} catch (e) {
 		console.error(`Unable to download ${description}`);
@@ -821,6 +823,8 @@ const main = async () => {
 		await setTimeout(retryStreamsDelay * 1e3);
 	}
 };
-main().catch((e) => console.error(e.message));
+main().catch((e) => {
+	console.error(e.message);
+});
 
 //#endregion
