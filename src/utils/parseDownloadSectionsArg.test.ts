@@ -26,6 +26,9 @@ describe('parseDownloadSectionsArg', () => {
       '*13:14:15-inf13:14:15',
       '*10-5',
       '*10-10',
+      '*60-inf',
+      '*61:00-inf',
+      '*99:00:00-inf',
     ] as const;
     for (const arg of cases) {
       assert.throws(() => parseDownloadSectionsArg(arg));
