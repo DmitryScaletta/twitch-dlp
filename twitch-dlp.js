@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { setTimeout } from "timers/promises";
-import childProcess from "node:child_process";
-import stream from "node:stream";
 import crypto from "node:crypto";
+import childProcess from "node:child_process";
+import fs from "node:fs";
+import stream from "node:stream";
 
 //#region src/constants.ts
 const CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
@@ -82,28 +82,6 @@ Requires:
 - streamlink (if downloading by channel link without --live-from-start)
 `;
 const PRIVATE_VIDEO_INSTRUCTIONS = "This video might be hidden or sub-only. Follow this article to download it: https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md";
-
-//#endregion
-//#region src/utils/parseLink.ts
-const VOD_REGEX = /^https:\/\/(?:www\.)?twitch\.tv\/videos\/(?<videoId>\d+)/;
-const CHANNEL_REGEX = /^https:\/\/(?:www\.)?twitch\.tv\/(?<channelLogin>[^/#?]+)/;
-const parseLink = (link) => {
-	if (link.startsWith("video:")) return {
-		type: "vodPath",
-		vodPath: link.replace("video:", "")
-	};
-	let m = link.match(VOD_REGEX);
-	if (m) return {
-		type: "video",
-		videoId: m.groups.videoId
-	};
-	m = link.match(CHANNEL_REGEX);
-	if (m) return {
-		type: "channel",
-		channelLogin: m.groups.channelLogin
-	};
-	throw new Error("Wrong link");
-};
 
 //#endregion
 //#region src/utils/fetchGql.ts
@@ -217,16 +195,26 @@ const getManifest = (videoId, accessToken) => {
 };
 
 //#endregion
-//#region src/lib/spawn.ts
-const spawn = (command, args, silent = false) => new Promise((resolve, reject) => {
-	const child = childProcess.spawn(command, args);
-	if (!silent) {
-		child.stdout.on("data", (data) => process.stdout.write(data));
-		child.stderr.on("data", (data) => process.stderr.write(data));
-	}
-	child.on("error", (err) => reject(err));
-	child.on("close", (code) => resolve(code));
-});
+//#region src/utils/parseLink.ts
+const VOD_REGEX = /^https:\/\/(?:www\.)?twitch\.tv\/videos\/(?<videoId>\d+)/;
+const CHANNEL_REGEX = /^https:\/\/(?:www\.)?twitch\.tv\/(?<channelLogin>[^/#?]+)/;
+const parseLink = (link) => {
+	if (link.startsWith("video:")) return {
+		type: "vodPath",
+		vodPath: link.replace("video:", "")
+	};
+	let m = link.match(VOD_REGEX);
+	if (m) return {
+		type: "video",
+		videoId: m.groups.videoId
+	};
+	m = link.match(CHANNEL_REGEX);
+	if (m) return {
+		type: "channel",
+		channelLogin: m.groups.channelLogin
+	};
+	throw new Error("Wrong link");
+};
 
 //#endregion
 //#region src/lib/m3u8.ts
@@ -319,6 +307,160 @@ const getFragsForDownloading = (playlistUrl, playlistContent, downloadSectionsAr
 	const firstFragIdx = frags.findLastIndex((frag) => frag.offset <= startTime);
 	const lastFragIdx = endTime === Infinity ? frags.length - 1 : frags.findIndex((frag) => frag.offset >= endTime);
 	return frags.slice(firstFragIdx, lastFragIdx + 1);
+};
+
+//#endregion
+//#region src/utils/parseDownloadFormats.ts
+const parseDownloadFormats = (playlistContent) => {
+	const playlist = parsePlaylist(playlistContent);
+	const formats = [];
+	for (const { name, width, height, url } of playlist) formats.push({
+		format_id: name.replaceAll(" ", "_"),
+		width,
+		height,
+		url
+	});
+	return formats;
+};
+
+//#endregion
+//#region src/utils/getVideoFormats.ts
+const getVideoFormats = async (videoId) => {
+	const accessToken = await getAccessToken("video", videoId);
+	if (!accessToken) return [];
+	const manifest = await getManifest(videoId, accessToken);
+	if (!manifest) return [];
+	const formats = parseDownloadFormats(manifest);
+	formats.sort((a, b) => (b.width || 0) - (a.width || 0));
+	return formats;
+};
+const getFullVodPath = (vodPath) => {
+	const hashedVodPath = crypto.createHash("sha1").update(vodPath).digest("hex").slice(0, 20);
+	return `${hashedVodPath}_${vodPath}`;
+};
+const getVodUrl = (vodDomain, fullVodPath, broadcastType = "ARCHIVE", videoId = "", resolution = "chunked") => {
+	const playlistName = broadcastType === "HIGHLIGHT" ? `highlight-${videoId}` : "index-dvr";
+	return `${vodDomain}/${fullVodPath}/${resolution}/${playlistName}.m3u8`;
+};
+const getAvailableFormats = async (vodDomain, fullVodPath, broadcastType, videoId) => {
+	const FORMATS_MAP = {
+		chunked: "Source",
+		audio_only: "Audio_Only"
+	};
+	const RESOLUTIONS = [
+		"chunked",
+		"720p60",
+		"720p30",
+		"480p30",
+		"360p30",
+		"160p30",
+		"audio_only"
+	];
+	const formats = [];
+	const resolutionUrls = RESOLUTIONS.map((resolution) => getVodUrl(vodDomain, fullVodPath, broadcastType, videoId, resolution));
+	const responses = await Promise.all(resolutionUrls.map((url) => fetch(url, { method: "HEAD" })));
+	for (const [i, res] of responses.entries()) {
+		if (!res.ok) continue;
+		const resolution = RESOLUTIONS[i];
+		formats.push({
+			format_id: FORMATS_MAP[resolution] || resolution,
+			url: resolutionUrls[i]
+		});
+	}
+	return formats;
+};
+const getVideoFormatsByFullVodPath = async (fullVodPath, broadcastType, videoId) => {
+	const responses = await Promise.all(VOD_DOMAINS.map((domain) => {
+		const url = getVodUrl(domain, fullVodPath, broadcastType, videoId);
+		return fetch(url, { method: "HEAD" });
+	}));
+	const vodDomainIdx = responses.findIndex((res) => res.ok);
+	if (vodDomainIdx === -1) return [];
+	return getAvailableFormats(VOD_DOMAINS[vodDomainIdx], fullVodPath, broadcastType, videoId);
+};
+const THUMB_REGEX = /cf_vods\/(?<subdomain>[^\/]+)\/(?<fullVodPath>(?:[^\/]+|[^\/]+\/[^\/]+\/[^\/]+))\/?\/thumb\//;
+const getVideoFormatsByThumbUrl = (broadcastType, videoId, thumbUrl) => {
+	const m = thumbUrl.match(THUMB_REGEX);
+	if (!m) return [];
+	const { fullVodPath } = m.groups;
+	return getVideoFormatsByFullVodPath(fullVodPath, broadcastType, videoId);
+};
+
+//#endregion
+//#region src/lib/spawn.ts
+const spawn = (command, args, silent = false) => new Promise((resolve, reject) => {
+	const child = childProcess.spawn(command, args);
+	if (!silent) {
+		child.stdout.on("data", (data) => process.stdout.write(data));
+		child.stderr.on("data", (data) => process.stderr.write(data));
+	}
+	child.on("error", (err) => reject(err));
+	child.on("close", (code) => resolve(code));
+});
+
+//#endregion
+//#region src/utils/getFilename.ts
+const getFilename = {
+	output: (template, videoInfo) => {
+		let outputFilename = template;
+		for (const [name, value] of Object.entries(videoInfo)) {
+			let newValue = value ? String(value) : "";
+			if (name.endsWith("_date")) newValue = newValue.slice(0, 10);
+			outputFilename = outputFilename.replaceAll(`%(${name})s`, newValue);
+		}
+		return path.resolve(".", outputFilename.replace(/[/\\?%*:|"'<>]/g, ""));
+	},
+	ffconcat: (filename) => `${filename}-ffconcat.txt`,
+	playlist: (filename) => `${filename}-playlist.txt`,
+	frag: (filename, i) => `${filename}.part-Frag${i}`
+};
+
+//#endregion
+//#region src/utils/mergeFrags.ts
+const runFfconcat = (ffconcatFilename, outputFilename) => spawn("ffmpeg", [
+	"-avoid_negative_ts",
+	"make_zero",
+	"-analyzeduration",
+	"2147483647",
+	"-probesize",
+	"2147483647",
+	"-max_streams",
+	"2147483647",
+	"-n",
+	"-f",
+	"concat",
+	"-safe",
+	"0",
+	"-i",
+	ffconcatFilename,
+	"-c",
+	"copy",
+	outputFilename
+]);
+const generateFfconcat = (files) => {
+	let ffconcat = "ffconcat version 1.0\n";
+	ffconcat += files.map(([file, duration]) => [
+		`file '${file}'`,
+		"stream",
+		"exact_stream_id 0x100",
+		"stream",
+		"exact_stream_id 0x101",
+		"stream",
+		"exact_stream_id 0x102",
+		`duration ${duration}`
+	].join("\n")).join("\n");
+	return ffconcat;
+};
+const mergeFrags = async (frags, outputFilename, keepFragments) => {
+	const fragFiles = frags.map((frag) => [getFilename.frag(outputFilename, frag.idx + 1), frag.duration]);
+	const ffconcat = generateFfconcat(fragFiles);
+	const ffconcatFilename = getFilename.ffconcat(outputFilename);
+	await fsp.writeFile(ffconcatFilename, ffconcat);
+	const returnCode = await runFfconcat(ffconcatFilename, outputFilename);
+	fsp.unlink(ffconcatFilename);
+	if (keepFragments || returnCode) return;
+	const playlistFilename = getFilename.playlist(outputFilename);
+	await Promise.all([...fragFiles.map(([filename]) => fsp.unlink(filename)), fsp.unlink(playlistFilename)]);
 };
 
 //#endregion
@@ -423,175 +565,7 @@ const downloadAndRetry = async (url, destPath, rateLimit, retryCount = 10) => {
 };
 
 //#endregion
-//#region src/utils/parseDownloadFormats.ts
-const parseDownloadFormats = (playlistContent) => {
-	const playlist = parsePlaylist(playlistContent);
-	const formats = [];
-	for (const { name, width, height, url } of playlist) formats.push({
-		format_id: name.replaceAll(" ", "_"),
-		width,
-		height,
-		url
-	});
-	return formats;
-};
-
-//#endregion
-//#region src/utils/getVideoFormats.ts
-const getVideoFormats = async (videoId) => {
-	const accessToken = await getAccessToken("video", videoId);
-	if (!accessToken) return [];
-	const manifest = await getManifest(videoId, accessToken);
-	if (!manifest) return [];
-	const formats = parseDownloadFormats(manifest);
-	formats.sort((a, b) => (b.width || 0) - (a.width || 0));
-	return formats;
-};
-const getFullVodPath = (vodPath) => {
-	const hashedVodPath = crypto.createHash("sha1").update(vodPath).digest("hex").slice(0, 20);
-	return `${hashedVodPath}_${vodPath}`;
-};
-const getVodUrl = (vodDomain, fullVodPath, broadcastType = "ARCHIVE", videoId = "", resolution = "chunked") => {
-	const playlistName = broadcastType === "HIGHLIGHT" ? `highlight-${videoId}` : "index-dvr";
-	return `${vodDomain}/${fullVodPath}/${resolution}/${playlistName}.m3u8`;
-};
-const getAvailableFormats = async (vodDomain, fullVodPath, broadcastType, videoId) => {
-	const FORMATS_MAP = {
-		chunked: "Source",
-		audio_only: "Audio_Only"
-	};
-	const RESOLUTIONS = [
-		"chunked",
-		"720p60",
-		"720p30",
-		"480p30",
-		"360p30",
-		"160p30",
-		"audio_only"
-	];
-	const formats = [];
-	const resolutionUrls = RESOLUTIONS.map((resolution) => getVodUrl(vodDomain, fullVodPath, broadcastType, videoId, resolution));
-	const responses = await Promise.all(resolutionUrls.map((url) => fetch(url, { method: "HEAD" })));
-	for (const [i, res] of responses.entries()) {
-		if (!res.ok) continue;
-		const resolution = RESOLUTIONS[i];
-		formats.push({
-			format_id: FORMATS_MAP[resolution] || resolution,
-			url: resolutionUrls[i]
-		});
-	}
-	return formats;
-};
-const getVideoFormatsByFullVodPath = async (fullVodPath, broadcastType, videoId) => {
-	const responses = await Promise.all(VOD_DOMAINS.map((domain) => {
-		const url = getVodUrl(domain, fullVodPath, broadcastType, videoId);
-		return fetch(url, { method: "HEAD" });
-	}));
-	const vodDomainIdx = responses.findIndex((res) => res.ok);
-	if (vodDomainIdx === -1) return [];
-	return getAvailableFormats(VOD_DOMAINS[vodDomainIdx], fullVodPath, broadcastType, videoId);
-};
-const THUMB_REGEX = /cf_vods\/(?<subdomain>[^\/]+)\/(?<fullVodPath>(?:[^\/]+|[^\/]+\/[^\/]+\/[^\/]+))\/?\/thumb\//;
-const getVideoFormatsByThumbUrl = (broadcastType, videoId, thumbUrl) => {
-	const m = thumbUrl.match(THUMB_REGEX);
-	if (!m) return [];
-	const { fullVodPath } = m.groups;
-	return getVideoFormatsByFullVodPath(fullVodPath, broadcastType, videoId);
-};
-
-//#endregion
-//#region src/main.ts
-const getPlaylistFilename = (filename) => `${filename}-playlist.txt`;
-const getFfconcatFilename = (filename) => `${filename}-ffconcat.txt`;
-const getFragFilename = (filename, i) => `${filename}.part-Frag${i}`;
-const getStreamInfo = (channel, channelLogin) => ({
-	id: channel.stream.id,
-	title: channel.lastBroadcast.title || "Untitled Broadcast",
-	uploader: channelLogin,
-	uploader_id: channel.id,
-	upload_date: channel.stream.createdAt,
-	release_date: channel.stream.createdAt,
-	ext: "mp4"
-});
-const getVideoInfo = (video) => ({
-	id: `v${video.id}`,
-	title: video.title || "Untitled Broadcast",
-	description: video.description,
-	duration: video.lengthSeconds,
-	uploader: video.owner.displayName,
-	uploader_id: video.owner.login,
-	upload_date: video.createdAt,
-	release_date: video.publishedAt,
-	view_count: video.viewCount,
-	ext: "mp4"
-});
-const getOutputFilename = (template, videoInfo) => {
-	let outputFilename = template;
-	for (const [name, value] of Object.entries(videoInfo)) {
-		let newValue = value ? String(value) : "";
-		if (name.endsWith("_date")) newValue = newValue.slice(0, 10);
-		outputFilename = outputFilename.replaceAll(`%(${name})s`, newValue);
-	}
-	return path.resolve(".", outputFilename.replace(/[/\\?%*:|"'<>]/g, ""));
-};
-const downloadWithStreamlink = async (link, channel, channelLogin, args) => {
-	const getDefaultOutputTemplate = () => {
-		const now = new Date().toISOString().slice(0, 16).replace("T", " ").replace(":", "_");
-		return `%(uploader)s (live) ${now} [%(id)s].%(ext)s`;
-	};
-	if (args.values["list-formats"]) {
-		await spawn("streamlink", ["-v", link]);
-		process.exit();
-	}
-	const outputFilename = getOutputFilename(args.values.output || getDefaultOutputTemplate(), getStreamInfo(channel, channelLogin));
-	const streamlinkArgs = [
-		"-o",
-		outputFilename,
-		link,
-		args.values.format,
-		"--twitch-disable-ads"
-	];
-	return spawn("streamlink", streamlinkArgs);
-};
-const runFfconcat = (ffconcatFilename, outputFilename) => spawn("ffmpeg", [
-	"-avoid_negative_ts",
-	"make_zero",
-	"-analyzeduration",
-	"2147483647",
-	"-probesize",
-	"2147483647",
-	"-max_streams",
-	"2147483647",
-	"-n",
-	"-f",
-	"concat",
-	"-safe",
-	"0",
-	"-i",
-	ffconcatFilename,
-	"-c",
-	"copy",
-	outputFilename
-]);
-const mergeFrags = async (frags, outputFilename, keepFragments) => {
-	let ffconcat = "ffconcat version 1.0\n";
-	ffconcat += frags.map((frag) => [
-		`file '${getFragFilename(outputFilename, frag.idx + 1)}'`,
-		"stream",
-		"exact_stream_id 0x100",
-		"stream",
-		"exact_stream_id 0x101",
-		"stream",
-		"exact_stream_id 0x102",
-		`duration ${frag.duration}`
-	].join("\n")).join("\n");
-	const ffconcatFilename = getFfconcatFilename(outputFilename);
-	await fsp.writeFile(ffconcatFilename, ffconcat);
-	const returnCode = await runFfconcat(ffconcatFilename, outputFilename);
-	fsp.unlink(ffconcatFilename);
-	if (keepFragments || returnCode) return;
-	await Promise.all([...frags.map((frag) => fsp.unlink(getFragFilename(outputFilename, frag.idx + 1))), fsp.unlink(getPlaylistFilename(outputFilename))]);
-};
+//#region src/utils/downloadVideo.ts
 const downloadVideo = async (formats, videoInfo, getIsLive, args) => {
 	const DEFAULT_OUTPUT_TEMPLATE = "%(title)s [%(id)s].%(ext)s";
 	const WAIT_BETWEEN_CYCLES_SECONDS = 60;
@@ -617,8 +591,8 @@ const downloadVideo = async (formats, videoInfo, getIsLive, args) => {
 		}
 		frags = getFragsForDownloading(downloadFormat.url, playlist, args.values["download-sections"]);
 		if (!outputFilename || !playlistFilename) {
-			outputFilename = getOutputFilename(args.values.output || DEFAULT_OUTPUT_TEMPLATE, videoInfo);
-			playlistFilename = getPlaylistFilename(outputFilename);
+			outputFilename = getFilename.output(args.values.output || DEFAULT_OUTPUT_TEMPLATE, videoInfo);
+			playlistFilename = getFilename.playlist(outputFilename);
 		}
 		await fsp.writeFile(playlistFilename, playlist);
 		const hasNewFrags = frags.length > fragsCount;
@@ -630,7 +604,7 @@ const downloadVideo = async (formats, videoInfo, getIsLive, args) => {
 		}
 		let downloadedFragments = 0;
 		for (let [i, frag] of frags.entries()) {
-			const fragFilename = path.resolve(".", getFragFilename(outputFilename, frag.idx + 1));
+			const fragFilename = path.resolve(".", getFilename.frag(outputFilename, frag.idx + 1));
 			const fragFilenameTmp = `${fragFilename}.part`;
 			if (fs.existsSync(fragFilename)) continue;
 			showProgress(frags, fragsMetadata, i + 1);
@@ -652,6 +626,24 @@ const downloadVideo = async (formats, videoInfo, getIsLive, args) => {
 	}
 	await mergeFrags(frags, outputFilename, args.values["keep-fragments"]);
 };
+
+//#endregion
+//#region src/utils/getVideoInfo.ts
+const getVideoInfo = (video) => ({
+	id: `v${video.id}`,
+	title: video.title || "Untitled Broadcast",
+	description: video.description,
+	duration: video.lengthSeconds,
+	uploader: video.owner.displayName,
+	uploader_id: video.owner.login,
+	upload_date: video.createdAt,
+	release_date: video.publishedAt,
+	view_count: video.viewCount,
+	ext: "mp4"
+});
+
+//#endregion
+//#region src/utils/downloadVideoFromStart.ts
 const downloadVideoFromStart = async (channel, channelLogin, args) => {
 	const WAIT_AFTER_STREAM_ENDED_SECONDS = 480;
 	let formats = [];
@@ -661,7 +653,7 @@ const downloadVideoFromStart = async (channel, channelLogin, args) => {
 	const broadcast = await getBroadcast(channel.id);
 	if (broadcast?.stream?.archiveVideo) {
 		videoId = broadcast.stream.archiveVideo.id;
-		[formats, videoInfo] = await Promise.all([getVideoFormats(videoId), getVideoMetadata(videoId).then(getVideoInfo)]);
+		[formats, videoInfo] = await Promise.all([getVideoFormats(videoId), getVideoMetadata(videoId).then((video) => getVideoInfo(video))]);
 	}
 	if (!broadcast?.stream?.archiveVideo || formats.length === 0) {
 		console.warn("Couldn't find an archived video for the current broadcast. Trying to recover VOD url");
@@ -715,6 +707,40 @@ const downloadVideoFromStart = async (channel, channelLogin, args) => {
 	await downloadVideo(formats, videoInfo, getIsLive, args);
 	return true;
 };
+
+//#endregion
+//#region src/utils/downloadWithStreamlink.ts
+const getStreamInfo = (channel, channelLogin) => ({
+	id: channel.stream.id,
+	title: channel.lastBroadcast.title || "Untitled Broadcast",
+	uploader: channelLogin,
+	uploader_id: channel.id,
+	upload_date: channel.stream.createdAt,
+	release_date: channel.stream.createdAt,
+	ext: "mp4"
+});
+const getDefaultOutputTemplate = () => {
+	const now = new Date().toISOString().slice(0, 16).replace("T", " ").replace(":", "_");
+	return `%(uploader)s (live) ${now} [%(id)s].%(ext)s`;
+};
+const downloadWithStreamlink = async (link, channel, channelLogin, args) => {
+	if (args.values["list-formats"]) {
+		await spawn("streamlink", ["-v", link]);
+		process.exit();
+	}
+	const outputFilename = getFilename.output(args.values.output || getDefaultOutputTemplate(), getStreamInfo(channel, channelLogin));
+	const streamlinkArgs = [
+		"-o",
+		outputFilename,
+		link,
+		args.values.format,
+		"--twitch-disable-ads"
+	];
+	return spawn("streamlink", streamlinkArgs);
+};
+
+//#endregion
+//#region src/main.ts
 const getArgs = () => parseArgs({
 	args: process.argv.slice(2),
 	options: {
@@ -758,14 +784,14 @@ const main = async () => {
 		return;
 	}
 	if (args.values["merge-fragments"]) {
-		const [filename] = args.positionals;
-		const [playlist, allFiles] = await Promise.all([fsp.readFile(getPlaylistFilename(filename), "utf8"), fsp.readdir(path.parse(filename).dir || ".")]);
+		const [outputFilename] = args.positionals;
+		const [playlist, allFiles] = await Promise.all([fsp.readFile(getFilename.playlist(outputFilename), "utf8"), fsp.readdir(path.parse(outputFilename).dir || ".")]);
 		const frags = getFragsForDownloading(".", playlist, args.values["download-sections"]);
 		const existingFrags = frags.filter((frag) => {
-			const fragFilename = getFragFilename(filename, frag.idx + 1);
+			const fragFilename = getFilename.frag(outputFilename, frag.idx + 1);
 			return allFiles.includes(path.parse(fragFilename).base);
 		});
-		await mergeFrags(existingFrags, filename, true);
+		await mergeFrags(existingFrags, outputFilename, true);
 		return;
 	}
 	if (args.positionals.length > 1) throw new Error("Expected only one link");
