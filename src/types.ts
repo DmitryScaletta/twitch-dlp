@@ -14,6 +14,7 @@ export type FragMetadata = {
   /** Time spent downloading a fragment */
   time: number;
 };
+
 export type DownloadSectionsArg = {
   startTime: number;
   endTime: number;
