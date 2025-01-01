@@ -7,6 +7,7 @@ import {
   getVideoFormatsByFullVodPath,
 } from './getVideoFormats.ts';
 import { downloadVideo } from './downloadVideo.ts';
+import { getVideoInfo } from './getVideoInfo.ts';
 
 export const downloadVideoFromStart = async (
   channel: api.StreamMetadataResponse,
@@ -26,11 +27,9 @@ export const downloadVideoFromStart = async (
   // public VOD
   if (broadcast?.stream?.archiveVideo) {
     videoId = broadcast.stream.archiveVideo.id;
-    // @ts-expect-error
     [formats, videoInfo] = await Promise.all([
       getVideoFormats(videoId),
-      // @ts-expect-error
-      api.getVideoMetadata(videoId).then(getVideoInfo),
+      api.getVideoMetadata(videoId).then((video) => getVideoInfo(video!)),
     ]);
   }
 

@@ -8,7 +8,6 @@ import { HELP, PRIVATE_VIDEO_INSTRUCTIONS } from './constants.ts';
 import type { VideoInfo } from './types.ts';
 import * as api from './api/twitch.ts';
 import { parseLink } from './utils/parseLink.ts';
-import { spawn } from './lib/spawn.ts';
 import { getFragsForDownloading } from './utils/getFragsForDownloading.ts';
 import {
   getFullVodPath,
@@ -20,67 +19,8 @@ import { mergeFrags } from './utils/mergeFrags.ts';
 import { getFilename } from './utils/getFilename.ts';
 import { downloadVideo } from './utils/downloadVideo.ts';
 import { downloadVideoFromStart } from './utils/downloadVideoFromStart.ts';
-
-const getStreamInfo = (
-  channel: api.StreamMetadataResponse,
-  channelLogin: string,
-): VideoInfo => ({
-  id: channel.stream!.id,
-  title: channel.lastBroadcast.title || 'Untitled Broadcast',
-  uploader: channelLogin,
-  uploader_id: channel.id,
-  upload_date: channel.stream!.createdAt,
-  release_date: channel.stream!.createdAt,
-  ext: 'mp4',
-});
-
-const getVideoInfo = (video: api.VideoMetadataResponse): VideoInfo => ({
-  id: `v${video.id}`,
-  title: video.title || 'Untitled Broadcast',
-  description: video.description,
-  duration: video.lengthSeconds,
-  uploader: video.owner.displayName,
-  uploader_id: video.owner.login,
-  upload_date: video.createdAt,
-  release_date: video.publishedAt,
-  view_count: video.viewCount,
-  ext: 'mp4',
-});
-
-const downloadWithStreamlink = async (
-  link: string,
-  channel: api.StreamMetadataResponse,
-  channelLogin: string,
-  args: AppArgs,
-) => {
-  const getDefaultOutputTemplate = () => {
-    const now = new Date()
-      .toISOString()
-      .slice(0, 16)
-      .replace('T', ' ')
-      .replace(':', '_');
-    return `%(uploader)s (live) ${now} [%(id)s].%(ext)s`;
-  };
-
-  if (args.values['list-formats']) {
-    await spawn('streamlink', ['-v', link]);
-    process.exit();
-  }
-
-  const outputFilename = getFilename.output(
-    args.values.output || getDefaultOutputTemplate(),
-    getStreamInfo(channel, channelLogin),
-  );
-
-  const streamlinkArgs = [
-    '-o',
-    outputFilename,
-    link,
-    args.values.format,
-    '--twitch-disable-ads',
-  ];
-  return spawn('streamlink', streamlinkArgs);
-};
+import { downloadWithStreamlink } from './utils/downloadWithStreamlink.ts';
+import { getVideoInfo } from './utils/getVideoInfo.ts';
 
 const getArgs = () =>
   parseArgs({

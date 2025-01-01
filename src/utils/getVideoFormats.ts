@@ -41,10 +41,10 @@ const getAvailableFormats = async (
   broadcastType?: BroadcastType,
   videoId?: string,
 ) => {
-  const FORMATS_MAP = {
+  const FORMATS_MAP: Record<string, string> = {
     chunked: 'Source',
     audio_only: 'Audio_Only',
-  } as const;
+  };
   const RESOLUTIONS = [
     'chunked',
     '720p60',
@@ -65,7 +65,6 @@ const getAvailableFormats = async (
     if (!res.ok) continue;
     const resolution = RESOLUTIONS[i];
     formats.push({
-      // @ts-expect-error
       format_id: FORMATS_MAP[resolution] || resolution,
       url: resolutionUrls[i],
     });
