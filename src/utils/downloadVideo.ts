@@ -1,12 +1,11 @@
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
-import path from 'node:path';
 import { setTimeout as sleep } from 'timers/promises';
 import type { AppArgs } from '../main.ts';
 import type { DownloadFormat, FragMetadata, VideoInfo } from '../types.ts';
 import { fetchText } from './fetchText.ts';
 import { getFragsForDownloading } from './getFragsForDownloading.ts';
-import { getFilename } from './getFilename.ts';
+import { getPath } from './getPath.ts';
 import { showProgress } from './showProgress.ts';
 import { downloadAndRetry } from '../downloaders.ts';
 import { mergeFrags } from './mergeFrags.ts';
@@ -31,8 +30,10 @@ export const downloadVideo = async (
       : formats.find((f) => f.format_id === args.values.format);
   if (!downloadFormat) throw new Error('Wrong format');
 
-  let outputFilename;
-  let playlistFilename;
+  const outputPath = getPath.output(
+    args.values.output || DEFAULT_OUTPUT_TEMPLATE,
+    videoInfo,
+  );
   let isLive;
   let frags;
   let fragsCount = 0;
@@ -55,14 +56,8 @@ export const downloadVideo = async (
       playlist,
       args.values['download-sections'],
     );
-    if (!outputFilename || !playlistFilename) {
-      outputFilename = getFilename.output(
-        args.values.output || DEFAULT_OUTPUT_TEMPLATE,
-        videoInfo,
-      );
-      playlistFilename = getFilename.playlist(outputFilename);
-    }
-    await fsp.writeFile(playlistFilename, playlist);
+
+    await fsp.writeFile(getPath.playlist(outputPath), playlist);
 
     const hasNewFrags = frags.length > fragsCount;
     fragsCount = frags.length;
@@ -76,15 +71,12 @@ export const downloadVideo = async (
 
     let downloadedFragments = 0;
     for (let [i, frag] of frags.entries()) {
-      const fragFilename = path.resolve(
-        '.',
-        getFilename.frag(outputFilename, frag.idx + 1),
-      );
-      const fragFilenameTmp = `${fragFilename}.part`;
-      if (fs.existsSync(fragFilename)) continue;
+      const fragPath = getPath.frag(outputPath, frag.idx + 1);
+      const fragTmpPath = `${fragPath}.part`;
+      if (fs.existsSync(fragPath)) continue;
       showProgress(frags, fragsMetadata, i + 1);
-      if (fs.existsSync(fragFilenameTmp)) {
-        await fsp.unlink(fragFilenameTmp);
+      if (fs.existsSync(fragTmpPath)) {
+        await fsp.unlink(fragTmpPath);
       }
 
       if (frag.url.endsWith('-unmuted.ts')) {
@@ -92,14 +84,10 @@ export const downloadVideo = async (
       }
 
       const startTime = Date.now();
-      await downloadAndRetry(
-        frag.url,
-        fragFilenameTmp,
-        args.values['limit-rate'],
-      );
+      await downloadAndRetry(frag.url, fragTmpPath, args.values['limit-rate']);
       const endTime = Date.now();
-      await fsp.rename(fragFilenameTmp, fragFilename);
-      const { size } = await fsp.stat(fragFilename);
+      await fsp.rename(fragTmpPath, fragPath);
+      const { size } = await fsp.stat(fragPath);
       fragsMetadata.push({ size, time: endTime - startTime });
       downloadedFragments += 1;
     }
@@ -108,5 +96,5 @@ export const downloadVideo = async (
     if (!isLive) break;
   }
 
-  await mergeFrags(frags, outputFilename, args.values['keep-fragments']);
+  await mergeFrags(frags, outputPath, args.values['keep-fragments']);
 };

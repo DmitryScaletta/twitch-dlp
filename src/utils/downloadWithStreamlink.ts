@@ -1,6 +1,6 @@
 import * as api from '../api/twitch.ts';
 import { spawn } from '../lib/spawn.ts';
-import { getFilename } from './getFilename.ts';
+import { getPath } from './getPath.ts';
 import type { AppArgs } from '../main.ts';
 import type { VideoInfo } from '../types.ts';
 
@@ -37,14 +37,14 @@ export const downloadWithStreamlink = async (
     process.exit();
   }
 
-  const outputFilename = getFilename.output(
+  const outputPath = getPath.output(
     args.values.output || getDefaultOutputTemplate(),
     getStreamInfo(channel, channelLogin),
   );
 
   const streamlinkArgs = [
     '-o',
-    outputFilename,
+    outputPath,
     link,
     args.values.format,
     '--twitch-disable-ads',

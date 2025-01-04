@@ -16,7 +16,7 @@ import {
   getVideoFormatsByThumbUrl,
 } from './utils/getVideoFormats.ts';
 import { mergeFrags } from './utils/mergeFrags.ts';
-import { getFilename } from './utils/getFilename.ts';
+import { getPath } from './utils/getPath.ts';
 import { downloadVideo } from './utils/downloadVideo.ts';
 import { downloadVideoFromStart } from './utils/downloadVideoFromStart.ts';
 import { downloadWithStreamlink } from './utils/downloadWithStreamlink.ts';
@@ -79,10 +79,10 @@ const main = async () => {
   }
 
   if (args.values['merge-fragments']) {
-    const [outputFilename] = args.positionals;
+    const [outputPath] = args.positionals;
     const [playlist, allFiles] = await Promise.all([
-      fsp.readFile(getFilename.playlist(outputFilename), 'utf8'),
-      fsp.readdir(path.parse(outputFilename).dir || '.'),
+      fsp.readFile(getPath.playlist(outputPath), 'utf8'),
+      fsp.readdir(path.parse(outputPath).dir || '.'),
     ]);
     const frags = getFragsForDownloading(
       '.',
@@ -90,10 +90,10 @@ const main = async () => {
       args.values['download-sections'],
     );
     const existingFrags = frags.filter((frag) => {
-      const fragFilename = getFilename.frag(outputFilename, frag.idx + 1);
-      return allFiles.includes(path.parse(fragFilename).base);
+      const fragPath = getPath.frag(outputPath, frag.idx + 1);
+      return allFiles.includes(path.parse(fragPath).base);
     });
-    await mergeFrags(existingFrags, outputFilename, true);
+    await mergeFrags(existingFrags, outputPath, true);
     return;
   }
 

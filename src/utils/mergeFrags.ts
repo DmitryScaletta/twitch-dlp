@@ -1,7 +1,7 @@
 import fsp from 'node:fs/promises';
 import { spawn } from '../lib/spawn.ts';
 import type { Frag } from '../types.ts';
-import { getFilename } from './getFilename.ts';
+import { getPath } from './getPath.ts';
 
 export type FragFile = [filename: string, duration: string];
 
@@ -43,25 +43,24 @@ const generateFfconcat = (files: FragFile[]) => {
 
 export const mergeFrags = async (
   frags: Frag[],
-  outputFilename: string,
+  outputPath: string,
   keepFragments: boolean,
 ) => {
   const fragFiles: FragFile[] = frags.map((frag) => [
-    getFilename.frag(outputFilename, frag.idx + 1),
+    getPath.frag(outputPath, frag.idx + 1),
     frag.duration,
   ]);
   const ffconcat = generateFfconcat(fragFiles);
-  const ffconcatFilename = getFilename.ffconcat(outputFilename);
-  await fsp.writeFile(ffconcatFilename, ffconcat);
+  const ffconcatPath = getPath.ffconcat(outputPath);
+  await fsp.writeFile(ffconcatPath, ffconcat);
 
-  const returnCode = await runFfconcat(ffconcatFilename, outputFilename);
-  fsp.unlink(ffconcatFilename);
+  const returnCode = await runFfconcat(ffconcatPath, outputPath);
+  fsp.unlink(ffconcatPath);
 
   if (keepFragments || returnCode) return;
 
-  const playlistFilename = getFilename.playlist(outputFilename);
   await Promise.all([
     ...fragFiles.map(([filename]) => fsp.unlink(filename)),
-    fsp.unlink(playlistFilename),
+    fsp.unlink(getPath.playlist(outputPath)),
   ]);
 };
