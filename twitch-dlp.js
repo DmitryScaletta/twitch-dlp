@@ -399,20 +399,22 @@ const spawn = (command, args, silent = false) => new Promise((resolve, reject) =
 });
 
 //#endregion
-//#region src/utils/getFilename.ts
-const getFilename = {
+//#region src/utils/getPath.ts
+const getPath = {
 	output: (template, videoInfo) => {
-		let outputFilename = template;
+		let outputPath = template;
 		for (const [name, value] of Object.entries(videoInfo)) {
 			let newValue = value ? String(value) : "";
 			if (name.endsWith("_date")) newValue = newValue.slice(0, 10);
-			outputFilename = outputFilename.replaceAll(`%(${name})s`, newValue);
+			outputPath = outputPath.replaceAll(`%(${name})s`, newValue);
 		}
-		return path.resolve(".", outputFilename.replace(/[/\\?%*:|"'<>]/g, ""));
+		const parsed = path.parse(outputPath);
+		parsed.base = parsed.base.replace(/[/\\?%*:|"'<>]/g, "");
+		return path.format(parsed);
 	},
-	ffconcat: (filename) => `${filename}-ffconcat.txt`,
-	playlist: (filename) => `${filename}-playlist.txt`,
-	frag: (filename, i) => `${filename}.part-Frag${i}`
+	ffconcat: (filePath) => `${filePath}-ffconcat.txt`,
+	playlist: (filePath) => `${filePath}-playlist.txt`,
+	frag: (filePath, i) => `${filePath}.part-Frag${i}`
 };
 
 //#endregion
@@ -451,16 +453,15 @@ const generateFfconcat = (files) => {
 	].join("\n")).join("\n");
 	return ffconcat;
 };
-const mergeFrags = async (frags, outputFilename, keepFragments) => {
-	const fragFiles = frags.map((frag) => [getFilename.frag(outputFilename, frag.idx + 1), frag.duration]);
+const mergeFrags = async (frags, outputPath, keepFragments) => {
+	const fragFiles = frags.map((frag) => [getPath.frag(outputPath, frag.idx + 1), frag.duration]);
 	const ffconcat = generateFfconcat(fragFiles);
-	const ffconcatFilename = getFilename.ffconcat(outputFilename);
-	await fsp.writeFile(ffconcatFilename, ffconcat);
-	const returnCode = await runFfconcat(ffconcatFilename, outputFilename);
-	fsp.unlink(ffconcatFilename);
+	const ffconcatPath = getPath.ffconcat(outputPath);
+	await fsp.writeFile(ffconcatPath, ffconcat);
+	const returnCode = await runFfconcat(ffconcatPath, outputPath);
+	fsp.unlink(ffconcatPath);
 	if (keepFragments || returnCode) return;
-	const playlistFilename = getFilename.playlist(outputFilename);
-	await Promise.all([...fragFiles.map(([filename]) => fsp.unlink(filename)), fsp.unlink(playlistFilename)]);
+	await Promise.all([...fragFiles.map(([filename]) => fsp.unlink(filename)), fsp.unlink(getPath.playlist(outputPath))]);
 };
 
 //#endregion
@@ -575,8 +576,7 @@ const downloadVideo = async (formats, videoInfo, getIsLive, args) => {
 	}
 	const downloadFormat = args.values.format === "best" ? formats[0] : formats.find((f) => f.format_id === args.values.format);
 	if (!downloadFormat) throw new Error("Wrong format");
-	let outputFilename;
-	let playlistFilename;
+	const outputPath = getPath.output(args.values.output || DEFAULT_OUTPUT_TEMPLATE, videoInfo);
 	let isLive;
 	let frags;
 	let fragsCount = 0;
@@ -590,11 +590,7 @@ const downloadVideo = async (formats, videoInfo, getIsLive, args) => {
 			continue;
 		}
 		frags = getFragsForDownloading(downloadFormat.url, playlist, args.values["download-sections"]);
-		if (!outputFilename || !playlistFilename) {
-			outputFilename = getFilename.output(args.values.output || DEFAULT_OUTPUT_TEMPLATE, videoInfo);
-			playlistFilename = getFilename.playlist(outputFilename);
-		}
-		await fsp.writeFile(playlistFilename, playlist);
+		await fsp.writeFile(getPath.playlist(outputPath), playlist);
 		const hasNewFrags = frags.length > fragsCount;
 		fragsCount = frags.length;
 		if (!hasNewFrags && isLive) {
@@ -604,17 +600,17 @@ const downloadVideo = async (formats, videoInfo, getIsLive, args) => {
 		}
 		let downloadedFragments = 0;
 		for (let [i, frag] of frags.entries()) {
-			const fragFilename = path.resolve(".", getFilename.frag(outputFilename, frag.idx + 1));
-			const fragFilenameTmp = `${fragFilename}.part`;
-			if (fs.existsSync(fragFilename)) continue;
+			const fragPath = getPath.frag(outputPath, frag.idx + 1);
+			const fragTmpPath = `${fragPath}.part`;
+			if (fs.existsSync(fragPath)) continue;
 			showProgress(frags, fragsMetadata, i + 1);
-			if (fs.existsSync(fragFilenameTmp)) await fsp.unlink(fragFilenameTmp);
+			if (fs.existsSync(fragTmpPath)) await fsp.unlink(fragTmpPath);
 			if (frag.url.endsWith("-unmuted.ts")) frag.url = frag.url.replace("-unmuted.ts", "-muted.ts");
 			const startTime = Date.now();
-			await downloadAndRetry(frag.url, fragFilenameTmp, args.values["limit-rate"]);
+			await downloadAndRetry(frag.url, fragTmpPath, args.values["limit-rate"]);
 			const endTime = Date.now();
-			await fsp.rename(fragFilenameTmp, fragFilename);
-			const { size } = await fsp.stat(fragFilename);
+			await fsp.rename(fragTmpPath, fragPath);
+			const { size } = await fsp.stat(fragPath);
 			fragsMetadata.push({
 				size,
 				time: endTime - startTime
@@ -624,7 +620,7 @@ const downloadVideo = async (formats, videoInfo, getIsLive, args) => {
 		if (downloadedFragments) process.stdout.write("\n");
 		if (!isLive) break;
 	}
-	await mergeFrags(frags, outputFilename, args.values["keep-fragments"]);
+	await mergeFrags(frags, outputPath, args.values["keep-fragments"]);
 };
 
 //#endregion
@@ -728,10 +724,10 @@ const downloadWithStreamlink = async (link, channel, channelLogin, args) => {
 		await spawn("streamlink", ["-v", link]);
 		process.exit();
 	}
-	const outputFilename = getFilename.output(args.values.output || getDefaultOutputTemplate(), getStreamInfo(channel, channelLogin));
+	const outputPath = getPath.output(args.values.output || getDefaultOutputTemplate(), getStreamInfo(channel, channelLogin));
 	const streamlinkArgs = [
 		"-o",
-		outputFilename,
+		outputPath,
 		link,
 		args.values.format,
 		"--twitch-disable-ads"
@@ -784,14 +780,14 @@ const main = async () => {
 		return;
 	}
 	if (args.values["merge-fragments"]) {
-		const [outputFilename] = args.positionals;
-		const [playlist, allFiles] = await Promise.all([fsp.readFile(getFilename.playlist(outputFilename), "utf8"), fsp.readdir(path.parse(outputFilename).dir || ".")]);
+		const [outputPath] = args.positionals;
+		const [playlist, allFiles] = await Promise.all([fsp.readFile(getPath.playlist(outputPath), "utf8"), fsp.readdir(path.parse(outputPath).dir || ".")]);
 		const frags = getFragsForDownloading(".", playlist, args.values["download-sections"]);
 		const existingFrags = frags.filter((frag) => {
-			const fragFilename = getFilename.frag(outputFilename, frag.idx + 1);
-			return allFiles.includes(path.parse(fragFilename).base);
+			const fragPath = getPath.frag(outputPath, frag.idx + 1);
+			return allFiles.includes(path.parse(fragPath).base);
 		});
-		await mergeFrags(existingFrags, outputFilename, true);
+		await mergeFrags(existingFrags, outputPath, true);
 		return;
 	}
 	if (args.positionals.length > 1) throw new Error("Expected only one link");
