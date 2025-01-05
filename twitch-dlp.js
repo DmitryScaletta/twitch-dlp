@@ -165,21 +165,6 @@ const getBroadcast = (channelId) => fetchGql({
 		sha256Hash: "cc89dfe8fcfe71235313b05b34799eaa519d162ebf85faf0c51d17c274614f0f"
 	} }
 }, "user", "broadcast id");
-const getContentMetadata = (login) => fetchGql({
-	operationName: "NielsenContentMetadata",
-	variables: {
-		isCollectionContent: false,
-		isLiveContent: true,
-		isVODContent: false,
-		collectionID: "",
-		login,
-		vodID: ""
-	},
-	extensions: { persistedQuery: {
-		version: 1,
-		sha256Hash: "2dbf505ee929438369e68e72319d1106bb3c142e295332fac157c90638968586"
-	} }
-}, "user", "content metadata");
 const getManifest = (videoId, accessToken) => {
 	const params = new URLSearchParams({
 		allow_source: "true",
@@ -196,22 +181,24 @@ const getManifest = (videoId, accessToken) => {
 
 //#endregion
 //#region src/utils/parseLink.ts
+const VOD_PATH_REGEX = /^video:(?<vodPath>(?<channelLogin>\w+)_(?<videoId>\d+)_(?<startTimestamp>\d+))$/;
 const VOD_REGEX = /^https:\/\/(?:www\.)?twitch\.tv\/videos\/(?<videoId>\d+)/;
 const CHANNEL_REGEX = /^https:\/\/(?:www\.)?twitch\.tv\/(?<channelLogin>[^/#?]+)/;
 const parseLink = (link) => {
-	if (link.startsWith("video:")) return {
+	let m = link.match(VOD_PATH_REGEX);
+	if (m) return {
 		type: "vodPath",
-		vodPath: link.replace("video:", "")
+		...m.groups
 	};
-	let m = link.match(VOD_REGEX);
+	m = link.match(VOD_REGEX);
 	if (m) return {
 		type: "video",
-		videoId: m.groups.videoId
+		...m.groups
 	};
 	m = link.match(CHANNEL_REGEX);
 	if (m) return {
 		type: "channel",
-		channelLogin: m.groups.channelLogin
+		...m.groups
 	};
 	throw new Error("Wrong link");
 };
@@ -325,6 +312,19 @@ const parseDownloadFormats = (playlistContent) => {
 
 //#endregion
 //#region src/utils/getVideoFormats.ts
+const FORMATS = [
+	"chunked",
+	"720p60",
+	"720p30",
+	"480p30",
+	"360p30",
+	"160p30",
+	"audio_only"
+];
+const FORMATS_MAP = {
+	chunked: "Source",
+	audio_only: "Audio_Only"
+};
 const getVideoFormats = async (videoId) => {
 	const accessToken = await getAccessToken("video", videoId);
 	if (!accessToken) return [];
@@ -338,33 +338,20 @@ const getFullVodPath = (vodPath) => {
 	const hashedVodPath = crypto.createHash("sha1").update(vodPath).digest("hex").slice(0, 20);
 	return `${hashedVodPath}_${vodPath}`;
 };
-const getVodUrl = (vodDomain, fullVodPath, broadcastType = "ARCHIVE", videoId = "", resolution = "chunked") => {
+const getVodUrl = (vodDomain, fullVodPath, broadcastType = "ARCHIVE", videoId = "", format = "chunked") => {
 	const playlistName = broadcastType === "HIGHLIGHT" ? `highlight-${videoId}` : "index-dvr";
-	return `${vodDomain}/${fullVodPath}/${resolution}/${playlistName}.m3u8`;
+	return `${vodDomain}/${fullVodPath}/${format}/${playlistName}.m3u8`;
 };
 const getAvailableFormats = async (vodDomain, fullVodPath, broadcastType, videoId) => {
-	const FORMATS_MAP = {
-		chunked: "Source",
-		audio_only: "Audio_Only"
-	};
-	const RESOLUTIONS = [
-		"chunked",
-		"720p60",
-		"720p30",
-		"480p30",
-		"360p30",
-		"160p30",
-		"audio_only"
-	];
 	const formats = [];
-	const resolutionUrls = RESOLUTIONS.map((resolution) => getVodUrl(vodDomain, fullVodPath, broadcastType, videoId, resolution));
-	const responses = await Promise.all(resolutionUrls.map((url) => fetch(url, { method: "HEAD" })));
+	const formatUrls = FORMATS.map((format) => getVodUrl(vodDomain, fullVodPath, broadcastType, videoId, format));
+	const responses = await Promise.all(formatUrls.map((url) => fetch(url, { method: "HEAD" })));
 	for (const [i, res] of responses.entries()) {
 		if (!res.ok) continue;
-		const resolution = RESOLUTIONS[i];
+		const format = FORMATS[i];
 		formats.push({
-			format_id: FORMATS_MAP[resolution] || resolution,
-			url: resolutionUrls[i]
+			format_id: FORMATS_MAP[format] || format,
+			url: formatUrls[i]
 		});
 	}
 	return formats;
@@ -402,15 +389,14 @@ const spawn = (command, args, silent = false) => new Promise((resolve, reject) =
 //#region src/utils/getPath.ts
 const getPath = {
 	output: (template, videoInfo) => {
-		let outputPath = template;
+		let finalTemplate = template;
 		for (const [name, value] of Object.entries(videoInfo)) {
 			let newValue = value ? String(value) : "";
 			if (name.endsWith("_date")) newValue = newValue.slice(0, 10);
-			outputPath = outputPath.replaceAll(`%(${name})s`, newValue);
+			newValue = newValue.replace(/[/\\?%*:|"'<>]/g, "");
+			finalTemplate = finalTemplate.replaceAll(`%(${name})s`, newValue);
 		}
-		const parsed = path.parse(outputPath);
-		parsed.base = parsed.base.replace(/[/\\?%*:|"'<>]/g, "");
-		return path.format(parsed);
+		return path.resolve(finalTemplate);
 	},
 	ffconcat: (filePath) => `${filePath}-ffconcat.txt`,
 	playlist: (filePath) => `${filePath}-playlist.txt`,
@@ -625,67 +611,83 @@ const downloadVideo = async (formats, videoInfo, getIsLive, args) => {
 
 //#endregion
 //#region src/utils/getVideoInfo.ts
-const getVideoInfo = (video) => ({
-	id: `v${video.id}`,
-	title: video.title || "Untitled Broadcast",
-	description: video.description,
-	duration: video.lengthSeconds,
-	uploader: video.owner.displayName,
-	uploader_id: video.owner.login,
-	upload_date: video.createdAt,
-	release_date: video.publishedAt,
-	view_count: video.viewCount,
+const DEFAULT_TITLE = "Untitled Broadcast";
+const getVideoInfoByVideoMeta = (videoMeta) => ({
+	id: `v${videoMeta.id}`,
+	title: videoMeta.title || DEFAULT_TITLE,
+	description: videoMeta.description,
+	duration: videoMeta.lengthSeconds,
+	uploader: videoMeta.owner.displayName,
+	uploader_id: videoMeta.owner.login,
+	upload_date: videoMeta.createdAt,
+	release_date: videoMeta.publishedAt,
+	view_count: videoMeta.viewCount,
+	ext: "mp4"
+});
+const getVideoInfoByStreamMeta = (streamMeta, channelLogin) => ({
+	id: `${streamMeta.lastBroadcast.id}`,
+	title: streamMeta.lastBroadcast.title || DEFAULT_TITLE,
+	description: null,
+	duration: null,
+	uploader: channelLogin,
+	uploader_id: streamMeta.id,
+	upload_date: streamMeta.stream.createdAt,
+	release_date: streamMeta.stream.createdAt,
+	view_count: null,
+	ext: "mp4"
+});
+const getVideoInfoByVodPath = ({ channelLogin, videoId, startTimestamp }) => ({
+	id: `v${videoId}`,
+	title: `${channelLogin}_${startTimestamp}`,
+	description: null,
+	duration: null,
+	uploader: channelLogin,
+	uploader_id: null,
+	upload_date: new Date(startTimestamp * 1e3).toISOString(),
+	release_date: new Date(startTimestamp * 1e3).toISOString(),
+	view_count: null,
 	ext: "mp4"
 });
 
 //#endregion
-//#region src/utils/downloadVideoFromStart.ts
-const downloadVideoFromStart = async (channel, channelLogin, args) => {
-	const WAIT_AFTER_STREAM_ENDED_SECONDS = 480;
+//#region src/utils/downloadLiveVideo.ts
+const WAIT_AFTER_STREAM_ENDED_SECONDS = 480;
+const downloadLiveVideo = async (streamMeta, channelLogin, args) => {
 	let formats = [];
 	let videoInfo;
 	let videoId;
-	if (!channel.stream) return false;
-	const broadcast = await getBroadcast(channel.id);
+	if (!streamMeta.stream) return false;
+	const broadcast = await getBroadcast(streamMeta.id);
 	if (broadcast?.stream?.archiveVideo) {
 		videoId = broadcast.stream.archiveVideo.id;
-		[formats, videoInfo] = await Promise.all([getVideoFormats(videoId), getVideoMetadata(videoId).then((video) => getVideoInfo(video))]);
+		[formats, videoInfo] = await Promise.all([getVideoFormats(videoId), getVideoMetadata(videoId).then((videoMeta) => getVideoInfoByVideoMeta(videoMeta))]);
 	}
 	if (!broadcast?.stream?.archiveVideo || formats.length === 0) {
 		console.warn("Couldn't find an archived video for the current broadcast. Trying to recover VOD url");
-		let contentMetadata;
-		const startTimestamp = new Date(channel.stream.createdAt).getTime() / 1e3;
-		const vodPath = `${channelLogin}_${channel.stream.id}_${startTimestamp}`;
-		[formats, contentMetadata] = await Promise.all([getVideoFormatsByFullVodPath(getFullVodPath(vodPath)), getContentMetadata(channelLogin)]);
-		videoInfo = {
-			id: `v${channel.stream.id}`,
-			title: contentMetadata?.broadcastSettings.title || "Untitled Broadcast",
-			uploader: channelLogin,
-			uploader_id: channelLogin,
-			upload_date: channel.stream.createdAt,
-			release_date: channel.stream.createdAt,
-			ext: "mp4"
-		};
+		const startTimestamp = new Date(streamMeta.stream.createdAt).getTime() / 1e3;
+		const vodPath = `${channelLogin}_${streamMeta.stream.id}_${startTimestamp}`;
+		formats = await getVideoFormatsByFullVodPath(getFullVodPath(vodPath));
+		videoInfo = getVideoInfoByStreamMeta(streamMeta, channelLogin);
 	}
 	const streamId = broadcast?.stream?.id;
 	let lastLiveTimestamp = Date.now();
-	const getIsVodLive = (video) => /\/404_processing_[^.?#]+\.png/.test(video.previewThumbnailURL);
-	const getSecondsAfterStreamEnded = (video) => {
-		const started = new Date(video.publishedAt);
-		const ended = new Date(started.getTime() + video.lengthSeconds * 1e3);
+	const getIsVodLive = (thumbUrl) => /\/404_processing_[^.?#]+\.png/.test(thumbUrl);
+	const getSecondsAfterStreamEnded = (videoMeta) => {
+		const started = new Date(videoMeta.publishedAt);
+		const ended = new Date(started.getTime() + videoMeta.lengthSeconds * 1e3);
 		return Math.floor((Date.now() - ended.getTime()) / 1e3);
 	};
 	const getIsLive = async () => {
-		let video;
+		let videoMeta = null;
 		if (videoId) {
-			video = await getVideoMetadata(videoId);
-			const isLive = !video || getIsVodLive(video);
+			videoMeta = await getVideoMetadata(videoId);
+			const isLive = !videoMeta || getIsVodLive(videoMeta.previewThumbnailURL);
 			if (isLive) return true;
-			const secondsAfterEnd = getSecondsAfterStreamEnded(video);
+			const secondsAfterEnd = getSecondsAfterStreamEnded(videoMeta);
 			return WAIT_AFTER_STREAM_ENDED_SECONDS - secondsAfterEnd > 0;
 		}
-		if (!videoId || !video) {
-			const broadcast$1 = await getBroadcast(channel.id);
+		if (!videoId || !videoMeta) {
+			const broadcast$1 = await getBroadcast(streamMeta.id);
 			if (!broadcast$1?.stream || broadcast$1.stream.id !== streamId) {
 				const secondsAfterEnd = (Date.now() - lastLiveTimestamp) / 1e3;
 				return WAIT_AFTER_STREAM_ENDED_SECONDS - secondsAfterEnd > 0;
@@ -706,25 +708,16 @@ const downloadVideoFromStart = async (channel, channelLogin, args) => {
 
 //#endregion
 //#region src/utils/downloadWithStreamlink.ts
-const getStreamInfo = (channel, channelLogin) => ({
-	id: channel.stream.id,
-	title: channel.lastBroadcast.title || "Untitled Broadcast",
-	uploader: channelLogin,
-	uploader_id: channel.id,
-	upload_date: channel.stream.createdAt,
-	release_date: channel.stream.createdAt,
-	ext: "mp4"
-});
 const getDefaultOutputTemplate = () => {
 	const now = new Date().toISOString().slice(0, 16).replace("T", " ").replace(":", "_");
 	return `%(uploader)s (live) ${now} [%(id)s].%(ext)s`;
 };
-const downloadWithStreamlink = async (link, channel, channelLogin, args) => {
+const downloadWithStreamlink = async (link, streamMeta, channelLogin, args) => {
 	if (args.values["list-formats"]) {
 		await spawn("streamlink", ["-v", link]);
 		process.exit();
 	}
-	const outputPath = getPath.output(args.values.output || getDefaultOutputTemplate(), getStreamInfo(channel, channelLogin));
+	const outputPath = getPath.output(args.values.output || getDefaultOutputTemplate(), getVideoInfoByStreamMeta(streamMeta, channelLogin));
 	const streamlinkArgs = [
 		"-o",
 		outputPath,
@@ -795,22 +788,18 @@ const main = async () => {
 	const parsedLink = parseLink(link);
 	if (parsedLink.type === "vodPath") {
 		const formats = await getVideoFormatsByFullVodPath(getFullVodPath(parsedLink.vodPath));
-		const [channelLogin$1, videoId, startTimestamp] = parsedLink.vodPath.split("_");
-		const videoInfo = {
-			id: videoId,
-			title: `${channelLogin$1}_${startTimestamp}`,
-			ext: "mp4"
-		};
+		const videoInfo = getVideoInfoByVodPath(parsedLink);
 		return downloadVideo(formats, videoInfo, () => false, args);
 	}
 	if (parsedLink.type === "video") {
-		let [formats, video] = await Promise.all([getVideoFormats(parsedLink.videoId), getVideoMetadata(parsedLink.videoId)]);
-		if (formats.length === 0 && video !== null) {
+		let [formats, videoMeta] = await Promise.all([getVideoFormats(parsedLink.videoId), getVideoMetadata(parsedLink.videoId)]);
+		if (formats.length === 0 && videoMeta !== null) {
 			console.log("Trying to get playlist url from video metadata");
-			formats = await getVideoFormatsByThumbUrl(video.broadcastType, video.id, video.previewThumbnailURL);
+			formats = await getVideoFormatsByThumbUrl(videoMeta.broadcastType, videoMeta.id, videoMeta.previewThumbnailURL);
 		}
-		if (formats.length === 0 || !video) return console.log(PRIVATE_VIDEO_INSTRUCTIONS);
-		return downloadVideo(formats, getVideoInfo(video), () => false, args);
+		if (formats.length === 0 || !videoMeta) return console.log(PRIVATE_VIDEO_INSTRUCTIONS);
+		const videoInfo = getVideoInfoByVideoMeta(videoMeta);
+		return downloadVideo(formats, videoInfo, () => false, args);
 	}
 	const { channelLogin } = parsedLink;
 	let retryStreamsDelay = 0;
@@ -820,27 +809,23 @@ const main = async () => {
 	}
 	const isLiveFromStart = args.values["live-from-start"];
 	if (!retryStreamsDelay) {
-		const channel = await getStreamMetadata(channelLogin);
-		if (!channel) return;
-		if (!channel.stream) {
+		const streamMeta = await getStreamMetadata(channelLogin);
+		if (!streamMeta) return;
+		if (!streamMeta.stream) {
 			console.warn("The channel is not currently live");
 			return;
 		}
-		if (!isLiveFromStart) return await downloadWithStreamlink(`https://www.twitch.tv/${channelLogin}`, channel, channelLogin, args);
-		if (isLiveFromStart) return await downloadVideoFromStart(channel, channelLogin, args);
+		if (!isLiveFromStart) return await downloadWithStreamlink(`https://www.twitch.tv/${channelLogin}`, streamMeta, channelLogin, args);
+		if (isLiveFromStart) return await downloadLiveVideo(streamMeta, channelLogin, args);
 	}
 	while (true) {
-		const channel = await getStreamMetadata(channelLogin);
-		if (!channel) {
-			await setTimeout(retryStreamsDelay * 1e3);
-			continue;
-		}
-		const isLive = !!channel.stream;
+		const streamMeta = await getStreamMetadata(channelLogin);
+		const isLive = !!streamMeta?.stream;
 		if (!isLive) console.log(`Waiting for streams, retrying every ${retryStreamsDelay} second(s)`);
-		if (isLive && !isLiveFromStart) await downloadWithStreamlink(`https://www.twitch.tv/${channelLogin}`, channel, channelLogin, args);
+		if (isLive && !isLiveFromStart) await downloadWithStreamlink(`https://www.twitch.tv/${channelLogin}`, streamMeta, channelLogin, args);
 		if (isLive && isLiveFromStart) {
-			const result = await downloadVideoFromStart(channel, channelLogin, args);
-			if (!result) console.log(`Waiting for VOD, retrying every ${retryStreamsDelay} second(s)`);
+			const isSuccess = await downloadLiveVideo(streamMeta, channelLogin, args);
+			if (!isSuccess) console.log(`Waiting for VOD, retrying every ${retryStreamsDelay} second(s)`);
 		}
 		await setTimeout(retryStreamsDelay * 1e3);
 	}

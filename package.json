@@ -1,6 +1,6 @@
 {
   "name": "twitch-dlp",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "author": "DmitryScaletta",
   "description": "Download regular/sub-only/hidden twitch VODs from start during live broadcast",
   "license": "MIT",
