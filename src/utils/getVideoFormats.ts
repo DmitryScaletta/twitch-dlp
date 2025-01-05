@@ -4,6 +4,20 @@ import type { BroadcastType, DownloadFormat } from '../types.ts';
 import { parseDownloadFormats } from './parseDownloadFormats.ts';
 import { VOD_DOMAINS } from '../constants.ts';
 
+const FORMATS = [
+  'chunked',
+  '720p60',
+  '720p30',
+  '480p30',
+  '360p30',
+  '160p30',
+  'audio_only',
+] as const;
+const FORMATS_MAP: Record<string, string> = {
+  chunked: 'Source',
+  audio_only: 'Audio_Only',
+};
+
 export const getVideoFormats = async (videoId: string) => {
   const accessToken = await api.getAccessToken('video', videoId);
   if (!accessToken) return [];
@@ -28,11 +42,11 @@ const getVodUrl = (
   fullVodPath: string,
   broadcastType: BroadcastType = 'ARCHIVE',
   videoId = '',
-  resolution = 'chunked',
+  format = 'chunked',
 ) => {
   const playlistName =
     broadcastType === 'HIGHLIGHT' ? `highlight-${videoId}` : 'index-dvr';
-  return `${vodDomain}/${fullVodPath}/${resolution}/${playlistName}.m3u8`;
+  return `${vodDomain}/${fullVodPath}/${format}/${playlistName}.m3u8`;
 };
 
 const getAvailableFormats = async (
@@ -41,32 +55,19 @@ const getAvailableFormats = async (
   broadcastType?: BroadcastType,
   videoId?: string,
 ) => {
-  const FORMATS_MAP: Record<string, string> = {
-    chunked: 'Source',
-    audio_only: 'Audio_Only',
-  };
-  const RESOLUTIONS = [
-    'chunked',
-    '720p60',
-    '720p30',
-    '480p30',
-    '360p30',
-    '160p30',
-    'audio_only',
-  ] as const;
   const formats: DownloadFormat[] = [];
-  const resolutionUrls = RESOLUTIONS.map((resolution) =>
-    getVodUrl(vodDomain, fullVodPath, broadcastType, videoId, resolution),
+  const formatUrls = FORMATS.map((format) =>
+    getVodUrl(vodDomain, fullVodPath, broadcastType, videoId, format),
   );
   const responses = await Promise.all(
-    resolutionUrls.map((url) => fetch(url, { method: 'HEAD' })),
+    formatUrls.map((url) => fetch(url, { method: 'HEAD' })),
   );
   for (const [i, res] of responses.entries()) {
     if (!res.ok) continue;
-    const resolution = RESOLUTIONS[i];
+    const format = FORMATS[i];
     formats.push({
-      format_id: FORMATS_MAP[resolution] || resolution,
-      url: resolutionUrls[i],
+      format_id: FORMATS_MAP[format] || format,
+      url: formatUrls[i],
     });
   }
   return formats;

@@ -18,9 +18,12 @@ import {
 import { mergeFrags } from './utils/mergeFrags.ts';
 import { getPath } from './utils/getPath.ts';
 import { downloadVideo } from './utils/downloadVideo.ts';
-import { downloadVideoFromStart } from './utils/downloadVideoFromStart.ts';
+import { downloadLiveVideo } from './utils/downloadLiveVideo.ts';
 import { downloadWithStreamlink } from './utils/downloadWithStreamlink.ts';
-import { getVideoInfo } from './utils/getVideoInfo.ts';
+import {
+  getVideoInfoByVideoMeta,
+  getVideoInfoByVodPath,
+} from './utils/getVideoInfo.ts';
 
 const getArgs = () =>
   parseArgs({
@@ -107,36 +110,30 @@ const main = async () => {
     const formats = await getVideoFormatsByFullVodPath(
       getFullVodPath(parsedLink.vodPath),
     );
-    const [channelLogin, videoId, startTimestamp] =
-      parsedLink.vodPath.split('_');
-    const videoInfo: VideoInfo = {
-      id: videoId,
-      title: `${channelLogin}_${startTimestamp}`,
-      ext: 'mp4',
-    };
+    const videoInfo = getVideoInfoByVodPath(parsedLink);
     return downloadVideo(formats, videoInfo, () => false, args);
   }
 
   // link type: video
   if (parsedLink.type === 'video') {
-    let [formats, video] = await Promise.all([
+    let [formats, videoMeta] = await Promise.all([
       getVideoFormats(parsedLink.videoId),
       api.getVideoMetadata(parsedLink.videoId),
     ]);
-
     // should work for sub only VODs and highlights
-    if (formats.length === 0 && video !== null) {
+    if (formats.length === 0 && videoMeta !== null) {
       console.log('Trying to get playlist url from video metadata');
       formats = await getVideoFormatsByThumbUrl(
-        video.broadcastType,
-        video.id,
-        video.previewThumbnailURL,
+        videoMeta.broadcastType,
+        videoMeta.id,
+        videoMeta.previewThumbnailURL,
       );
     }
-    if (formats.length === 0 || !video) {
+    if (formats.length === 0 || !videoMeta) {
       return console.log(PRIVATE_VIDEO_INSTRUCTIONS);
     }
-    return downloadVideo(formats, getVideoInfo(video), () => false, args);
+    const videoInfo = getVideoInfoByVideoMeta(videoMeta);
+    return downloadVideo(formats, videoInfo, () => false, args);
   }
 
   // link type: channel
@@ -152,9 +149,9 @@ const main = async () => {
 
   // not retry
   if (!retryStreamsDelay) {
-    const channel = await api.getStreamMetadata(channelLogin);
-    if (!channel) return;
-    if (!channel.stream) {
+    const streamMeta = await api.getStreamMetadata(channelLogin);
+    if (!streamMeta) return;
+    if (!streamMeta.stream) {
       console.warn('The channel is not currently live');
       return;
     }
@@ -163,7 +160,7 @@ const main = async () => {
     if (!isLiveFromStart) {
       return await downloadWithStreamlink(
         `https://www.twitch.tv/${channelLogin}`,
-        channel,
+        streamMeta,
         channelLogin,
         args,
       );
@@ -171,18 +168,14 @@ const main = async () => {
 
     // from start
     if (isLiveFromStart) {
-      return await downloadVideoFromStart(channel, channelLogin, args);
+      return await downloadLiveVideo(streamMeta, channelLogin, args);
     }
   }
 
   // retry
   while (true) {
-    const channel = await api.getStreamMetadata(channelLogin);
-    if (!channel) {
-      await sleep(retryStreamsDelay * 1000);
-      continue;
-    }
-    const isLive = !!channel.stream;
+    const streamMeta = await api.getStreamMetadata(channelLogin);
+    const isLive = !!streamMeta?.stream;
     if (!isLive) {
       console.log(
         `Waiting for streams, retrying every ${retryStreamsDelay} second(s)`,
@@ -193,7 +186,7 @@ const main = async () => {
     if (isLive && !isLiveFromStart) {
       await downloadWithStreamlink(
         `https://www.twitch.tv/${channelLogin}`,
-        channel,
+        streamMeta,
         channelLogin,
         args,
       );
@@ -201,8 +194,8 @@ const main = async () => {
 
     // from start
     if (isLive && isLiveFromStart) {
-      const result = await downloadVideoFromStart(channel, channelLogin, args);
-      if (!result) {
+      const isSuccess = await downloadLiveVideo(streamMeta, channelLogin, args);
+      if (!isSuccess) {
         console.log(
           `Waiting for VOD, retrying every ${retryStreamsDelay} second(s)`,
         );

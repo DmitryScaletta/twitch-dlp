@@ -7,29 +7,35 @@ import {
   getVideoFormatsByFullVodPath,
 } from './getVideoFormats.ts';
 import { downloadVideo } from './downloadVideo.ts';
-import { getVideoInfo } from './getVideoInfo.ts';
+import {
+  getVideoInfoByStreamMeta,
+  getVideoInfoByVideoMeta,
+} from './getVideoInfo.ts';
 
-export const downloadVideoFromStart = async (
-  channel: api.StreamMetadataResponse,
+// To be able to download full vod we need to wait about 5-10 minutes after the end of the stream
+const WAIT_AFTER_STREAM_ENDED_SECONDS = 8 * 60;
+
+export const downloadLiveVideo = async (
+  streamMeta: api.StreamMetadataResponse,
   channelLogin: string,
   args: AppArgs,
 ) => {
-  const WAIT_AFTER_STREAM_ENDED_SECONDS = 8 * 60;
-
   let formats: DownloadFormat[] = [];
   let videoInfo: VideoInfo;
   let videoId: string;
 
-  if (!channel.stream) return false; // make ts happy
+  if (!streamMeta.stream) return false; // make ts happy
 
-  const broadcast = await api.getBroadcast(channel.id);
+  const broadcast = await api.getBroadcast(streamMeta.id);
 
   // public VOD
   if (broadcast?.stream?.archiveVideo) {
     videoId = broadcast.stream.archiveVideo.id;
     [formats, videoInfo] = await Promise.all([
       getVideoFormats(videoId),
-      api.getVideoMetadata(videoId).then((video) => getVideoInfo(video!)),
+      api
+        .getVideoMetadata(videoId)
+        .then((videoMeta) => getVideoInfoByVideoMeta(videoMeta!)),
     ]);
   }
 
@@ -38,32 +44,20 @@ export const downloadVideoFromStart = async (
     console.warn(
       "Couldn't find an archived video for the current broadcast. Trying to recover VOD url",
     );
-    let contentMetadata: api.ContentMetadataResponse | null;
-    const startTimestamp = new Date(channel.stream.createdAt).getTime() / 1000;
-    const vodPath = `${channelLogin}_${channel.stream.id}_${startTimestamp}`;
-    [formats, contentMetadata] = await Promise.all([
-      getVideoFormatsByFullVodPath(getFullVodPath(vodPath)),
-      api.getContentMetadata(channelLogin),
-    ]);
-    videoInfo = {
-      id: `v${channel.stream.id}`,
-      title: contentMetadata?.broadcastSettings.title || 'Untitled Broadcast',
-      uploader: channelLogin,
-      uploader_id: channelLogin,
-      upload_date: channel.stream.createdAt,
-      release_date: channel.stream.createdAt,
-      ext: 'mp4',
-    };
+    const startTimestamp =
+      new Date(streamMeta.stream.createdAt).getTime() / 1000;
+    const vodPath = `${channelLogin}_${streamMeta.stream.id}_${startTimestamp}`;
+    formats = await getVideoFormatsByFullVodPath(getFullVodPath(vodPath));
+    videoInfo = getVideoInfoByStreamMeta(streamMeta, channelLogin);
   }
 
-  // To be able to download full vod we need to wait about 5 minutes after the end of the stream
   const streamId = broadcast?.stream?.id;
   let lastLiveTimestamp = Date.now();
-  const getIsVodLive = (video: api.VideoMetadataResponse) =>
-    /\/404_processing_[^.?#]+\.png/.test(video.previewThumbnailURL);
-  const getSecondsAfterStreamEnded = (video: api.VideoMetadataResponse) => {
-    const started = new Date(video.publishedAt);
-    const ended = new Date(started.getTime() + video.lengthSeconds * 1000);
+  const getIsVodLive = (videoMeta: api.VideoMetadataResponse) =>
+    /\/404_processing_[^.?#]+\.png/.test(videoMeta.previewThumbnailURL);
+  const getSecondsAfterStreamEnded = (videoMeta: api.VideoMetadataResponse) => {
+    const started = new Date(videoMeta.publishedAt);
+    const ended = new Date(started.getTime() + videoMeta.lengthSeconds * 1000);
     return Math.floor((Date.now() - ended.getTime()) / 1000);
   };
   const getIsLive = async () => {
@@ -76,7 +70,7 @@ export const downloadVideoFromStart = async (
       return WAIT_AFTER_STREAM_ENDED_SECONDS - secondsAfterEnd > 0;
     }
     if (!videoId || !video) {
-      const broadcast = await api.getBroadcast(channel.id);
+      const broadcast = await api.getBroadcast(streamMeta.id);
       if (!broadcast?.stream || broadcast.stream.id !== streamId) {
         const secondsAfterEnd = (Date.now() - lastLiveTimestamp) / 1000;
         return WAIT_AFTER_STREAM_ENDED_SECONDS - secondsAfterEnd > 0;

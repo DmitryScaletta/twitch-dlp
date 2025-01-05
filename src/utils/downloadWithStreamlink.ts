@@ -1,21 +1,8 @@
 import * as api from '../api/twitch.ts';
 import { spawn } from '../lib/spawn.ts';
 import { getPath } from './getPath.ts';
+import { getVideoInfoByStreamMeta } from './getVideoInfo.ts';
 import type { AppArgs } from '../main.ts';
-import type { VideoInfo } from '../types.ts';
-
-export const getStreamInfo = (
-  channel: api.StreamMetadataResponse,
-  channelLogin: string,
-): VideoInfo => ({
-  id: channel.stream!.id,
-  title: channel.lastBroadcast.title || 'Untitled Broadcast',
-  uploader: channelLogin,
-  uploader_id: channel.id,
-  upload_date: channel.stream!.createdAt,
-  release_date: channel.stream!.createdAt,
-  ext: 'mp4',
-});
 
 const getDefaultOutputTemplate = () => {
   const now = new Date()
@@ -28,7 +15,7 @@ const getDefaultOutputTemplate = () => {
 
 export const downloadWithStreamlink = async (
   link: string,
-  channel: api.StreamMetadataResponse,
+  streamMeta: api.StreamMetadataResponse,
   channelLogin: string,
   args: AppArgs,
 ) => {
@@ -39,7 +26,7 @@ export const downloadWithStreamlink = async (
 
   const outputPath = getPath.output(
     args.values.output || getDefaultOutputTemplate(),
-    getStreamInfo(channel, channelLogin),
+    getVideoInfoByStreamMeta(streamMeta, channelLogin),
   );
 
   const streamlinkArgs = [
