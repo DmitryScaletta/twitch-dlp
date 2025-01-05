@@ -53,23 +53,23 @@ export const downloadLiveVideo = async (
 
   const streamId = broadcast?.stream?.id;
   let lastLiveTimestamp = Date.now();
-  const getIsVodLive = (videoMeta: api.VideoMetadataResponse) =>
-    /\/404_processing_[^.?#]+\.png/.test(videoMeta.previewThumbnailURL);
+  const getIsVodLive = (thumbUrl: string) =>
+    /\/404_processing_[^.?#]+\.png/.test(thumbUrl);
   const getSecondsAfterStreamEnded = (videoMeta: api.VideoMetadataResponse) => {
     const started = new Date(videoMeta.publishedAt);
     const ended = new Date(started.getTime() + videoMeta.lengthSeconds * 1000);
     return Math.floor((Date.now() - ended.getTime()) / 1000);
   };
   const getIsLive = async () => {
-    let video;
+    let videoMeta: api.VideoMetadataResponse | null = null;
     if (videoId) {
-      video = await api.getVideoMetadata(videoId);
-      const isLive = !video || getIsVodLive(video);
+      videoMeta = await api.getVideoMetadata(videoId);
+      const isLive = !videoMeta || getIsVodLive(videoMeta.previewThumbnailURL);
       if (isLive) return true;
-      const secondsAfterEnd = getSecondsAfterStreamEnded(video!);
+      const secondsAfterEnd = getSecondsAfterStreamEnded(videoMeta!);
       return WAIT_AFTER_STREAM_ENDED_SECONDS - secondsAfterEnd > 0;
     }
-    if (!videoId || !video) {
+    if (!videoId || !videoMeta) {
       const broadcast = await api.getBroadcast(streamMeta.id);
       if (!broadcast?.stream || broadcast.stream.id !== streamId) {
         const secondsAfterEnd = (Date.now() - lastLiveTimestamp) / 1000;
