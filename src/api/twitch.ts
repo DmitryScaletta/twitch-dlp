@@ -152,46 +152,6 @@ export const getBroadcast = (channelId: string) =>
     'broadcast id',
   );
 
-export type ContentMetadataResponse = {
-  id: string;
-  broadcastSettings: {
-    id: string;
-    title: string;
-    __typename: 'BroadcastSettings';
-  };
-  stream: {
-    id: string;
-    createdAt: string;
-    game: { id: string; displayName: string; __typename: 'Game' } | null;
-    __typename: 'Stream';
-  } | null;
-  __typename: 'User';
-};
-
-export const getContentMetadata = (login: string) =>
-  fetchGql<ContentMetadataResponse>(
-    {
-      operationName: 'NielsenContentMetadata',
-      variables: {
-        isCollectionContent: false,
-        isLiveContent: true,
-        isVODContent: false,
-        collectionID: '',
-        login: login,
-        vodID: '',
-      },
-      extensions: {
-        persistedQuery: {
-          version: 1,
-          sha256Hash:
-            '2dbf505ee929438369e68e72319d1106bb3c142e295332fac157c90638968586',
-        },
-      },
-    },
-    'user',
-    'content metadata',
-  );
-
 export const getManifest = (
   videoId: string,
   accessToken: VideoAccessTokenResponse,
