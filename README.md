@@ -33,7 +33,7 @@ yarn dlx twitch-dlp LINK
 # Download a VOD from start using channel link, continue until stream ends
 npx twitch-dlp https://www.twitch.tv/xqc --live-from-start
 
-# Download a VOD. If it's live, continue until stream ends
+# Download a VOD
 npx twitch-dlp https://www.twitch.tv/videos/2022789761
 
 # Download live stream from the current time using streamlink
