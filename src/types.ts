@@ -32,12 +32,12 @@ export type DownloadFormat = {
 export type VideoInfo = {
   id: string;
   title: string;
-  description?: string | null;
-  duration?: number | null;
-  uploader?: string | null;
-  uploader_id?: string | null;
-  upload_date?: string | null;
-  release_date?: string | null;
-  view_count?: number | null;
+  description: string | null;
+  duration: number | null;
+  uploader: string | null;
+  uploader_id: string | null;
+  upload_date: string | null;
+  release_date: string | null;
+  view_count: number | null;
   ext: 'mp4';
 };

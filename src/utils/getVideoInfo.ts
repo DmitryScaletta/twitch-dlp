@@ -24,10 +24,13 @@ export const getVideoInfoByStreamMeta = (
 ): VideoInfo => ({
   id: `${streamMeta.lastBroadcast.id}`,
   title: streamMeta.lastBroadcast.title || DEFAULT_TITLE,
+  description: null,
+  duration: null,
   uploader: channelLogin,
   uploader_id: streamMeta.id,
   upload_date: streamMeta.stream!.createdAt,
   release_date: streamMeta.stream!.createdAt,
+  view_count: null,
   ext: 'mp4',
 });
 
@@ -42,8 +45,12 @@ export const getVideoInfoByVodPath = ({
 }): VideoInfo => ({
   id: `v${videoId}`,
   title: `${channelLogin}_${startTimestamp}`,
+  description: null,
+  duration: null,
   uploader: channelLogin,
+  uploader_id: null,
   upload_date: new Date(startTimestamp * 1000).toISOString(),
   release_date: new Date(startTimestamp * 1000).toISOString(),
+  view_count: null,
   ext: 'mp4',
 });

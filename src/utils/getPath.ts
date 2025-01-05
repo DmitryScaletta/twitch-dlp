@@ -7,11 +7,10 @@ export const getPath = {
     for (const [name, value] of Object.entries(videoInfo)) {
       let newValue = value ? String(value) : '';
       if (name.endsWith('_date')) newValue = newValue.slice(0, 10);
+      newValue = newValue.replace(/[/\\?%*:|"'<>]/g, '');
       finalTemplate = finalTemplate.replaceAll(`%(${name})s`, newValue);
     }
-    const parsed = path.parse(finalTemplate);
-    parsed.base = parsed.base.replace(/[/\\?%*:|"'<>]/g, '');
-    return path.resolve(path.format(parsed));
+    return path.resolve(finalTemplate);
   },
   ffconcat: (filePath: string) => `${filePath}-ffconcat.txt`,
   playlist: (filePath: string) => `${filePath}-playlist.txt`,
