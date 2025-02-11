@@ -2,7 +2,7 @@
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { setTimeout } from "timers/promises";
+import { setTimeout } from "node:timers/promises";
 import crypto from "node:crypto";
 import childProcess from "node:child_process";
 import fs from "node:fs";
@@ -27,7 +27,7 @@ const VOD_DOMAINS = [
 	"https://d3aqoihi2n8ty8.cloudfront.net"
 ];
 const HELP = `
-Download regular/sub-only/hidden twitch VODs from start during live broadcast
+Download any twitch VODs from start during live broadcast
 
 GitHub Repo: https://github.com/DmitryScaletta/twitch-dlp
 
@@ -81,7 +81,7 @@ Requires:
 - curl (if using --limit-rate option)
 - streamlink (if downloading by channel link without --live-from-start)
 `;
-const PRIVATE_VIDEO_INSTRUCTIONS = "This video might be hidden or sub-only. Follow this article to download it: https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md";
+const PRIVATE_VIDEO_INSTRUCTIONS = "This video might be private. Follow this article to download it: https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md";
 
 //#endregion
 //#region src/utils/fetchGql.ts
@@ -553,9 +553,9 @@ const downloadAndRetry = async (url, destPath, rateLimit, retryCount = 10) => {
 
 //#endregion
 //#region src/utils/downloadVideo.ts
+const DEFAULT_OUTPUT_TEMPLATE = "%(title)s [%(id)s].%(ext)s";
+const WAIT_BETWEEN_CYCLES_SECONDS = 60;
 const downloadVideo = async (formats, videoInfo, getIsLive, args) => {
-	const DEFAULT_OUTPUT_TEMPLATE = "%(title)s [%(id)s].%(ext)s";
-	const WAIT_BETWEEN_CYCLES_SECONDS = 60;
 	if (args.values["list-formats"]) {
 		console.table(formats.map(({ url,...rest }) => rest));
 		process.exit();
@@ -625,7 +625,7 @@ const getVideoInfoByVideoMeta = (videoMeta) => ({
 	ext: "mp4"
 });
 const getVideoInfoByStreamMeta = (streamMeta, channelLogin) => ({
-	id: `${streamMeta.lastBroadcast.id}`,
+	id: `v${streamMeta.lastBroadcast.id}`,
 	title: streamMeta.lastBroadcast.title || DEFAULT_TITLE,
 	description: null,
 	duration: null,
@@ -651,7 +651,7 @@ const getVideoInfoByVodPath = ({ channelLogin, videoId, startTimestamp }) => ({
 
 //#endregion
 //#region src/utils/downloadLiveVideo.ts
-const WAIT_AFTER_STREAM_ENDED_SECONDS = 480;
+const WAIT_AFTER_STREAM_ENDED_SECONDS = 8 * 60;
 const downloadLiveVideo = async (streamMeta, channelLogin, args) => {
 	let formats = [];
 	let videoInfo;
