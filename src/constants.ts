@@ -16,7 +16,7 @@ export const VOD_DOMAINS = [
   'https://d3aqoihi2n8ty8.cloudfront.net',
 ];
 export const HELP = `
-Download regular/sub-only/hidden twitch VODs from start during live broadcast
+Download any twitch VODs from start during live broadcast
 
 GitHub Repo: https://github.com/DmitryScaletta/twitch-dlp
 
@@ -71,4 +71,4 @@ Requires:
 - streamlink (if downloading by channel link without --live-from-start)
 `;
 export const PRIVATE_VIDEO_INSTRUCTIONS =
-  'This video might be hidden or sub-only. Follow this article to download it: https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md';
+  'This video might be private. Follow this article to download it: https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md';

@@ -3,7 +3,7 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { parseArgs } from 'node:util';
-import { setTimeout as sleep } from 'timers/promises';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { HELP, PRIVATE_VIDEO_INSTRUCTIONS } from './constants.ts';
 import type { VideoInfo } from './types.ts';
 import * as api from './api/twitch.ts';
@@ -120,7 +120,7 @@ const main = async () => {
       getVideoFormats(parsedLink.videoId),
       api.getVideoMetadata(parsedLink.videoId),
     ]);
-    // should work for sub only VODs and highlights
+    // should work for VODs and highlights
     if (formats.length === 0 && videoMeta !== null) {
       console.log('Trying to get playlist url from video metadata');
       formats = await getVideoFormatsByThumbUrl(
