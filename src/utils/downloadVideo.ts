@@ -10,15 +10,15 @@ import { showProgress } from './showProgress.ts';
 import { downloadAndRetry } from '../downloaders.ts';
 import { mergeFrags } from './mergeFrags.ts';
 
+const DEFAULT_OUTPUT_TEMPLATE = '%(title)s [%(id)s].%(ext)s';
+const WAIT_BETWEEN_CYCLES_SECONDS = 60;
+
 export const downloadVideo = async (
   formats: DownloadFormat[],
   videoInfo: VideoInfo,
   getIsLive: () => boolean | Promise<boolean>,
   args: AppArgs,
 ) => {
-  const DEFAULT_OUTPUT_TEMPLATE = '%(title)s [%(id)s].%(ext)s';
-  const WAIT_BETWEEN_CYCLES_SECONDS = 60;
-
   if (args.values['list-formats']) {
     console.table(formats.map(({ url, ...rest }) => rest));
     process.exit();
