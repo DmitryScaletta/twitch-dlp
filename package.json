@@ -13,11 +13,11 @@
   "bin": "twitch-dlp.js",
   "scripts": {
     "start": "node --experimental-strip-types ./src/main.ts",
-    "build": "pnpm dlx rolldown src/main.ts --file twitch-dlp.js",
+    "build": "pnpm dlx rolldown src/main.ts --file twitch-dlp.js --platform node",
     "test": "node --experimental-strip-types --test"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2"
+    "@types/node": "^22.13.1"
   },
-  "packageManager": "pnpm@9.15.2"
+  "packageManager": "pnpm@10.3.0+sha512.ee592eda8815a8a293c206bb0917c4bb0ff274c50def7cbc17be05ec641fc2d1b02490ce660061356bd0d126a4d7eb2ec8830e6959fb8a447571c631d5a2442d"
 }
