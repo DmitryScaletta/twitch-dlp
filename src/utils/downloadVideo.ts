@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
-import { setTimeout as sleep } from 'timers/promises';
+import { setTimeout as sleep } from 'node:timers/promises';
 import type { AppArgs } from '../main.ts';
 import type { DownloadFormat, FragMetadata, VideoInfo } from '../types.ts';
 import { fetchText } from './fetchText.ts';
