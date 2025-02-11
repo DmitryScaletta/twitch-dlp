@@ -1,4 +1,4 @@
-# Download Twitch Private Videos (Sub Only or Hidden)
+# Download Twitch Private Videos
 
 > [!IMPORTANT]
 > This tutorial is only relevant for finished streams.

@@ -39,7 +39,7 @@ npx twitch-dlp https://www.twitch.tv/videos/2022789761
 # Download live stream from the current time using streamlink
 npx twitch-dlp https://www.twitch.tv/xqc
 
-# Download sub-only or hidden VOD
+# Download a hidden VOD
 # Follow this instructions first:
 # https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md
 npx twitch-dlp video:xqc_51582913581_1721686515
