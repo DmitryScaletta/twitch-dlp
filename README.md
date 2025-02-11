@@ -1,12 +1,12 @@
 # twitch-dlp
 
-Download regular/sub-only/hidden twitch VODs from start during live broadcast
+Download any twitch VODs from start during live broadcast
 
 ## Features
 
 - Download live VODs from start (`--live-from-start`)
-- Download ongoing sub-only/hidden VODs (or if they were hidden during the broadcast)
-- Download finished sub-only/hidden VODs (see the [instructions](https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md))
+- Download ongoing hidden VODs (or if they were hidden during the broadcast)
+- Download finished hidden VODs (see the [instructions](https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md))
 - Download specific part of the video (`--download-sections`)
 - Watch channel status. If it becomes live, start downloading (`--retry-streams DELAY`)
 - Supports VOD links and channel links

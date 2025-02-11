@@ -3,7 +3,7 @@
 > [!IMPORTANT]
 > This tutorial is only relevant for finished streams.
 >
-> If You want to download sub-only/hidden VOD which is currently live, just use a channel link and `--live-from-start` option.
+> If You want to download hidden VOD which is currently live, just use a channel link and `--live-from-start` option.
 >
 > It's not possible to download if:
 >
