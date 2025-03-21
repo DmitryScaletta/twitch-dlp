@@ -9,23 +9,6 @@ import fs from "node:fs";
 import stream from "node:stream";
 
 //#region src/constants.ts
-const CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
-const VOD_DOMAINS = [
-	"https://d2e2de1etea730.cloudfront.net",
-	"https://dqrpb9wgowsf5.cloudfront.net",
-	"https://ds0h3roq6wcgc.cloudfront.net",
-	"https://d2nvs31859zcd8.cloudfront.net",
-	"https://d2aba1wr3818hz.cloudfront.net",
-	"https://d3c27h4odz752x.cloudfront.net",
-	"https://dgeft87wbj63p.cloudfront.net",
-	"https://d1m7jfoe9zdc1j.cloudfront.net",
-	"https://d3vd9lfkzbru3h.cloudfront.net",
-	"https://d2vjef5jvl6bfs.cloudfront.net",
-	"https://d1ymi26ma8va5x.cloudfront.net",
-	"https://d1mhjrowxxagfy.cloudfront.net",
-	"https://ddacn6pr5v0tl.cloudfront.net",
-	"https://d3aqoihi2n8ty8.cloudfront.net"
-];
 const HELP = `
 Download any twitch VODs from start during live broadcast
 
@@ -82,25 +65,74 @@ Requires:
 - streamlink (if downloading by channel link without --live-from-start)
 `;
 const PRIVATE_VIDEO_INSTRUCTIONS = "This video might be private. Follow this article to download it: https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md";
+const VOD_DOMAINS = [
+	"https://d2e2de1etea730.cloudfront.net",
+	"https://dqrpb9wgowsf5.cloudfront.net",
+	"https://ds0h3roq6wcgc.cloudfront.net",
+	"https://d2nvs31859zcd8.cloudfront.net",
+	"https://d2aba1wr3818hz.cloudfront.net",
+	"https://d3c27h4odz752x.cloudfront.net",
+	"https://dgeft87wbj63p.cloudfront.net",
+	"https://d1m7jfoe9zdc1j.cloudfront.net",
+	"https://d3vd9lfkzbru3h.cloudfront.net",
+	"https://d2vjef5jvl6bfs.cloudfront.net",
+	"https://d1ymi26ma8va5x.cloudfront.net",
+	"https://d1mhjrowxxagfy.cloudfront.net",
+	"https://ddacn6pr5v0tl.cloudfront.net",
+	"https://d3aqoihi2n8ty8.cloudfront.net"
+];
 
 //#endregion
-//#region src/utils/fetchGql.ts
-const fetchGql = async (body, resultKey, description = "metadata") => {
-	console.log(`Downloading ${description}`);
-	try {
-		const res = await fetch("https://gql.twitch.tv/gql", {
-			method: "POST",
-			body: JSON.stringify(body),
-			headers: { "Client-Id": CLIENT_ID }
-		});
-		if (!res.ok) throw new Error();
-		const json = await res.json();
-		return json.data[resultKey];
-	} catch (e) {
-		console.error(`Unable to download ${description}`);
-		return null;
-	}
+//#region node_modules/.pnpm/twitch-gql-queries@0.1.10/node_modules/twitch-gql-queries/dist/index.js
+var CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
+var MAX_QUERIES_PER_REQUEST = 35;
+var gqlRequest = async (queries, requestInit) => {
+	if (queries.length === 0) return [];
+	if (queries.length > MAX_QUERIES_PER_REQUEST) throw new Error(`Too many queries. Max: ${MAX_QUERIES_PER_REQUEST}`);
+	const res = await fetch("https://gql.twitch.tv/gql", {
+		method: "POST",
+		body: JSON.stringify(queries),
+		headers: {
+			"Client-Id": CLIENT_ID,
+			...requestInit?.headers
+		},
+		...requestInit
+	});
+	if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+	return res.json();
 };
+var getQueryFfzBroadcastId = (variables) => ({
+	operationName: "FFZ_BroadcastID",
+	variables,
+	extensions: { persistedQuery: {
+		version: 1,
+		sha256Hash: "cc89dfe8fcfe71235313b05b34799eaa519d162ebf85faf0c51d17c274614f0f"
+	} }
+});
+var getQueryPlaybackAccessToken = (variables) => ({
+	operationName: "PlaybackAccessToken",
+	variables,
+	extensions: { persistedQuery: {
+		version: 1,
+		sha256Hash: "ed230aa1e33e07eebb8928504583da78a5173989fadfb1ac94be06a04f3cdbe9"
+	} }
+});
+var getQueryStreamMetadata = (variables) => ({
+	operationName: "StreamMetadata",
+	variables,
+	extensions: { persistedQuery: {
+		version: 1,
+		sha256Hash: "252a46e3f5b1ddc431b396e688331d8d020daec27079893ac7d4e6db759a7402"
+	} }
+});
+var getQueryVideoMetadata = (variables) => ({
+	operationName: "VideoMetadata",
+	variables,
+	extensions: { persistedQuery: {
+		version: 1,
+		sha256Hash: "45111672eea2e507f8ba44d101a61862f9c56b11dee09a15634cb75cb9b9084d"
+	} }
+});
 
 //#endregion
 //#region src/utils/fetchText.ts
@@ -118,53 +150,30 @@ const fetchText = async (url, description = "metadata") => {
 
 //#endregion
 //#region src/api/twitch.ts
-const getAccessToken = (type, id) => {
-	const PARAM_NAMES = {
-		video: "id",
-		stream: "channelName"
-	};
-	const query = `{
-    ${type}PlaybackAccessToken(
-      ${PARAM_NAMES[type]}: "${id}"
-      params: {
-        platform: "web"
-        playerBackend: "mediaplayer"
-        playerType: "site"
-      }
-    ) {
-      value
-      signature
-    }
-  }`;
-	return fetchGql({ query }, `${type}PlaybackAccessToken`, `${type} access token`);
+const apiRequest = async (query, resultKey, description = "metadata") => {
+	console.log(`Downloading ${description}`);
+	try {
+		const [res] = await gqlRequest([query]);
+		return res?.data[resultKey] || null;
+	} catch (e) {
+		console.error(`Unable to download ${description}`);
+		return null;
+	}
 };
-const getStreamMetadata = (channelLogin) => fetchGql({
-	operationName: "StreamMetadata",
-	variables: { channelLogin },
-	extensions: { persistedQuery: {
-		version: 1,
-		sha256Hash: "252a46e3f5b1ddc431b396e688331d8d020daec27079893ac7d4e6db759a7402"
-	} }
-}, "user", "stream metadata");
-const getVideoMetadata = (videoId) => fetchGql({
-	operationName: "VideoMetadata",
-	variables: {
-		channelLogin: "",
-		videoID: videoId
-	},
-	extensions: { persistedQuery: {
-		version: 1,
-		sha256Hash: "45111672eea2e507f8ba44d101a61862f9c56b11dee09a15634cb75cb9b9084d"
-	} }
-}, "video", "video metadata");
-const getBroadcast = (channelId) => fetchGql({
-	operationName: "FFZ_BroadcastID",
-	variables: { id: channelId },
-	extensions: { persistedQuery: {
-		version: 1,
-		sha256Hash: "cc89dfe8fcfe71235313b05b34799eaa519d162ebf85faf0c51d17c274614f0f"
-	} }
-}, "user", "broadcast id");
+const getVideoAccessToken = (id) => apiRequest(getQueryPlaybackAccessToken({
+	isLive: false,
+	login: "",
+	isVod: true,
+	vodID: id,
+	playerType: "site",
+	platform: "web"
+}), "videoPlaybackAccessToken", "video access token");
+const getStreamMetadata = (channelLogin) => apiRequest(getQueryStreamMetadata({ channelLogin }), "user", "stream metadata");
+const getVideoMetadata = (videoId) => apiRequest(getQueryVideoMetadata({
+	channelLogin: "",
+	videoID: videoId
+}), "video", "video metadata");
+const getBroadcast = (channelId) => apiRequest(getQueryFfzBroadcastId({ id: channelId }), "user", "broadcast id");
 const getManifest = (videoId, accessToken) => {
 	const params = new URLSearchParams({
 		allow_source: "true",
@@ -326,7 +335,7 @@ const FORMATS_MAP = {
 	audio_only: "Audio_Only"
 };
 const getVideoFormats = async (videoId) => {
-	const accessToken = await getAccessToken("video", videoId);
+	const accessToken = await getVideoAccessToken(videoId);
 	if (!accessToken) return [];
 	const manifest = await getManifest(videoId, accessToken);
 	if (!manifest) return [];
@@ -663,7 +672,7 @@ const downloadLiveVideo = async (streamMeta, channelLogin, args) => {
 		[formats, videoInfo] = await Promise.all([getVideoFormats(videoId), getVideoMetadata(videoId).then((videoMeta) => getVideoInfoByVideoMeta(videoMeta))]);
 	}
 	if (!broadcast?.stream?.archiveVideo || formats.length === 0) {
-		console.warn("Couldn't find an archived video for the current broadcast. Trying to recover VOD url");
+		console.warn("Couldn't find an archived video for the current broadcast. Trying to recover a VOD url");
 		const startTimestamp = new Date(streamMeta.stream.createdAt).getTime() / 1e3;
 		const vodPath = `${channelLogin}_${streamMeta.stream.id}_${startTimestamp}`;
 		formats = await getVideoFormatsByFullVodPath(getFullVodPath(vodPath));
@@ -699,7 +708,7 @@ const downloadLiveVideo = async (streamMeta, channelLogin, args) => {
 		return false;
 	};
 	if (formats.length === 0) {
-		console.warn("Couldn't find VOD url");
+		console.warn("Couldn't find a VOD url");
 		return false;
 	}
 	await downloadVideo(formats, videoInfo, getIsLive, args);
