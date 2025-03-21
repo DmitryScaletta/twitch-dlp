@@ -5,7 +5,6 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { HELP, PRIVATE_VIDEO_INSTRUCTIONS } from './constants.ts';
-import type { VideoInfo } from './types.ts';
 import * as api from './api/twitch.ts';
 import { parseLink } from './utils/parseLink.ts';
 import { getFragsForDownloading } from './utils/getFragsForDownloading.ts';

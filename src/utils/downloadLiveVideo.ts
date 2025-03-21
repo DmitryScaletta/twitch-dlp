@@ -16,7 +16,7 @@ import {
 const WAIT_AFTER_STREAM_ENDED_SECONDS = 8 * 60;
 
 export const downloadLiveVideo = async (
-  streamMeta: api.StreamMetadataResponse,
+  streamMeta: api.StreamMetadata,
   channelLogin: string,
   args: AppArgs,
 ) => {
@@ -42,7 +42,7 @@ export const downloadLiveVideo = async (
   // private VOD
   if (!broadcast?.stream?.archiveVideo || formats.length === 0) {
     console.warn(
-      "Couldn't find an archived video for the current broadcast. Trying to recover VOD url",
+      "Couldn't find an archived video for the current broadcast. Trying to recover a VOD url",
     );
     const startTimestamp =
       new Date(streamMeta.stream.createdAt).getTime() / 1000;
@@ -83,7 +83,7 @@ export const downloadLiveVideo = async (
   };
 
   if (formats.length === 0) {
-    console.warn("Couldn't find VOD url");
+    console.warn("Couldn't find a VOD url");
     return false;
   }
 

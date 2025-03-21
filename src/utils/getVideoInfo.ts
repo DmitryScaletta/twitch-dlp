@@ -19,7 +19,7 @@ export const getVideoInfoByVideoMeta = (
 });
 
 export const getVideoInfoByStreamMeta = (
-  streamMeta: api.StreamMetadataResponse,
+  streamMeta: api.StreamMetadata,
   channelLogin: string,
 ): VideoInfo => ({
   id: `v${streamMeta.lastBroadcast.id}`,

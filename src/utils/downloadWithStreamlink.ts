@@ -15,7 +15,7 @@ const getDefaultOutputTemplate = () => {
 
 export const downloadWithStreamlink = async (
   link: string,
-  streamMeta: api.StreamMetadataResponse,
+  streamMeta: api.StreamMetadata,
   channelLogin: string,
   args: AppArgs,
 ) => {

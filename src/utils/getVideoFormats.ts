@@ -19,7 +19,7 @@ const FORMATS_MAP: Record<string, string> = {
 };
 
 export const getVideoFormats = async (videoId: string) => {
-  const accessToken = await api.getAccessToken('video', videoId);
+  const accessToken = await api.getVideoAccessToken(videoId);
   if (!accessToken) return [];
   const manifest = await api.getManifest(videoId, accessToken);
   if (!manifest) return [];
