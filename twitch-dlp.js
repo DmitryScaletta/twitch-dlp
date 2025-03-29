@@ -59,6 +59,12 @@ Options:
                             ".part-FragN". Can't be used with other
                             options (except --download-sections)
 
+It's also possible to pass streamlink twitch plugin args:
+--twitch-disable-ads, --twitch-low-latency, --twitch-api-header,
+--twitch-access-token-param, --twitch-force-client-integrity,
+--twitch-purge-client-integrity
+See https://streamlink.github.io/cli.html#twitch
+
 Requires:
 - ffmpeg
 - curl (if using --limit-rate option)
@@ -717,6 +723,7 @@ const downloadLiveVideo = async (streamMeta, channelLogin, args) => {
 
 //#endregion
 //#region src/utils/downloadWithStreamlink.ts
+const DEFAULT_STREAMLINK_ARGS = ["--twitch-force-client-integrity", "--twitch-access-token-param=playerType=frontpage"];
 const getDefaultOutputTemplate = () => {
 	const now = new Date().toISOString().slice(0, 16).replace("T", " ").replace(":", "_");
 	return `%(uploader)s (live) ${now} [%(id)s].%(ext)s`;
@@ -727,14 +734,21 @@ const downloadWithStreamlink = async (link, streamMeta, channelLogin, args) => {
 		process.exit();
 	}
 	const outputPath = getPath.output(args.values.output || getDefaultOutputTemplate(), getVideoInfoByStreamMeta(streamMeta, channelLogin));
-	const streamlinkArgs = [
+	const streamlinkArgs = [];
+	for (const argName of Object.keys(args.values)) {
+		if (!argName.startsWith("twitch-")) continue;
+		const argValue = args.values[argName];
+		if (argValue === void 0) continue;
+		if (Array.isArray(argValue)) for (const v of argValue) streamlinkArgs.push(`--${argName}=${v}`);
+		else streamlinkArgs.push(typeof argValue === "boolean" ? `--${argName}` : `--${argName}=${argValue}`);
+	}
+	return spawn("streamlink", [
 		"-o",
 		outputPath,
 		link,
 		args.values.format,
-		"--twitch-disable-ads"
-	];
-	return spawn("streamlink", streamlinkArgs);
+		...streamlinkArgs.length ? streamlinkArgs : DEFAULT_STREAMLINK_ARGS
+	]);
 };
 
 //#endregion
@@ -771,7 +785,19 @@ const getArgs = () => parseArgs({
 		"live-from-start": { type: "boolean" },
 		"retry-streams": { type: "string" },
 		"download-sections": { type: "string" },
-		"merge-fragments": { type: "boolean" }
+		"merge-fragments": { type: "boolean" },
+		"twitch-disable-ads": { type: "boolean" },
+		"twitch-low-latency": { type: "boolean" },
+		"twitch-api-header": {
+			type: "string",
+			multiple: true
+		},
+		"twitch-access-token-param": {
+			type: "string",
+			multiple: true
+		},
+		"twitch-force-client-integrity": { type: "boolean" },
+		"twitch-purge-client-integrity": { type: "boolean" }
 	},
 	allowPositionals: true
 });
