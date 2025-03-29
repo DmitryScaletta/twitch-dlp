@@ -48,6 +48,12 @@ Options:
                             ".part-FragN". Can't be used with other
                             options (except --download-sections)
 
+It's also possible to pass streamlink twitch plugin args:
+--twitch-disable-ads, --twitch-low-latency, --twitch-api-header,
+--twitch-access-token-param, --twitch-force-client-integrity,
+--twitch-purge-client-integrity
+See https://streamlink.github.io/cli.html#twitch
+
 Requires:
 - ffmpeg
 - curl (if using --limit-rate option)

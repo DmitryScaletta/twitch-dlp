@@ -66,6 +66,28 @@ const getArgs = () =>
       'merge-fragments': {
         type: 'boolean',
       },
+      // streamlink twitch plugin args
+      // https://streamlink.github.io/cli.html#twitch
+      'twitch-disable-ads': {
+        type: 'boolean',
+      },
+      'twitch-low-latency': {
+        type: 'boolean',
+      },
+      'twitch-api-header': {
+        type: 'string',
+        multiple: true,
+      },
+      'twitch-access-token-param': {
+        type: 'string',
+        multiple: true,
+      },
+      'twitch-force-client-integrity': {
+        type: 'boolean',
+      },
+      'twitch-purge-client-integrity': {
+        type: 'boolean',
+      },
     },
     allowPositionals: true,
   });

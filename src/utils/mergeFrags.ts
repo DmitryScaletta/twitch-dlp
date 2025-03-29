@@ -5,7 +5,7 @@ import { getPath } from './getPath.ts';
 
 export type FragFile = [filename: string, duration: string];
 
-// https://github.com/ScrubN/TwitchDownloader/blob/master/TwitchDownloaderCore/VideoDownloader.cs#L337
+// https://github.com/lay295/TwitchDownloader/blob/master/TwitchDownloaderCore/VideoDownloader.cs#L393
 const runFfconcat = (ffconcatFilename: string, outputFilename: string) =>
   // prettier-ignore
   spawn('ffmpeg', [
@@ -21,7 +21,7 @@ const runFfconcat = (ffconcatFilename: string, outputFilename: string) =>
     outputFilename,
   ]);
 
-// https://github.com/ScrubN/TwitchDownloader/blob/master/TwitchDownloaderCore/Tools/FfmpegConcatList.cs#L30-L35
+// https://github.com/lay295/TwitchDownloader/blob/master/TwitchDownloaderCore/Tools/FfmpegConcatList.cs#L30-L35
 const generateFfconcat = (files: FragFile[]) => {
   let ffconcat = 'ffconcat version 1.0\n';
   ffconcat += files
