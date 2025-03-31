@@ -319,7 +319,7 @@ const parseDownloadFormats = (playlistContent) => {
 		format_id: name.replaceAll(" ", "_"),
 		width,
 		height,
-		url: url.replace(/-muted-\w+(?=\.m3u8$)/, "")
+		url
 	});
 	return formats;
 };
@@ -580,16 +580,24 @@ const downloadVideo = async (formats, videoInfo, getIsLive, args) => {
 	let isLive;
 	let frags;
 	let fragsCount = 0;
+	let playlistUrl = downloadFormat.url;
 	const fragsMetadata = [];
 	while (true) {
 		let playlist;
-		[playlist, isLive] = await Promise.all([fetchText(downloadFormat.url, "playlist"), getIsLive()]);
+		[playlist, isLive] = await Promise.all([fetchText(playlistUrl, "playlist"), getIsLive()]);
+		if (!playlist) {
+			const newPlaylistUrl = downloadFormat.url.replace(/-muted-\w+(?=\.m3u8$)/, "");
+			if (newPlaylistUrl !== playlistUrl) {
+				playlistUrl = newPlaylistUrl;
+				playlist = await fetchText(playlistUrl, "playlist (attempt #2)");
+			}
+		}
 		if (!playlist) {
 			console.log(`Can't fetch playlist. Retry after ${WAIT_BETWEEN_CYCLES_SECONDS} second(s)`);
 			await setTimeout(WAIT_BETWEEN_CYCLES_SECONDS * 1e3);
 			continue;
 		}
-		frags = getFragsForDownloading(downloadFormat.url, playlist, args.values["download-sections"]);
+		frags = getFragsForDownloading(playlistUrl, playlist, args.values["download-sections"]);
 		await fsp.writeFile(getPath.playlist(outputPath), playlist);
 		const hasNewFrags = frags.length > fragsCount;
 		fragsCount = frags.length;
@@ -606,6 +614,11 @@ const downloadVideo = async (formats, videoInfo, getIsLive, args) => {
 			showProgress(frags, fragsMetadata, i + 1);
 			if (fs.existsSync(fragTmpPath)) await fsp.unlink(fragTmpPath);
 			if (frag.url.endsWith("-unmuted.ts")) frag.url = frag.url.replace("-unmuted.ts", "-muted.ts");
+			if (frag.url.endsWith("-muted.ts")) {
+				const notMutedUrl = frag.url.replace("-muted.ts", ".ts");
+				const res = await fetch(notMutedUrl, { method: "HEAD" });
+				if (res.ok) frag.url = notMutedUrl;
+			}
 			const startTime = Date.now();
 			await downloadAndRetry(frag.url, fragTmpPath, args.values["limit-rate"]);
 			const endTime = Date.now();
