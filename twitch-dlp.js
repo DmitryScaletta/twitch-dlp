@@ -314,13 +314,12 @@ const getFragsForDownloading = (playlistUrl, playlistContent, downloadSectionsAr
 //#endregion
 //#region src/utils/parseDownloadFormats.ts
 const parseDownloadFormats = (playlistContent) => {
-	const playlist = parsePlaylist(playlistContent);
 	const formats = [];
-	for (const { name, width, height, url } of playlist) formats.push({
+	for (const { name, width, height, url } of parsePlaylist(playlistContent)) formats.push({
 		format_id: name.replaceAll(" ", "_"),
 		width,
 		height,
-		url
+		url: url.replace(/-muted-\w+(?=\.m3u8$)/, "")
 	});
 	return formats;
 };
