@@ -95,6 +95,11 @@ export const downloadVideo = async (
       if (frag.url.endsWith('-unmuted.ts')) {
         frag.url = frag.url.replace('-unmuted.ts', '-muted.ts');
       }
+      if (frag.url.endsWith('-muted.ts')) {
+        const notMutedUrl = frag.url.replace('-muted.ts', '.ts');
+        const res = await fetch(notMutedUrl, { method: 'HEAD' });
+        if (res.ok) frag.url = notMutedUrl;
+      }
 
       const startTime = Date.now();
       await downloadAndRetry(frag.url, fragTmpPath, args.values['limit-rate']);
