@@ -8,9 +8,7 @@ export const parseDownloadFormats = (playlistContent: string) => {
       format_id: name.replaceAll(' ', '_'),
       width,
       height,
-      // workaround for some old muted highlights
-      // https://regex101.com/r/HdZKlP/1
-      url: url.replace(/-muted-\w+(?=\.m3u8$)/, ''),
+      url,
     });
   }
   return formats;

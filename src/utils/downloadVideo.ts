@@ -37,13 +37,26 @@ export const downloadVideo = async (
   let isLive;
   let frags;
   let fragsCount = 0;
+  let playlistUrl = downloadFormat.url;
   const fragsMetadata: FragMetadata[] = [];
   while (true) {
     let playlist;
     [playlist, isLive] = await Promise.all([
-      fetchText(downloadFormat.url, 'playlist'),
+      fetchText(playlistUrl, 'playlist'),
       getIsLive(),
     ]);
+    // workaround for some old muted highlights
+    // https://regex101.com/r/HdZKlP/1
+    if (!playlist) {
+      const newPlaylistUrl = downloadFormat.url.replace(
+        /-muted-\w+(?=\.m3u8$)/,
+        '',
+      );
+      if (newPlaylistUrl !== playlistUrl) {
+        playlistUrl = newPlaylistUrl;
+        playlist = await fetchText(playlistUrl, 'playlist (attempt #2)');
+      }
+    }
     if (!playlist) {
       console.log(
         `Can't fetch playlist. Retry after ${WAIT_BETWEEN_CYCLES_SECONDS} second(s)`,
@@ -52,7 +65,7 @@ export const downloadVideo = async (
       continue;
     }
     frags = getFragsForDownloading(
-      downloadFormat.url,
+      playlistUrl,
       playlist,
       args.values['download-sections'],
     );
