@@ -1,7 +1,7 @@
 import fsp from 'node:fs/promises';
 import { spawn } from '../lib/spawn.ts';
 import type { Frag } from '../types.ts';
-import { getPath } from './getPath.ts';
+import { getPath } from '../utils/getPath.ts';
 
 export type FragFile = [filename: string, duration: string];
 
