@@ -4,6 +4,7 @@ import {
   getQueryStreamMetadata,
   getQueryVideoMetadata,
   gqlRequest,
+  type FfzBroadcastIdUser,
   type PlaybackAccessTokenVideo,
   type StreamMetadataUser,
   type VideoMetadataVideo,
@@ -44,23 +45,29 @@ export const getVideoAccessToken = (id: string) =>
 
 export type StreamMetadata = StreamMetadataUser;
 
-export const getStreamMetadata = (channelLogin: string) =>
+export const getStreamMetadata = (
+  channelLogin: string,
+): Promise<StreamMetadata | null> =>
   apiRequest(
     getQueryStreamMetadata({ channelLogin }),
     'user',
     'stream metadata',
   );
 
-export type VideoMetadataResponse = VideoMetadataVideo;
+export type VideoMetadata = VideoMetadataVideo;
 
-export const getVideoMetadata = (videoId: string) =>
+export const getVideoMetadata = (
+  videoId: string,
+): Promise<VideoMetadata | null> =>
   apiRequest(
     getQueryVideoMetadata({ channelLogin: '', videoID: videoId }),
     'video',
     'video metadata',
   );
 
-export const getBroadcast = (channelId: string) =>
+export const getBroadcast = (
+  channelId: string,
+): Promise<FfzBroadcastIdUser | null> =>
   apiRequest(getQueryFfzBroadcastId({ id: channelId }), 'user', 'broadcast id');
 
 export const getManifest = (
