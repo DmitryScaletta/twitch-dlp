@@ -11,19 +11,20 @@ export const downloadFile = async (
   downloader: Downloader,
   url: string,
   destPath: string,
-  rateLimit?: string,
+  rateLimit: string | undefined,
+  gzip?: boolean,
   retries = 5,
 ) => {
   if (downloader === CURL) {
-    return curl.downloadFile(url, destPath, retries, rateLimit);
+    return curl.downloadFile(url, destPath, retries, rateLimit, gzip);
   }
   for (const [i] of Object.entries(Array.from({ length: retries }))) {
     let success = false;
     if (downloader === ARIA2C) {
-      success = await aria2c.downloadFile(url, destPath, rateLimit);
+      success = await aria2c.downloadFile(url, destPath, rateLimit, gzip);
     }
     if (downloader === FETCH) {
-      success = await fetch.downloadFile(url, destPath);
+      success = await fetch.downloadFile(url, destPath, gzip);
     }
     if (success) return true;
     sleep(1000);
