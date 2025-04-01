@@ -133,3 +133,4 @@ dist
 *.mp4
 *-playlist.txt
 *-ffconcat.txt
+*.m3u8
