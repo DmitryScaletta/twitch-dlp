@@ -30,7 +30,7 @@ export const processUnmutedFrags = async (
       fragUnmutedPathTmp,
     ]);
 
-    const message = `[unmute] Adding audio in Frag${frag.idx + 1}`;
+    const message = `[unmute] Adding audio to Frag${frag.idx + 1}`;
 
     if (retCode) {
       try {
