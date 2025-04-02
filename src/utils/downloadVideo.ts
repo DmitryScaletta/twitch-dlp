@@ -142,6 +142,7 @@ export const downloadVideo = async (
       if (fragStats) {
         if (!downloadedFrags[i]) {
           downloadedFrags[i] = { size: fragStats.size, time: 0 };
+          showProgress(downloadedFrags, fragsCount);
         }
         continue;
       }

@@ -8,14 +8,24 @@ export type FragFile = [filename: string, duration: string];
 export const spawnFfmpeg = (args: string[]) =>
   new Promise((resolve, reject) => {
     let isInputSection = true;
+    let prevLine = '';
     const handleFfmpegData = (stream: NodeJS.WriteStream) => (data: Buffer) => {
-      const newData: string[] = [];
-      for (const line of data.toString().split('\n')) {
-        if (isInputSection && line.startsWith('  Stream #0:')) continue;
-        if (line.startsWith('Stream mapping:')) isInputSection = false;
-        newData.push(line);
+      if (!isInputSection) return stream.write(data);
+
+      const str = data.toString();
+      const lines = str.split('\n');
+      lines[0] = prevLine + lines[0];
+      prevLine = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('  Stream #')) continue;
+        if (line.startsWith('Stream mapping:')) {
+          isInputSection = false;
+        }
+        stream.write(line + '\n');
       }
-      stream.write(newData.join('\n'));
+
+      if (!isInputSection) stream.write(prevLine);
     };
 
     const child = childProcess.spawn('ffmpeg', args);
