@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 import fsp from "node:fs/promises";
-import path from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import childProcess from "node:child_process";
+import path from "node:path";
 import { setTimeout as setTimeout$1 } from "timers/promises";
 import os from "node:os";
 import fs from "node:fs";
@@ -153,6 +153,11 @@ const COLOR = {
 	cyan: "\x1B[36m",
 	red: "\x1B[31m"
 };
+const RET_CODE = {
+	OK: 0,
+	UNKNOWN_ERROR: 1,
+	HTTP_RETURNED_ERROR: 22
+};
 
 //#endregion
 //#region src/utils/getPath.ts
@@ -177,14 +182,19 @@ const getPath = {
 //#region src/merge/ffconcat.ts
 const spawnFfmpeg = (args) => new Promise((resolve, reject) => {
 	let isInputSection = true;
+	let prevLine = "";
 	const handleFfmpegData = (stream$1) => (data) => {
-		const newData = [];
-		for (const line of data.toString().split("\n")) {
-			if (isInputSection && line.startsWith("  Stream #0:")) continue;
+		if (!isInputSection) return stream$1.write(data);
+		const str = data.toString();
+		const lines = str.split("\n");
+		lines[0] = prevLine + lines[0];
+		prevLine = lines.pop() || "";
+		for (const line of lines) {
+			if (line.startsWith("  Stream #")) continue;
 			if (line.startsWith("Stream mapping:")) isInputSection = false;
-			newData.push(line);
+			stream$1.write(line + "\n");
 		}
-		stream$1.write(newData.join("\n"));
+		if (!isInputSection) stream$1.write(prevLine);
 	};
 	const child = childProcess.spawn("ffmpeg", args);
 	child.stdout.on("data", handleFfmpegData(process.stdout));
@@ -232,9 +242,9 @@ const mergeFrags$2 = async (frags, outputPath, keepFragments) => {
 	const ffconcat = generateFfconcat(fragFiles);
 	const ffconcatPath = getPath.ffconcat(outputPath);
 	await fsp.writeFile(ffconcatPath, ffconcat);
-	const returnCode = await runFfconcat(ffconcatPath, outputPath);
+	const retCode = await runFfconcat(ffconcatPath, outputPath);
 	fsp.unlink(ffconcatPath);
-	if (keepFragments || returnCode) return;
+	if (keepFragments || retCode) return;
 	await Promise.all([...fragFiles.map(([filename]) => fsp.unlink(filename)), fsp.unlink(getPath.playlist(outputPath))]);
 };
 
@@ -294,8 +304,8 @@ const downloadFile$3 = async (url, destPath, rateLimit = "0", gzip = false) => n
 	];
 	if (gzip) args.push("--http-accept-gzip");
 	const child = childProcess.spawn("aria2c", args);
-	child.on("error", () => resolve(false));
-	child.on("close", (code) => resolve(code === 0));
+	child.on("error", () => resolve(RET_CODE.UNKNOWN_ERROR));
+	child.on("close", (code) => resolve(code || RET_CODE.OK));
 });
 
 //#endregion
@@ -342,12 +352,13 @@ const downloadFile$2 = async (url, destPath, retries, rateLimit = "0", gzip = fa
 		"1",
 		"--limit-rate",
 		rateLimit,
+		"--fail",
 		url
 	];
 	if (gzip) args.push("-H", "Accept-Encoding: deflate, gzip");
 	const child = childProcess.spawn("curl", args);
-	child.on("error", () => resolve(false));
-	child.on("close", (code) => resolve(code === 0));
+	child.on("error", () => resolve(RET_CODE.UNKNOWN_ERROR));
+	child.on("close", (code) => resolve(code || RET_CODE.OK));
 });
 
 //#endregion
@@ -367,11 +378,12 @@ const isUrlsAvailable$1 = async (urls) => {
 const downloadFile$1 = async (url, destPath, gzip = true) => {
 	try {
 		const res = await fetch(url, { headers: { "Accept-Encoding": gzip ? "deflate, gzip" : "" } });
+		if (!res.ok) return RET_CODE.HTTP_RETURNED_ERROR;
 		const fileStream = fs.createWriteStream(destPath, { flags: "wx" });
 		await stream.promises.finished(stream.Readable.fromWeb(res.body).pipe(fileStream));
-		return true;
+		return RET_CODE.OK;
 	} catch (e) {
-		return false;
+		return RET_CODE.UNKNOWN_ERROR;
 	}
 };
 
@@ -381,14 +393,14 @@ const [ARIA2C$1, CURL$1, FETCH$1] = DOWNLOADERS;
 const downloadFile = async (downloader, url, destPath, rateLimit, gzip, retries = 5) => {
 	if (downloader === CURL$1) return downloadFile$2(url, destPath, retries, rateLimit, gzip);
 	for (const [i] of Object.entries(Array.from({ length: retries }))) {
-		let success = false;
-		if (downloader === ARIA2C$1) success = await downloadFile$3(url, destPath, rateLimit, gzip);
-		if (downloader === FETCH$1) success = await downloadFile$1(url, destPath, gzip);
-		if (success) return true;
+		let retCode = RET_CODE.OK;
+		if (downloader === ARIA2C$1) retCode = await downloadFile$3(url, destPath, rateLimit, gzip);
+		if (downloader === FETCH$1) retCode = await downloadFile$1(url, destPath, gzip);
+		if (retCode === RET_CODE.OK || retCode === RET_CODE.HTTP_RETURNED_ERROR) return retCode;
 		setTimeout$1(1e3);
 		console.error(`Can't download a url. Retry ${i + 1}`);
 	}
-	throw new Error("Unknown downloader");
+	return RET_CODE.UNKNOWN_ERROR;
 };
 const IS_URLS_AVAILABLE_MAP = {
 	[ARIA2C$1]: isUrlsAvailable$3,
@@ -414,6 +426,13 @@ const statsOrNull = async (path$1) => {
 		return null;
 	}
 };
+
+//#endregion
+//#region src/utils/getExistingFrags.ts
+const getExistingFrags = (frags, outputPath, dir) => frags.filter((frag) => {
+	const fragPath = getPath.frag(outputPath, frag.idx + 1);
+	return dir.includes(path.parse(fragPath).base);
+});
 
 //#endregion
 //#region src/lib/m3u8.ts
@@ -589,15 +608,14 @@ const spawn = (command, args = [], silent = false) => new Promise((resolve, reje
 
 //#endregion
 //#region src/utils/processUnmutedFrags.ts
-const processUnmutedFrags = async (frags, outputPath, _dir) => {
-	const dir = _dir || await fsp.readdir(path.parse(outputPath).dir);
+const processUnmutedFrags = async (frags, outputPath, dir) => {
 	for (const frag of frags) {
 		const fragPath = getPath.frag(outputPath, frag.idx + 1);
 		const fragUnmutedPath = getPath.fragUnmuted(fragPath);
 		const fragUnmutedFileName = path.parse(fragUnmutedPath).base;
 		if (!dir.includes(fragUnmutedFileName)) continue;
 		const fragUnmutedPathTmp = `${fragPath}.ts`;
-		const returnCode = await spawn("ffmpeg", [
+		const retCode = await spawn("ffmpeg", [
 			"-hide_banner",
 			"-loglevel",
 			"error",
@@ -617,7 +635,7 @@ const processUnmutedFrags = async (frags, outputPath, _dir) => {
 			fragUnmutedPathTmp
 		]);
 		const message = `[unmute] Adding audio in Frag${frag.idx + 1}`;
-		if (returnCode) {
+		if (retCode) {
 			try {
 				await fsp.unlink(fragUnmutedPathTmp);
 			} catch {}
@@ -629,6 +647,10 @@ const processUnmutedFrags = async (frags, outputPath, _dir) => {
 		console.log(`${message}. Success`);
 	}
 };
+
+//#endregion
+//#region src/utils/readOutputDir.ts
+const readOutputDir = (outputPath) => fsp.readdir(path.parse(outputPath).dir || ".");
 
 //#endregion
 //#region src/utils/showProgress.ts
@@ -702,8 +724,17 @@ const downloadFrag = async (downloader, url, destPath, limitRateArg, gzip) => {
 	const destPathTmp = `${destPath}.part`;
 	if (await statsOrNull(destPathTmp)) await fsp.unlink(destPathTmp);
 	const startTime = Date.now();
-	await downloadFile(downloader, url, destPathTmp, limitRateArg, gzip);
+	const retCode = await downloadFile(downloader, url, destPathTmp, limitRateArg, gzip);
 	const endTime = Date.now();
+	if (retCode !== RET_CODE.OK) {
+		try {
+			await fsp.unlink(destPathTmp);
+		} catch {}
+		return {
+			size: 0,
+			time: 0
+		};
+	}
 	await fsp.rename(destPathTmp, destPath);
 	const { size } = await fsp.stat(destPath);
 	return {
@@ -763,10 +794,13 @@ const downloadVideo = async (formats, videoInfo, getIsFinalized, args) => {
 			const fragPath = getPath.frag(outputPath, frag.idx + 1);
 			const fragStats = await statsOrNull(fragPath);
 			if (fragStats) {
-				if (!downloadedFrags[i]) downloadedFrags[i] = {
-					size: fragStats.size,
-					time: 0
-				};
+				if (!downloadedFrags[i]) {
+					downloadedFrags[i] = {
+						size: fragStats.size,
+						time: 0
+					};
+					showProgress(downloadedFrags, fragsCount);
+				}
 				continue;
 			}
 			if (frag.url.endsWith("-unmuted.ts")) frag.url = frag.url.replace("-unmuted", "-muted");
@@ -786,8 +820,10 @@ const downloadVideo = async (formats, videoInfo, getIsFinalized, args) => {
 		if (downloadedFragments) process.stdout.write("\n");
 		if (isFinalized) break;
 	}
-	await processUnmutedFrags(frags, outputPath);
-	await mergeFrags(args["merge-method"], frags, outputPath, args["keep-fragments"]);
+	const dir = await readOutputDir(outputPath);
+	const existingFrags = getExistingFrags(frags, outputPath, dir);
+	await processUnmutedFrags(existingFrags, outputPath, dir);
+	await mergeFrags(args["merge-method"], existingFrags, outputPath, args["keep-fragments"]);
 };
 
 //#endregion
@@ -1145,12 +1181,9 @@ const main = async () => {
 	if (!MERGE_METHODS.includes(args["merge-method"])) throw new Error(`Unknown merge method. Available: ${MERGE_METHODS}`);
 	if (args["merge-fragments"]) {
 		const [outputPath] = positionals;
-		const [playlist, dir] = await Promise.all([fsp.readFile(getPath.playlist(outputPath), "utf8"), fsp.readdir(path.parse(outputPath).dir || ".")]);
+		const [playlist, dir] = await Promise.all([fsp.readFile(getPath.playlist(outputPath), "utf8"), readOutputDir(outputPath)]);
 		const frags = getFragsForDownloading(".", playlist, args["download-sections"]);
-		const existingFrags = frags.filter((frag) => {
-			const fragPath = getPath.frag(outputPath, frag.idx + 1);
-			return dir.includes(path.parse(fragPath).base);
-		});
+		const existingFrags = getExistingFrags(frags, outputPath, dir);
 		await processUnmutedFrags(existingFrags, outputPath, dir);
 		await mergeFrags(args["merge-method"], existingFrags, outputPath, true);
 		return;
