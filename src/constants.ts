@@ -33,3 +33,9 @@ export const COLOR = {
   cyan: '\x1b[36m',
   red: '\x1b[31m',
 };
+
+export const RET_CODE = {
+  OK: 0,
+  UNKNOWN_ERROR: 1,
+  HTTP_RETURNED_ERROR: 22,
+};

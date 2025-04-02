@@ -1,6 +1,6 @@
 import { setTimeout as sleep } from 'timers/promises';
+import { DOWNLOADERS, RET_CODE } from '../constants.ts';
 import type { Downloader } from '../types.ts';
-import { DOWNLOADERS } from '../constants.ts';
 import * as aria2c from './aria2c.ts';
 import * as curl from './curl.ts';
 import * as fetch from './fetch.ts';
@@ -19,18 +19,19 @@ export const downloadFile = async (
     return curl.downloadFile(url, destPath, retries, rateLimit, gzip);
   }
   for (const [i] of Object.entries(Array.from({ length: retries }))) {
-    let success = false;
+    let retCode = RET_CODE.OK;
     if (downloader === ARIA2C) {
-      success = await aria2c.downloadFile(url, destPath, rateLimit, gzip);
+      retCode = await aria2c.downloadFile(url, destPath, rateLimit, gzip);
     }
     if (downloader === FETCH) {
-      success = await fetch.downloadFile(url, destPath, gzip);
+      retCode = await fetch.downloadFile(url, destPath, gzip);
     }
-    if (success) return true;
+    if (retCode === RET_CODE.OK) return true;
+    if (retCode === RET_CODE.HTTP_RETURNED_ERROR) return false;
     sleep(1000);
     console.error(`Can't download a url. Retry ${i + 1}`);
   }
-  throw new Error('Unknown downloader');
+  return RET_CODE.UNKNOWN_ERROR;
 };
 
 const IS_URLS_AVAILABLE_MAP = {

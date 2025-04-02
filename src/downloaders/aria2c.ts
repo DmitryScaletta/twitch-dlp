@@ -1,7 +1,8 @@
-import path from 'node:path';
-import os from 'node:os';
-import fsp from 'node:fs/promises';
 import childProcess from 'node:child_process';
+import fsp from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { RET_CODE } from '../constants.ts';
 
 const isUrlsAvailableAria2c = (
   urls: string[],
@@ -41,12 +42,13 @@ export const isUrlsAvailable = async (
   return urls.map((_, i) => [urlsNoGzip[i], urlsGzip[i]] as const);
 };
 
+// https://aria2.github.io/manual/en/html/aria2c.html#exit-status
 export const downloadFile = async (
   url: string,
   destPath: string,
   rateLimit = '0',
   gzip = false,
-): Promise<boolean> =>
+): Promise<number> =>
   new Promise((resolve) => {
     // prettier-ignore
     const args: string[] = [
@@ -57,6 +59,6 @@ export const downloadFile = async (
     ]
     if (gzip) args.push('--http-accept-gzip');
     const child = childProcess.spawn('aria2c', args);
-    child.on('error', () => resolve(false));
-    child.on('close', (code) => resolve(code === 0));
+    child.on('error', () => resolve(RET_CODE.UNKNOWN_ERROR));
+    child.on('close', (code) => resolve(code || RET_CODE.OK));
   });

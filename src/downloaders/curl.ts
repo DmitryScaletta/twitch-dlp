@@ -1,4 +1,5 @@
 import childProcess from 'node:child_process';
+import { RET_CODE } from '../constants.ts';
 
 const getIsUrlsAvailableCurl = (
   urls: string[],
@@ -46,13 +47,14 @@ export const isUrlsAvailable = async (
   return urls.map((_, i) => [urlsNoGzip[i], urlsGzip[i]] as const);
 };
 
+// https://curl.se/libcurl/c/libcurl-errors.html
 export const downloadFile = async (
   url: string,
   destPath: string,
   retries: number,
   rateLimit = '0',
   gzip = false,
-): Promise<boolean> =>
+): Promise<number> =>
   new Promise((resolve) => {
     // prettier-ignore
     const args: string[] = [
@@ -60,10 +62,11 @@ export const downloadFile = async (
       '--retry', `${retries}`,
       '--retry-delay', '1',
       '--limit-rate', rateLimit,
+      '--fail',
       url,
     ]
     if (gzip) args.push('-H', 'Accept-Encoding: deflate, gzip');
     const child = childProcess.spawn('curl', args);
-    child.on('error', () => resolve(false));
-    child.on('close', (code) => resolve(code === 0));
+    child.on('error', () => resolve(RET_CODE.UNKNOWN_ERROR));
+    child.on('close', (code) => resolve(code || RET_CODE.OK));
   });

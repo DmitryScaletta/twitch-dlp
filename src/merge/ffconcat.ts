@@ -1,5 +1,5 @@
-import fsp from 'node:fs/promises';
 import childProcess from 'node:child_process';
+import fsp from 'node:fs/promises';
 import type { Frag } from '../types.ts';
 import { getPath } from '../utils/getPath.ts';
 
@@ -75,10 +75,10 @@ export const mergeFrags = async (
   const ffconcatPath = getPath.ffconcat(outputPath);
   await fsp.writeFile(ffconcatPath, ffconcat);
 
-  const returnCode = await runFfconcat(ffconcatPath, outputPath);
+  const retCode = await runFfconcat(ffconcatPath, outputPath);
   fsp.unlink(ffconcatPath);
 
-  if (keepFragments || returnCode) return;
+  if (keepFragments || retCode) return;
 
   await Promise.all([
     ...fragFiles.map(([filename]) => fsp.unlink(filename)),

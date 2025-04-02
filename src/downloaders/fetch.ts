@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import stream from 'node:stream';
+import { RET_CODE } from '../constants.ts';
 
 const isUrlsAvailableFetch = async (urls: string[], gzip: boolean) => {
   try {
@@ -33,12 +34,13 @@ export const downloadFile = async (
     const res = await fetch(url, {
       headers: { 'Accept-Encoding': gzip ? 'deflate, gzip' : '' },
     });
+    if (!res.ok) return RET_CODE.HTTP_RETURNED_ERROR;
     const fileStream = fs.createWriteStream(destPath, { flags: 'wx' });
     await stream.promises.finished(
       stream.Readable.fromWeb(res.body as any).pipe(fileStream),
     );
-    return true;
+    return RET_CODE.OK;
   } catch (e) {
-    return false;
+    return RET_CODE.UNKNOWN_ERROR;
   }
 };
