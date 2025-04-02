@@ -50,6 +50,7 @@ export const downloadFile = async (
   rateLimit?: string,
   gzip = true,
 ) => {
+  const rateLimitN = rateLimit ? parseRateLimit(rateLimit) : null;
   try {
     const res = await fetch(url, {
       headers: { 'Accept-Encoding': gzip ? 'deflate, gzip' : '' },
@@ -57,9 +58,7 @@ export const downloadFile = async (
     if (!res.ok) return RET_CODE.HTTP_RETURNED_ERROR;
     await stream.promises.pipeline(
       stream.Readable.fromWeb(res.body as any),
-      rateLimit
-        ? new ThrottleTransform(parseRateLimit(rateLimit))
-        : new stream.PassThrough(),
+      rateLimitN ? new ThrottleTransform(rateLimitN) : new stream.PassThrough(),
       fs.createWriteStream(destPath, { flags: 'wx' }),
     );
     return RET_CODE.OK;
