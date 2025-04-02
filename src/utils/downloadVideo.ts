@@ -1,118 +1,186 @@
-import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { downloadFile } from '../downloaders/index.ts';
+import { isInstalled } from '../lib/isInstalled.ts';
+import { statsOrNull } from '../lib/statsOrNull.ts';
 import type { AppArgs } from '../main.ts';
-import type { DownloadFormat, FragMetadata, VideoInfo } from '../types.ts';
+import { mergeFrags } from '../merge/index.ts';
+import type {
+  Downloader,
+  DownloadFormat,
+  FragMetadata,
+  VideoInfo,
+} from '../types.ts';
 import { fetchText } from './fetchText.ts';
 import { getFragsForDownloading } from './getFragsForDownloading.ts';
 import { getPath } from './getPath.ts';
+import { getUnmutedFrag } from './getUnmutedFrag.ts';
+import { processUnmutedFrags } from './processUnmutedFrags.ts';
 import { showProgress } from './showProgress.ts';
-import { downloadAndRetry } from '../downloaders.ts';
-import { mergeFrags } from './mergeFrags.ts';
 
 const DEFAULT_OUTPUT_TEMPLATE = '%(title)s [%(id)s].%(ext)s';
-const WAIT_BETWEEN_CYCLES_SECONDS = 60;
+const WAIT_BETWEEN_CYCLES_SEC = 60;
+
+const downloadFrag = async (
+  downloader: Downloader,
+  url: string,
+  destPath: string,
+  limitRateArg?: string,
+  gzip?: boolean,
+) => {
+  const destPathTmp = `${destPath}.part`;
+  if (await statsOrNull(destPathTmp)) await fsp.unlink(destPathTmp);
+  const startTime = Date.now();
+  await downloadFile(downloader, url, destPathTmp, limitRateArg, gzip);
+  const endTime = Date.now();
+  await fsp.rename(destPathTmp, destPath);
+  const { size } = await fsp.stat(destPath);
+  return { size, time: endTime - startTime };
+};
+
+const isVideoOlderThat24h = (videoInfo: VideoInfo) => {
+  const videoDate = videoInfo.upload_date || videoInfo.release_date;
+  if (!videoDate) return null;
+  const now = Date.now();
+  const videoDateMs = new Date(videoDate).getTime();
+  return now - videoDateMs > 24 * 60 * 60 * 1000;
+};
 
 export const downloadVideo = async (
   formats: DownloadFormat[],
   videoInfo: VideoInfo,
-  getIsLive: () => boolean | Promise<boolean>,
+  getIsFinalized: () => boolean | Promise<boolean>,
   args: AppArgs,
 ) => {
-  if (args.values['list-formats']) {
+  if (args['list-formats']) {
+    console.log(formats[0].url);
     console.table(formats.map(({ url, ...rest }) => rest));
     process.exit();
   }
 
-  const downloadFormat =
-    args.values.format === 'best'
+  if (!(await isInstalled('ffmpeg'))) {
+    throw new Error(
+      'ffmpeg is not installed. Install it from https://ffmpeg.org/',
+    );
+  }
+
+  const dlFormat =
+    args.format === 'best'
       ? formats[0]
-      : formats.find((f) => f.format_id === args.values.format);
-  if (!downloadFormat) throw new Error('Wrong format');
+      : formats.find((f) => f.format_id === args.format);
+  if (!dlFormat) throw new Error('Wrong format');
 
   const outputPath = getPath.output(
-    args.values.output || DEFAULT_OUTPUT_TEMPLATE,
+    args.output || DEFAULT_OUTPUT_TEMPLATE,
     videoInfo,
   );
-  let isLive;
+  let isFinalized;
   let frags;
   let fragsCount = 0;
-  let playlistUrl = downloadFormat.url;
-  const fragsMetadata: FragMetadata[] = [];
+  let playlistUrl = dlFormat.url;
+  const downloadedFrags: FragMetadata[] = [];
   while (true) {
     let playlist;
-    [playlist, isLive] = await Promise.all([
+    [playlist, isFinalized] = await Promise.all([
       fetchText(playlistUrl, 'playlist'),
-      getIsLive(),
+      getIsFinalized(),
     ]);
     // workaround for some old muted highlights
-    // https://regex101.com/r/HdZKlP/1
     if (!playlist) {
-      const newPlaylistUrl = downloadFormat.url.replace(
-        /-muted-\w+(?=\.m3u8$)/,
-        '',
-      );
+      const newPlaylistUrl = dlFormat.url.replace(/-muted-\w+(?=\.m3u8$)/, '');
       if (newPlaylistUrl !== playlistUrl) {
         playlistUrl = newPlaylistUrl;
         playlist = await fetchText(playlistUrl, 'playlist (attempt #2)');
       }
     }
     if (!playlist) {
-      console.log(
-        `Can't fetch playlist. Retry after ${WAIT_BETWEEN_CYCLES_SECONDS} second(s)`,
+      console.warn(
+        `Cannot download the playlist. Retry every ${WAIT_BETWEEN_CYCLES_SEC} second(s)`,
       );
-      await sleep(WAIT_BETWEEN_CYCLES_SECONDS * 1000);
+      await sleep(WAIT_BETWEEN_CYCLES_SEC * 1000);
       continue;
     }
     frags = getFragsForDownloading(
       playlistUrl,
       playlist,
-      args.values['download-sections'],
+      args['download-sections'],
     );
 
     await fsp.writeFile(getPath.playlist(outputPath), playlist);
 
     const hasNewFrags = frags.length > fragsCount;
     fragsCount = frags.length;
-    if (!hasNewFrags && isLive) {
+    if (!hasNewFrags && !isFinalized) {
       console.log(
-        `Waiting for new segments, retrying every ${WAIT_BETWEEN_CYCLES_SECONDS} second(s)`,
+        `No new fragments. Retry every ${WAIT_BETWEEN_CYCLES_SEC} second(s)`,
       );
-      await sleep(WAIT_BETWEEN_CYCLES_SECONDS * 1000);
+      await sleep(WAIT_BETWEEN_CYCLES_SEC * 1000);
       continue;
     }
 
     let downloadedFragments = 0;
-    for (let [i, frag] of frags.entries()) {
+    for (const [i, frag] of frags.entries()) {
+      showProgress(downloadedFrags, fragsCount);
+
       const fragPath = getPath.frag(outputPath, frag.idx + 1);
-      const fragTmpPath = `${fragPath}.part`;
-      if (fs.existsSync(fragPath)) continue;
-      showProgress(frags, fragsMetadata, i + 1);
-      if (fs.existsSync(fragTmpPath)) {
-        await fsp.unlink(fragTmpPath);
+      const fragStats = await statsOrNull(fragPath);
+      if (fragStats) {
+        if (!downloadedFrags[i]) {
+          downloadedFrags[i] = { size: fragStats.size, time: 0 };
+        }
+        continue;
       }
 
       if (frag.url.endsWith('-unmuted.ts')) {
-        frag.url = frag.url.replace('-unmuted.ts', '-muted.ts');
+        frag.url = frag.url.replace('-unmuted', '-muted');
       }
-      if (frag.url.endsWith('-muted.ts')) {
-        const notMutedUrl = frag.url.replace('-muted.ts', '.ts');
-        const res = await fetch(notMutedUrl, { method: 'HEAD' });
-        if (res.ok) frag.url = notMutedUrl;
+      let unmutedFrag: Awaited<ReturnType<typeof getUnmutedFrag>> | null = null;
+      if (frag.url.endsWith('-muted.ts') && !isVideoOlderThat24h(videoInfo)) {
+        unmutedFrag = await getUnmutedFrag(
+          args.downloader,
+          args.unmute,
+          frag.url,
+          formats,
+        );
       }
 
-      const startTime = Date.now();
-      await downloadAndRetry(frag.url, fragTmpPath, args.values['limit-rate']);
-      const endTime = Date.now();
-      await fsp.rename(fragTmpPath, fragPath);
-      const { size } = await fsp.stat(fragPath);
-      fragsMetadata.push({ size, time: endTime - startTime });
+      let fragGzip: boolean | undefined = undefined;
+      if (unmutedFrag && unmutedFrag.sameFormat) {
+        frag.url = unmutedFrag.url;
+        fragGzip = unmutedFrag.gzip;
+      }
+      const fragMeta = await downloadFrag(
+        args.downloader,
+        frag.url,
+        fragPath,
+        args['limit-rate'],
+        fragGzip,
+      );
+      downloadedFrags.push(fragMeta);
       downloadedFragments += 1;
+
+      if (unmutedFrag && !unmutedFrag.sameFormat) {
+        await downloadFrag(
+          args.downloader,
+          unmutedFrag.url,
+          getPath.fragUnmuted(fragPath),
+          args['limit-rate'],
+          unmutedFrag.gzip,
+        );
+      }
+
+      showProgress(downloadedFrags, fragsCount);
     }
     if (downloadedFragments) process.stdout.write('\n');
 
-    if (!isLive) break;
+    if (isFinalized) break;
   }
 
-  await mergeFrags(frags, outputPath, args.values['keep-fragments']);
+  await processUnmutedFrags(frags, outputPath);
+  await mergeFrags(
+    args['merge-method'],
+    frags,
+    outputPath,
+    args['keep-fragments'],
+  );
 };

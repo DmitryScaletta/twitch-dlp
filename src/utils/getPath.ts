@@ -13,6 +13,7 @@ export const getPath = {
     return path.resolve(finalTemplate);
   },
   ffconcat: (filePath: string) => `${filePath}-ffconcat.txt`,
-  playlist: (filePath: string) => `${filePath}-playlist.txt`,
+  playlist: (filePath: string) => `${filePath}-playlist.m3u8`,
   frag: (filePath: string, i: number) => `${filePath}.part-Frag${i}`,
+  fragUnmuted: (fragPath: string) => `${fragPath}-unmuted`,
 };

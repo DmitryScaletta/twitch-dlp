@@ -4,7 +4,7 @@ import type { VideoInfo } from '../types.ts';
 const DEFAULT_TITLE = 'Untitled Broadcast';
 
 export const getVideoInfoByVideoMeta = (
-  videoMeta: api.VideoMetadataResponse,
+  videoMeta: api.VideoMetadata,
 ): VideoInfo => ({
   id: `v${videoMeta.id}`,
   title: videoMeta.title || DEFAULT_TITLE,

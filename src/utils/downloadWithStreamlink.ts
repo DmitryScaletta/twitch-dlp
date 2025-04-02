@@ -1,8 +1,9 @@
 import * as api from '../api/twitch.ts';
+import { isInstalled } from '../lib/isInstalled.ts';
 import { spawn } from '../lib/spawn.ts';
+import type { AppArgs } from '../main.ts';
 import { getPath } from './getPath.ts';
 import { getVideoInfoByStreamMeta } from './getVideoInfo.ts';
-import type { AppArgs } from '../main.ts';
 
 const DEFAULT_STREAMLINK_ARGS = [
   '--twitch-force-client-integrity',
@@ -24,21 +25,27 @@ export const downloadWithStreamlink = async (
   channelLogin: string,
   args: AppArgs,
 ) => {
-  if (args.values['list-formats']) {
+  if (!(await isInstalled('streamlink'))) {
+    throw new Error(
+      'streamlink is not installed. Install it from https://streamlink.github.io/',
+    );
+  }
+
+  if (args['list-formats']) {
     await spawn('streamlink', ['-v', link]);
     process.exit();
   }
 
   const outputPath = getPath.output(
-    args.values.output || getDefaultOutputTemplate(),
+    args.output || getDefaultOutputTemplate(),
     getVideoInfoByStreamMeta(streamMeta, channelLogin),
   );
 
   const streamlinkArgs = [];
-  for (const argName of Object.keys(args.values)) {
+  for (const argName of Object.keys(args)) {
     if (!argName.startsWith('twitch-')) continue;
     type ArgValue = undefined | string | string[] | boolean;
-    const argValue = (args.values as any)[argName] as ArgValue;
+    const argValue = (args as any)[argName] as ArgValue;
     if (argValue === undefined) continue;
     if (Array.isArray(argValue)) {
       for (const v of argValue) {
@@ -57,7 +64,7 @@ export const downloadWithStreamlink = async (
     '-o',
     outputPath,
     link,
-    args.values.format,
+    args.format,
     ...(streamlinkArgs.length ? streamlinkArgs : DEFAULT_STREAMLINK_ARGS),
   ]);
 };

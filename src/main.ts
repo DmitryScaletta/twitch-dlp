@@ -1,28 +1,35 @@
 #!/usr/bin/env node
-
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { parseArgs } from 'node:util';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { HELP, PRIVATE_VIDEO_INSTRUCTIONS } from './constants.ts';
+import { parseArgs } from 'node:util';
 import * as api from './api/twitch.ts';
-import { parseLink } from './utils/parseLink.ts';
+import {
+  COLOR,
+  MERGE_METHODS,
+  PRIVATE_VIDEO_INSTRUCTIONS,
+} from './constants.ts';
+import { mergeFrags } from './merge/index.ts';
+import type { Downloader, MergeMethod } from './types.ts';
+import { downloadVideo } from './utils/downloadVideo.ts';
+import { downloadWithStreamlink } from './utils/downloadWithStreamlink.ts';
+import { getDownloader } from './utils/getDownloader.ts';
 import { getFragsForDownloading } from './utils/getFragsForDownloading.ts';
+import { getIsStreamFinalized } from './utils/getIsVodFinalized.ts';
+import { getLiveVideoInfo } from './utils/getLiveVideoInfo.ts';
+import { getPath } from './utils/getPath.ts';
 import {
   getFullVodPath,
   getVideoFormats,
   getVideoFormatsByFullVodPath,
   getVideoFormatsByThumbUrl,
 } from './utils/getVideoFormats.ts';
-import { mergeFrags } from './utils/mergeFrags.ts';
-import { getPath } from './utils/getPath.ts';
-import { downloadVideo } from './utils/downloadVideo.ts';
-import { downloadLiveVideo } from './utils/downloadLiveVideo.ts';
-import { downloadWithStreamlink } from './utils/downloadWithStreamlink.ts';
 import {
   getVideoInfoByVideoMeta,
   getVideoInfoByVodPath,
 } from './utils/getVideoInfo.ts';
+import { parseLink } from './utils/parseLink.ts';
+import { processUnmutedFrags } from './utils/processUnmutedFrags.ts';
 
 const getArgs = () =>
   parseArgs({
@@ -31,6 +38,9 @@ const getArgs = () =>
       help: {
         type: 'boolean',
         short: 'h',
+      },
+      version: {
+        type: 'boolean',
       },
       format: {
         type: 'string',
@@ -45,6 +55,9 @@ const getArgs = () =>
       output: {
         type: 'string',
         short: 'o',
+      },
+      downloader: {
+        type: 'string',
       },
       'keep-fragments': {
         type: 'boolean',
@@ -63,8 +76,15 @@ const getArgs = () =>
       'download-sections': {
         type: 'string',
       },
+      unmute: {
+        type: 'string',
+      },
       'merge-fragments': {
         type: 'boolean',
+      },
+      'merge-method': {
+        type: 'string',
+        default: 'ffconcat',
       },
       // streamlink twitch plugin args
       // https://streamlink.github.io/cli.html#twitch
@@ -92,38 +112,67 @@ const getArgs = () =>
     allowPositionals: true,
   });
 
-export type AppArgs = ReturnType<typeof getArgs>;
+export type AppArgs = ReturnType<typeof getArgs>['values'] & {
+  downloader: Downloader;
+  'merge-method': MergeMethod;
+};
 
 const main = async () => {
-  const args = getArgs();
+  const parsedArgs = getArgs();
+  const args = parsedArgs.values as AppArgs;
+  const positionals = parsedArgs.positionals;
 
-  if (args.values.help || args.positionals.length === 0) {
-    console.log(HELP);
+  if (args.version) {
+    const pkg = await fsp.readFile('./package.json', 'utf8');
+    console.log(JSON.parse(pkg).version);
     return;
   }
 
-  if (args.values['merge-fragments']) {
-    const [outputPath] = args.positionals;
-    const [playlist, allFiles] = await Promise.all([
+  if (args.help || parsedArgs.positionals.length === 0) {
+    const readme = await fsp.readFile('./README.md', 'utf8');
+    const entries = readme.split(/\s## (.*)/g).slice(1);
+    const sections: Record<string, string> = {};
+    for (let i = 0; i < entries.length; i += 2) {
+      const header = entries[i];
+      const content = entries[i + 1].trim();
+      sections[header] = content;
+    }
+    console.log('Options:');
+    console.log(sections.Options.replace(/^```\w+\n(.*)\n```$/s, '$1'));
+    console.log('');
+    console.log('Dependencies:');
+    console.log(sections.Dependencies.replaceAll('**', ''));
+    return;
+  }
+
+  args.downloader = await getDownloader(args.downloader, args['limit-rate']);
+  if (!MERGE_METHODS.includes(args['merge-method'])) {
+    throw new Error(`Unknown merge method. Available: ${MERGE_METHODS}`);
+  }
+
+  if (args['merge-fragments']) {
+    const [outputPath] = positionals;
+    const [playlist, dir] = await Promise.all([
       fsp.readFile(getPath.playlist(outputPath), 'utf8'),
       fsp.readdir(path.parse(outputPath).dir || '.'),
     ]);
     const frags = getFragsForDownloading(
       '.',
       playlist,
-      args.values['download-sections'],
+      args['download-sections'],
     );
     const existingFrags = frags.filter((frag) => {
       const fragPath = getPath.frag(outputPath, frag.idx + 1);
-      return allFiles.includes(path.parse(fragPath).base);
+      return dir.includes(path.parse(fragPath).base);
     });
-    await mergeFrags(existingFrags, outputPath, true);
+    await processUnmutedFrags(existingFrags, outputPath, dir);
+    await mergeFrags(args['merge-method'], existingFrags, outputPath, true);
     return;
   }
 
-  if (args.positionals.length > 1) throw new Error('Expected only one link');
+  if (positionals.length > 1) throw new Error('Expected only one link');
 
-  const [link] = args.positionals;
+  const [link] = positionals;
   const parsedLink = parseLink(link);
 
   // link type: vodPath
@@ -154,53 +203,33 @@ const main = async () => {
       return console.log(PRIVATE_VIDEO_INSTRUCTIONS);
     }
     const videoInfo = getVideoInfoByVideoMeta(videoMeta);
-    return downloadVideo(formats, videoInfo, () => false, args);
+    return downloadVideo(formats, videoInfo, () => true, args);
   }
 
   // link type: channel
   const { channelLogin } = parsedLink;
   let retryStreamsDelay = 0;
-  if (args.values['retry-streams']) {
-    retryStreamsDelay = Number.parseInt(args.values['retry-streams']);
+  if (args['retry-streams']) {
+    retryStreamsDelay = Number.parseInt(args['retry-streams']);
     if (!retryStreamsDelay || retryStreamsDelay < 0) {
       throw new Error('Wrong --retry-streams delay');
     }
   }
-  const isLiveFromStart = args.values['live-from-start'];
+  const isLiveFromStart = args['live-from-start'];
+  const isRetry = retryStreamsDelay > 0;
 
-  // not retry
-  if (!retryStreamsDelay) {
-    const streamMeta = await api.getStreamMetadata(channelLogin);
-    if (!streamMeta) return;
-    if (!streamMeta.stream) {
-      console.warn('The channel is not currently live');
-      return;
-    }
-
-    // not from start
-    if (!isLiveFromStart) {
-      return await downloadWithStreamlink(
-        `https://www.twitch.tv/${channelLogin}`,
-        streamMeta,
-        channelLogin,
-        args,
-      );
-    }
-
-    // from start
-    if (isLiveFromStart) {
-      return await downloadLiveVideo(streamMeta, channelLogin, args);
-    }
-  }
-
-  // retry
   while (true) {
     const streamMeta = await api.getStreamMetadata(channelLogin);
     const isLive = !!streamMeta?.stream;
     if (!isLive) {
-      console.log(
-        `Waiting for streams, retrying every ${retryStreamsDelay} second(s)`,
-      );
+      if (isRetry) {
+        console.log(
+          `Waiting for streams, retrying every ${retryStreamsDelay} second(s)`,
+        );
+      } else {
+        console.warn('The channel is not currently live');
+        return;
+      }
     }
 
     // not from start
@@ -215,12 +244,20 @@ const main = async () => {
 
     // from start
     if (isLive && isLiveFromStart) {
-      const isSuccess = await downloadLiveVideo(streamMeta, channelLogin, args);
-      if (!isSuccess) {
-        console.log(
-          `Waiting for VOD, retrying every ${retryStreamsDelay} second(s)`,
+      const liveVideoInfo = await getLiveVideoInfo(streamMeta, channelLogin);
+      if (liveVideoInfo) {
+        const { formats, videoInfo, videoId } = liveVideoInfo;
+        await downloadVideo(
+          formats,
+          videoInfo,
+          () => getIsStreamFinalized(videoId, streamMeta.stream!.id),
+          args,
         );
       }
+      if (!isRetry) return;
+      console.log(
+        `Waiting for VOD, retrying every ${retryStreamsDelay} second(s)`,
+      );
     }
 
     await sleep(retryStreamsDelay * 1000);
@@ -228,6 +265,5 @@ const main = async () => {
 };
 
 main().catch((e) => {
-  // throw e;
-  console.error(e.message);
+  console.error(`${COLOR.red}ERROR:${COLOR.reset} ${e.message}`);
 });

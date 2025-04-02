@@ -1,6 +1,5 @@
-import type { AppArgs } from '../main.ts';
-import type { DownloadFormat, VideoInfo } from '../types.ts';
 import * as api from '../api/twitch.ts';
+import type { DownloadFormat, VideoInfo } from '../types.ts';
 import {
   getFullVodPath,
   getVideoFormats,
