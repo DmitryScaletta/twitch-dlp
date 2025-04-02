@@ -1,3 +1,13 @@
+import type {
+  DOWNLOADERS,
+  MERGE_METHODS,
+  UNMUTE_POLICIES,
+} from './constants.ts';
+
+export type Downloader = (typeof DOWNLOADERS)[number];
+export type MergeMethod = (typeof MERGE_METHODS)[number];
+export type UnmutePolicy = (typeof UNMUTE_POLICIES)[number];
+
 export type Frag = {
   /** Frag index in the original playlist */
   idx: number;
@@ -20,7 +30,7 @@ export type DownloadSectionsArg = {
   endTime: number;
 } | null;
 
-export type BroadcastType = 'ARCHIVE' | 'HIGHLIGHT';
+export type BroadcastType = 'ARCHIVE' | 'HIGHLIGHT' | 'UPLOAD';
 
 export type DownloadFormat = {
   format_id: string;

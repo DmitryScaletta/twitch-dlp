@@ -1,64 +1,3 @@
-export const HELP = `
-Download any twitch VODs from start during live broadcast
-
-GitHub Repo: https://github.com/DmitryScaletta/twitch-dlp
-
-Usage:
-npx twitch-dlp LINK
-
-Positional arguments:
-LINK                        Link to the VOD or channel
-
-Options:
--h, --help                  Show this help message and exit
--f, --format FORMAT         Select format to download
-                            Available formats:
-                            - best: best quality (default)
-                            - FORMAT: select format by format_id
--F, --list-formats          List available formats and exit
--o, --output OUTPUT         Output filename template
-                            Available template variables:
-                            - %(title)s
-                            - %(id)s
-                            - %(ext)s
-                            - %(description)s
-                            - %(duration)s
-                            - %(uploader)s
-                            - %(uploader_id)s
-                            - %(upload_date)s
-                            - %(release_date)s
-                            - %(view_count)s
---live-from-start           Download live streams from the start
---retry-streams DELAY       Retry fetching the list of available
-                            streams until streams are found
-                            while waiting DELAY second(s)
-                            between each attempt
--r, --limit-rate RATE       Limit download rate to RATE
---keep-fragments            Keep fragments after downloading
---download-sections TEXT    Download specific part of the video.
-                            Syntax: "*start_time-end_time".
-                            Examples: "*0-12:34", "*3:14:15-inf"
-                            A "*" prefix is for yt-dlp compatibility.
-                            Negative timestamps and multiple
-                            sections are not supported
---merge-fragments           Merge already downloaded fragments.
-                            Example: "npx twitch-dlp FILENAME
-                            --merge-fragments". FILENAME must match
-                            the fragment names but without
-                            ".part-FragN". Can't be used with other
-                            options (except --download-sections)
-
-It's also possible to pass streamlink twitch plugin args:
---twitch-disable-ads, --twitch-low-latency, --twitch-api-header,
---twitch-access-token-param, --twitch-force-client-integrity,
---twitch-purge-client-integrity
-See https://streamlink.github.io/cli.html#twitch
-
-Requires:
-- ffmpeg
-- curl (if using --limit-rate option)
-- streamlink (if downloading by channel link without --live-from-start)
-`;
 export const PRIVATE_VIDEO_INSTRUCTIONS =
   'This video might be private. Follow this article to download it: https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md';
 export const VOD_DOMAINS = [
@@ -77,3 +16,20 @@ export const VOD_DOMAINS = [
   'https://ddacn6pr5v0tl.cloudfront.net',
   'https://d3aqoihi2n8ty8.cloudfront.net',
 ];
+
+export const DOWNLOADERS = ['aria2c', 'curl', 'fetch'] as const;
+export const MERGE_METHODS = ['ffconcat', 'append'] as const;
+export const UNMUTE_POLICIES = [
+  'quality',
+  'any',
+  'same_format',
+  'none',
+] as const;
+
+export const COLOR = {
+  reset: '\x1b[0m',
+  green: '\x1b[32m',
+  yellow: '\x1b[33m',
+  cyan: '\x1b[36m',
+  red: '\x1b[31m',
+};
