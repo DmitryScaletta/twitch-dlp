@@ -1,6 +1,25 @@
 import fs from 'node:fs';
 import stream from 'node:stream';
 import { RET_CODE } from '../constants.ts';
+import { ThrottleTransform } from '../lib/throttleTransform.ts';
+
+const WRONG_LIMIT_RATE_SYNTAX = 'Wrong --limit-rate syntax';
+const RATE_LIMIT_MULTIPLIER: Record<string, number> = {
+  B: 1,
+  K: 1024,
+  M: 1024 * 1024,
+};
+
+const parseRateLimit = (rateLimit: string) => {
+  const m = rateLimit.match(/^(?<value>\d+(?:\.\d+)?)(?<unit>[KM])?$/i);
+  if (!m) throw new Error(WRONG_LIMIT_RATE_SYNTAX);
+  const { value, unit } = m.groups as { value: string; unit?: string };
+  const v = Number.parseFloat(value);
+  const u = unit ? unit.toUpperCase() : 'B';
+  if (Number.isNaN(v)) throw new Error(WRONG_LIMIT_RATE_SYNTAX);
+  const multiplier = RATE_LIMIT_MULTIPLIER[u];
+  return Math.round(v * multiplier);
+};
 
 const isUrlsAvailableFetch = async (urls: string[], gzip: boolean) => {
   try {
@@ -28,6 +47,7 @@ export const isUrlsAvailable = async (urls: string[]) => {
 export const downloadFile = async (
   url: string,
   destPath: string,
+  rateLimit?: string,
   gzip = true,
 ) => {
   try {
@@ -35,9 +55,12 @@ export const downloadFile = async (
       headers: { 'Accept-Encoding': gzip ? 'deflate, gzip' : '' },
     });
     if (!res.ok) return RET_CODE.HTTP_RETURNED_ERROR;
-    const fileStream = fs.createWriteStream(destPath, { flags: 'wx' });
-    await stream.promises.finished(
-      stream.Readable.fromWeb(res.body as any).pipe(fileStream),
+    await stream.promises.pipeline(
+      stream.Readable.fromWeb(res.body as any),
+      rateLimit
+        ? new ThrottleTransform(parseRateLimit(rateLimit))
+        : new stream.PassThrough(),
+      fs.createWriteStream(destPath, { flags: 'wx' }),
     );
     return RET_CODE.OK;
   } catch (e) {

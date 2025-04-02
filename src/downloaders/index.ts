@@ -11,7 +11,7 @@ export const downloadFile = async (
   downloader: Downloader,
   url: string,
   destPath: string,
-  rateLimit: string | undefined,
+  rateLimit?: string,
   gzip?: boolean,
   retries = 5,
 ) => {
@@ -24,7 +24,7 @@ export const downloadFile = async (
       retCode = await aria2c.downloadFile(url, destPath, rateLimit, gzip);
     }
     if (downloader === FETCH) {
-      retCode = await fetch.downloadFile(url, destPath, gzip);
+      retCode = await fetch.downloadFile(url, destPath, rateLimit, gzip);
     }
     if (retCode === RET_CODE.OK || retCode === RET_CODE.HTTP_RETURNED_ERROR) {
       return retCode;

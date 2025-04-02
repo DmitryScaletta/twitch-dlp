@@ -2,31 +2,10 @@ import os from 'node:os';
 import { DOWNLOADERS } from '../constants.ts';
 import { isInstalled } from '../lib/isInstalled.ts';
 
-const FETCH_WARNING =
-  'Warning: --limit-rate (-r) option is not supported by default downloader. Install aria2c or curl';
 const [ARIA2C, CURL, FETCH] = DOWNLOADERS;
 
-export const getDownloader = async (
-  downloaderArg?: string,
-  limitRateArg?: string,
-) => {
-  if (downloaderArg === FETCH) {
-    if (!limitRateArg) return FETCH;
-    console.warn(FETCH_WARNING);
-    return FETCH;
-  }
-
-  if (!downloaderArg) {
-    if (!limitRateArg) return FETCH;
-    const [aria2cInstalled, curlInstalled] = await Promise.all([
-      isInstalled(ARIA2C),
-      isInstalled(CURL),
-    ]);
-    if (curlInstalled) return CURL;
-    if (aria2cInstalled) return ARIA2C;
-    console.warn(FETCH_WARNING);
-    return FETCH;
-  }
+export const getDownloader = async (downloaderArg?: string) => {
+  if (!downloaderArg || downloaderArg === FETCH) return FETCH;
 
   if (downloaderArg === ARIA2C) {
     if (await isInstalled(ARIA2C)) return ARIA2C;

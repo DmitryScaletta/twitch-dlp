@@ -147,7 +147,7 @@ const main = async () => {
     return;
   }
 
-  args.downloader = await getDownloader(args.downloader, args['limit-rate']);
+  args.downloader = await getDownloader(args.downloader);
   if (!MERGE_METHODS.includes(args['merge-method'])) {
     throw new Error(`Unknown merge method. Available: ${MERGE_METHODS}`);
   }
