@@ -179,7 +179,7 @@ const main = async () => {
       getFullVodPath(parsedLink.vodPath),
     );
     const videoInfo = getVideoInfoByVodPath(parsedLink);
-    return downloadVideo(formats, videoInfo, () => false, args);
+    return downloadVideo(formats, videoInfo, () => true, args);
   }
 
   // link type: video
