@@ -1,14 +1,35 @@
 import fsp from 'node:fs/promises';
-import { spawn } from '../lib/spawn.ts';
+import childProcess from 'node:child_process';
 import type { Frag } from '../types.ts';
 import { getPath } from '../utils/getPath.ts';
 
 export type FragFile = [filename: string, duration: string];
 
+export const spawnFfmpeg = (args: string[]) =>
+  new Promise((resolve, reject) => {
+    let isInputSection = true;
+    const handleFfmpegData = (stream: NodeJS.WriteStream) => (data: Buffer) => {
+      const newData: string[] = [];
+      for (const line of data.toString().split('\n')) {
+        if (isInputSection && line.startsWith('  Stream #0:')) continue;
+        if (line.startsWith('Stream mapping:')) isInputSection = false;
+        newData.push(line);
+      }
+      stream.write(newData.join('\n'));
+    };
+
+    const child = childProcess.spawn('ffmpeg', args);
+    child.stdout.on('data', handleFfmpegData(process.stdout));
+    child.stderr.on('data', handleFfmpegData(process.stderr));
+    child.on('error', (err) => reject(err));
+    child.on('close', (code) => resolve(code));
+  });
+
 // https://github.com/lay295/TwitchDownloader/blob/master/TwitchDownloaderCore/VideoDownloader.cs#L393
 const runFfconcat = (ffconcatFilename: string, outputFilename: string) =>
   // prettier-ignore
-  spawn('ffmpeg', [
+  spawnFfmpeg([
+    '-hide_banner',
     '-avoid_negative_ts', 'make_zero',
     '-analyzeduration', '2147483647',
     '-probesize', '2147483647',

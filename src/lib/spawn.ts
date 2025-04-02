@@ -1,6 +1,6 @@
 import childProcess from 'node:child_process';
 
-export const spawn = (command: string, args: string[], silent = false) =>
+export const spawn = (command: string, args: string[] = [], silent = false) =>
   new Promise((resolve, reject) => {
     const child = childProcess.spawn(command, args);
     if (!silent) {
