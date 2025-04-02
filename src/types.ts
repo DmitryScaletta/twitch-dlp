@@ -21,7 +21,7 @@ export type Frag = {
 export type FragMetadata = {
   /** Frag size (bytes) */
   size: number;
-  /** Time spent downloading a fragment */
+  /** Time spent downloading a fragment (ms) */
   time: number;
 };
 

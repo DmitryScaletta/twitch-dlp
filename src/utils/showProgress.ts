@@ -1,8 +1,8 @@
 import { COLOR } from '../constants.ts';
 import type { FragMetadata } from '../types.ts';
 
-const LOCALE = 'en-US';
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+const LOCALE = 'en-GB';
 
 const percentFormatter = new Intl.NumberFormat(LOCALE, {
   style: 'percent',
@@ -10,7 +10,7 @@ const percentFormatter = new Intl.NumberFormat(LOCALE, {
   maximumFractionDigits: 1,
 });
 
-const timeFormatter = new Intl.DateTimeFormat('en-GB', {
+const timeFormatter = new Intl.DateTimeFormat(LOCALE, {
   hour: 'numeric',
   minute: 'numeric',
   second: 'numeric',
@@ -34,26 +34,24 @@ export const showProgress = (
   fragsCount: number,
 ) => {
   const downloadedSize = downloadedFrags.reduce((acc, f) => acc + f.size, 0);
-  const avgFragSize =
-    downloadedFrags.length === 0 ? 0 : downloadedSize / downloadedFrags.length;
-  const last5frags = downloadedFrags.filter((f) => f.time !== 0).slice(-5);
-  const currentSpeedBps =
-    last5frags.length === 0
-      ? 0
-      : last5frags
-          .map((f) => (f.size / f.time) * 1000)
-          .reduce((a, b) => a + b, 0) / last5frags.length;
+  const avgFragSize = downloadedFrags.length
+    ? downloadedSize / downloadedFrags.length
+    : 0;
+  const last5 = downloadedFrags.filter((f) => f.time !== 0).slice(-5);
+  const currentSpeedBps = last5.length
+    ? last5.map((f) => (f.size / f.time) * 1000).reduce((a, b) => a + b, 0) /
+      last5.length
+    : 0;
 
   const estFullSize = avgFragSize * fragsCount;
   const estSizeLeft = estFullSize - downloadedSize;
-  let estTimeLeftSec =
-    currentSpeedBps === 0 ? 0 : estSizeLeft / currentSpeedBps;
-  let downloadedPercent = estFullSize === 0 ? 0 : downloadedSize / estFullSize;
+  const estTimeLeftSec = currentSpeedBps ? estSizeLeft / currentSpeedBps : 0;
+  const downloadedPercent = estFullSize ? downloadedSize / estFullSize : 0;
 
   const progress = [
-    '[download]',
+    '[download] ',
     COLOR.cyan,
-    percentFormatter.format(downloadedPercent || 0).padStart(7, ' '),
+    percentFormatter.format(downloadedPercent || 0).padStart(6, ' '),
     COLOR.reset,
     ' of ~ ',
     formatSize(estFullSize || 0).padStart(9, ' '),
