@@ -1,6 +1,6 @@
 import fsp from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { RET_CODE } from '../constants.ts';
+import { COLOR, LIVE_VIDEO_STATUS, RET_CODE } from '../constants.ts';
 import { downloadFile } from '../downloaders/index.ts';
 import { isInstalled } from '../lib/isInstalled.ts';
 import { statsOrNull } from '../lib/statsOrNull.ts';
@@ -10,6 +10,7 @@ import type {
   Downloader,
   DownloadFormat,
   FragMetadata,
+  LiveVideoStatus,
   VideoInfo,
 } from '../types.ts';
 import { fetchText } from './fetchText.ts';
@@ -23,6 +24,8 @@ import { showProgress } from './showProgress.ts';
 
 const DEFAULT_OUTPUT_TEMPLATE = '%(title)s [%(id)s].%(ext)s';
 const WAIT_BETWEEN_CYCLES_SEC = 60;
+
+const RETRY_MESSAGE = `Retry every ${WAIT_BETWEEN_CYCLES_SEC} second(s)`;
 
 const downloadFrag = async (
   downloader: Downloader,
@@ -64,8 +67,11 @@ const isVideoOlderThat24h = (videoInfo: VideoInfo) => {
 export const downloadVideo = async (
   formats: DownloadFormat[],
   videoInfo: VideoInfo,
-  getIsFinalized: () => boolean | Promise<boolean>,
   args: AppArgs,
+  getLiveVideoStatus: (
+    currentStreamId?: string,
+  ) => LiveVideoStatus | Promise<LiveVideoStatus> = () =>
+    LIVE_VIDEO_STATUS.FINALIZED,
 ) => {
   if (args['list-formats']) {
     console.table(formats.map(({ url, ...rest }) => rest));
@@ -88,16 +94,16 @@ export const downloadVideo = async (
     args.output || DEFAULT_OUTPUT_TEMPLATE,
     videoInfo,
   );
-  let isFinalized;
+  let liveVideoStatus: LiveVideoStatus;
   let frags;
   let fragsCount = 0;
   let playlistUrl = dlFormat.url;
   const downloadedFrags: FragMetadata[] = [];
   while (true) {
     let playlist;
-    [playlist, isFinalized] = await Promise.all([
+    [playlist, liveVideoStatus] = await Promise.all([
       fetchText(playlistUrl, 'playlist'),
-      getIsFinalized(),
+      getLiveVideoStatus(),
     ]);
     // workaround for some old muted highlights
     if (!playlist) {
@@ -107,9 +113,12 @@ export const downloadVideo = async (
         playlist = await fetchText(playlistUrl, 'playlist (attempt #2)');
       }
     }
+    if (!playlist && liveVideoStatus === LIVE_VIDEO_STATUS.FINALIZED) {
+      throw new Error('Cannot download the playlist');
+    }
     if (!playlist) {
       console.warn(
-        `Cannot download the playlist. Retry every ${WAIT_BETWEEN_CYCLES_SEC} second(s)`,
+        `[live-from-start] Waiting for the playlist. ${RETRY_MESSAGE}`,
       );
       await sleep(WAIT_BETWEEN_CYCLES_SEC * 1000);
       continue;
@@ -124,10 +133,13 @@ export const downloadVideo = async (
 
     const hasNewFrags = frags.length > fragsCount;
     fragsCount = frags.length;
-    if (!hasNewFrags && !isFinalized) {
-      console.log(
-        `Waiting for new fragments. Retry every ${WAIT_BETWEEN_CYCLES_SEC} second(s)`,
-      );
+    if (!hasNewFrags && liveVideoStatus !== LIVE_VIDEO_STATUS.FINALIZED) {
+      let message = '[live-from-start] ';
+      message +=
+        liveVideoStatus === LIVE_VIDEO_STATUS.ONLINE
+          ? `${COLOR.green}VOD ONLINE${COLOR.reset}: waiting for new fragments`
+          : `${COLOR.red}VOD OFFLINE${COLOR.reset}: waiting for the finalization`;
+      console.log(`${message}. ${RETRY_MESSAGE}`);
       await sleep(WAIT_BETWEEN_CYCLES_SEC * 1000);
       continue;
     }
@@ -186,9 +198,9 @@ export const downloadVideo = async (
 
       showProgress(downloadedFrags, fragsCount);
     }
-    if (downloadedFragments) process.stdout.write('\n');
+    process.stdout.write('\n');
 
-    if (isFinalized) break;
+    if (liveVideoStatus === LIVE_VIDEO_STATUS.FINALIZED) break;
   }
 
   const dir = await readOutputDir(outputPath);

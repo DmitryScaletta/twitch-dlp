@@ -35,9 +35,7 @@ export const getLiveVideoInfo = async (
 
   // private VOD
   if (!broadcast?.stream?.archiveVideo || formats.length === 0) {
-    console.warn(
-      "Couldn't find an archived video for the broadcast. Trying to recover a VOD url",
-    );
+    console.warn('[live-from-start] Recovering the playlist');
     const startTimestamp =
       new Date(streamMeta.stream.createdAt).getTime() / 1000;
     const vodPath = `${channelLogin}_${streamMeta.stream.id}_${startTimestamp}`;
@@ -45,12 +43,7 @@ export const getLiveVideoInfo = async (
     videoInfo = getVideoInfoByStreamMeta(streamMeta, channelLogin);
   }
 
-  if (formats.length === 0) {
-    console.warn("Couldn't find a VOD url");
-    return null;
-  }
-
-  if (!videoInfo) return null;
+  if (formats.length === 0 || !videoInfo) return null;
 
   return { formats, videoInfo, videoId };
 };

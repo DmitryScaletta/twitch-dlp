@@ -19,7 +19,7 @@ export const downloadFile = async (
     return curl.downloadFile(url, destPath, retries, rateLimit, gzip);
   }
   for (const [i] of Object.entries(Array.from({ length: retries }))) {
-    let retCode = RET_CODE.OK;
+    let retCode: number = RET_CODE.OK;
     if (downloader === ARIA2C) {
       retCode = await aria2c.downloadFile(url, destPath, rateLimit, gzip);
     }
@@ -30,7 +30,7 @@ export const downloadFile = async (
       return retCode;
     }
     sleep(1000);
-    console.error(`Can't download a url. Retry ${i + 1}`);
+    console.error(`[download] Cannot download the url. Retry ${i + 1}`);
   }
   return RET_CODE.UNKNOWN_ERROR;
 };

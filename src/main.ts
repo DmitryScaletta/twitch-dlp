@@ -5,6 +5,7 @@ import { parseArgs } from 'node:util';
 import * as api from './api/twitch.ts';
 import {
   COLOR,
+  LIVE_VIDEO_STATUS,
   MERGE_METHODS,
   PRIVATE_VIDEO_INSTRUCTIONS,
 } from './constants.ts';
@@ -15,8 +16,8 @@ import { downloadWithStreamlink } from './utils/downloadWithStreamlink.ts';
 import { getDownloader } from './utils/getDownloader.ts';
 import { getExistingFrags } from './utils/getExistingFrags.ts';
 import { getFragsForDownloading } from './utils/getFragsForDownloading.ts';
-import { getIsStreamFinalized } from './utils/getIsVodFinalized.ts';
 import { getLiveVideoInfo } from './utils/getLiveVideoInfo.ts';
+import { getLiveVideoStatus } from './utils/getLiveVideoStatus.ts';
 import { getPath } from './utils/getPath.ts';
 import {
   getFullVodPath,
@@ -179,7 +180,7 @@ const main = async () => {
       getFullVodPath(parsedLink.vodPath),
     );
     const videoInfo = getVideoInfoByVodPath(parsedLink);
-    return downloadVideo(formats, videoInfo, () => true, args);
+    return downloadVideo(formats, videoInfo, args);
   }
 
   // link type: video
@@ -190,7 +191,7 @@ const main = async () => {
     ]);
     // should work for VODs and highlights
     if (formats.length === 0 && videoMeta !== null) {
-      console.log('Trying to get playlist url from video metadata');
+      console.log('Trying to get playlist from video metadata');
       formats = await getVideoFormatsByThumbUrl(
         videoMeta.broadcastType,
         videoMeta.id,
@@ -201,7 +202,7 @@ const main = async () => {
       return console.log(PRIVATE_VIDEO_INSTRUCTIONS);
     }
     const videoInfo = getVideoInfoByVideoMeta(videoMeta);
-    return downloadVideo(formats, videoInfo, () => true, args);
+    return downloadVideo(formats, videoInfo, args);
   }
 
   // link type: channel
@@ -222,10 +223,10 @@ const main = async () => {
     if (!isLive) {
       if (isRetry) {
         console.log(
-          `Waiting for streams, retrying every ${retryStreamsDelay} second(s)`,
+          `[retry-streams] Waiting for streams. Retry every ${retryStreamsDelay} second(s)`,
         );
       } else {
-        console.warn('The channel is not currently live');
+        console.warn('[download] The channel is not currently live');
         return;
       }
     }
@@ -245,17 +246,19 @@ const main = async () => {
       const liveVideoInfo = await getLiveVideoInfo(streamMeta, channelLogin);
       if (liveVideoInfo) {
         const { formats, videoInfo, videoId } = liveVideoInfo;
-        await downloadVideo(
-          formats,
-          videoInfo,
-          () => getIsStreamFinalized(videoId, streamMeta.stream!.id),
-          args,
-        );
+        const getLiveVideoStatusFn = () =>
+          getLiveVideoStatus(videoId, streamMeta.stream!.id, channelLogin);
+        await downloadVideo(formats, videoInfo, args, getLiveVideoStatusFn);
+      } else {
+        let message = `[live-from-start] Cannot find the playlist`;
+        if (isRetry) {
+          message += `. Retry every ${retryStreamsDelay} second(s)`;
+          console.warn(message);
+        } else {
+          console.warn(message);
+          return;
+        }
       }
-      if (!isRetry) return;
-      console.log(
-        `Waiting for VOD, retrying every ${retryStreamsDelay} second(s)`,
-      );
     }
 
     await sleep(retryStreamsDelay * 1000);

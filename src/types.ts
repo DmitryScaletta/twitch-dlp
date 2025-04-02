@@ -1,5 +1,6 @@
 import type {
   DOWNLOADERS,
+  LIVE_VIDEO_STATUS,
   MERGE_METHODS,
   UNMUTE_POLICIES,
 } from './constants.ts';
@@ -7,6 +8,9 @@ import type {
 export type Downloader = (typeof DOWNLOADERS)[number];
 export type MergeMethod = (typeof MERGE_METHODS)[number];
 export type UnmutePolicy = (typeof UNMUTE_POLICIES)[number];
+
+export type LiveVideoStatus =
+  (typeof LIVE_VIDEO_STATUS)[keyof typeof LIVE_VIDEO_STATUS];
 
 export type Frag = {
   /** Frag index in the original playlist */
