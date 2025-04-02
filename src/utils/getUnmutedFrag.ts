@@ -9,6 +9,16 @@ const SAME_FORMAT_SLUGS = ['audio_only', ...LOWER_AUDIO_QUALITY];
 
 const getFormatSlug = (url: string) => url.split('/').at(-2)!;
 
+const getFragResponse = (
+  [available, availableGzip]: readonly [boolean, boolean],
+  sameFormat: boolean,
+  url: string,
+) => {
+  if (available) return { sameFormat, url, gzip: false };
+  if (availableGzip) return { sameFormat, url, gzip: true };
+  return null;
+};
+
 export const getUnmutedFrag = async (
   downloader: Downloader,
   unmutePolicy: string | undefined,
@@ -31,10 +41,8 @@ export const getUnmutedFrag = async (
 
   if (unmutePolicy === SAME_FORMAT) {
     const url = fragUrl.replace('-muted', '');
-    const [available, availableGzip] = await isUrlsAvailable(downloader, [url]);
-    if (available) return { sameFormat: true, url: url, gzip: false };
-    if (availableGzip) return { sameFormat: true, url: url, gzip: true };
-    return null;
+    const [availability] = await isUrlsAvailable(downloader, [url]);
+    return getFragResponse(availability, true, url);
   }
 
   if (unmutePolicy === ANY || unmutePolicy === QUALITY) {
@@ -57,19 +65,16 @@ export const getUnmutedFrag = async (
     }
     const responses = await isUrlsAvailable(downloader, urls);
 
-    let [available, availableGzip] = responses[currentFormatIdx];
-    let url = urls[currentFormatIdx];
-    if (available) return { sameFormat: true, url, gzip: false };
-    if (availableGzip) return { sameFormat: true, url, gzip: true };
+    const unmutedSameFormat = getFragResponse(
+      responses[currentFormatIdx],
+      true,
+      urls[currentFormatIdx],
+    );
+    if (unmutedSameFormat) return unmutedSameFormat;
 
     const idx = responses.findLastIndex(([av, avGzip]) => av || avGzip);
-
     if (idx === -1) return null;
-    [available, availableGzip] = responses[idx];
-    url = urls[idx];
-    if (available) return { sameFormat: false, url, gzip: false };
-    if (availableGzip) return { sameFormat: false, url, gzip: true };
-    return null;
+    return getFragResponse(responses[idx], false, urls[idx]);
   }
 
   throw new Error(
