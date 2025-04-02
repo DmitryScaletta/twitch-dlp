@@ -173,5 +173,4 @@ Available streams: audio_only, 160p (worst), 360p, 480p, 720p, 720p60_alt, 720p6
 ## Dependencies
 
 - **ffmpeg**
-- **curl** or **aria2c** (if using `--limit-rate` option)
 - **streamlink** (if downloading by channel link without `--live-from-start`)
