@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import fsp from "node:fs/promises";
-import { setTimeout } from "node:timers/promises";
+import { setTimeout as setTimeout$1 } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import childProcess from "node:child_process";
 import path from "node:path";
@@ -366,7 +366,51 @@ const downloadFile$2 = async (url, destPath, retries, rateLimit = "0", gzip = fa
 });
 
 //#endregion
+//#region src/lib/throttleTransform.ts
+var ThrottleTransform = class extends stream.Transform {
+	rateBps;
+	startTime;
+	processedBytes;
+	constructor(rateBps) {
+		super();
+		this.rateBps = rateBps;
+		this.startTime = Date.now();
+		this.processedBytes = 0;
+	}
+	_transform(chunk, _, callback) {
+		this.processedBytes += chunk.length;
+		const expectedTime = this.processedBytes / this.rateBps * 1e3;
+		const actualTime = Date.now() - this.startTime;
+		const delay = Math.max(0, expectedTime - actualTime);
+		if (delay > 0) setTimeout(() => {
+			this.push(chunk);
+			callback();
+		}, delay);
+		else {
+			this.push(chunk);
+			callback();
+		}
+	}
+};
+
+//#endregion
 //#region src/downloaders/fetch.ts
+const WRONG_LIMIT_RATE_SYNTAX = "Wrong --limit-rate syntax";
+const RATE_LIMIT_MULTIPLIER = {
+	"": 1,
+	K: 1024,
+	M: 1024 * 1024
+};
+const parseRateLimit = (rateLimit) => {
+	const m = rateLimit.match(/^(?<value>\d+(?:\.\d+)?)(?<unit>[KM])?$/i);
+	if (!m) throw new Error(WRONG_LIMIT_RATE_SYNTAX);
+	const { value, unit } = m.groups;
+	const v = Number.parseFloat(value);
+	const u = unit ? unit.toUpperCase() : "";
+	if (Number.isNaN(v)) throw new Error(WRONG_LIMIT_RATE_SYNTAX);
+	const multiplier = RATE_LIMIT_MULTIPLIER[u];
+	return Math.round(v * multiplier);
+};
 const isUrlsAvailableFetch = async (urls, gzip) => {
 	try {
 		const responses = await Promise.all(urls.map((url) => fetch(url, { headers: { "Accept-Encoding": gzip ? "deflate, gzip" : "" } })));
@@ -379,12 +423,11 @@ const isUrlsAvailable$1 = async (urls) => {
 	const [urlsNoGzip, urlsGzip] = await Promise.all([isUrlsAvailableFetch(urls, false), isUrlsAvailableFetch(urls, true)]);
 	return urls.map((_, i) => [urlsNoGzip[i], urlsGzip[i]]);
 };
-const downloadFile$1 = async (url, destPath, gzip = true) => {
+const downloadFile$1 = async (url, destPath, rateLimit, gzip = true) => {
 	try {
 		const res = await fetch(url, { headers: { "Accept-Encoding": gzip ? "deflate, gzip" : "" } });
 		if (!res.ok) return RET_CODE.HTTP_RETURNED_ERROR;
-		const fileStream = fs.createWriteStream(destPath, { flags: "wx" });
-		await stream.promises.finished(stream.Readable.fromWeb(res.body).pipe(fileStream));
+		await stream.promises.pipeline(stream.Readable.fromWeb(res.body), rateLimit ? new ThrottleTransform(parseRateLimit(rateLimit)) : new stream.PassThrough(), fs.createWriteStream(destPath, { flags: "wx" }));
 		return RET_CODE.OK;
 	} catch (e) {
 		return RET_CODE.UNKNOWN_ERROR;
@@ -399,9 +442,9 @@ const downloadFile = async (downloader, url, destPath, rateLimit, gzip, retries 
 	for (const [i] of Object.entries(Array.from({ length: retries }))) {
 		let retCode = RET_CODE.OK;
 		if (downloader === ARIA2C$1) retCode = await downloadFile$3(url, destPath, rateLimit, gzip);
-		if (downloader === FETCH$1) retCode = await downloadFile$1(url, destPath, gzip);
+		if (downloader === FETCH$1) retCode = await downloadFile$1(url, destPath, rateLimit, gzip);
 		if (retCode === RET_CODE.OK || retCode === RET_CODE.HTTP_RETURNED_ERROR) return retCode;
-		setTimeout(1e3);
+		setTimeout$1(1e3);
 		console.error(`[download] Cannot download the url. Retry ${i + 1}`);
 	}
 	return RET_CODE.UNKNOWN_ERROR;
@@ -537,6 +580,19 @@ const [QUALITY, ANY, SAME_FORMAT, NONE] = UNMUTE_POLICIES;
 const LOWER_AUDIO_QUALITY = ["160p30", "360p30"];
 const SAME_FORMAT_SLUGS = ["audio_only", ...LOWER_AUDIO_QUALITY];
 const getFormatSlug = (url) => url.split("/").at(-2);
+const getFragResponse = ([available, availableGzip], sameFormat, url) => {
+	if (available) return {
+		sameFormat,
+		url,
+		gzip: false
+	};
+	if (availableGzip) return {
+		sameFormat,
+		url,
+		gzip: true
+	};
+	return null;
+};
 const getUnmutedFrag = async (downloader, unmutePolicy, fragUrl, formats) => {
 	if (unmutePolicy === NONE) return null;
 	const currentFormatSlug = getFormatSlug(fragUrl);
@@ -544,18 +600,8 @@ const getUnmutedFrag = async (downloader, unmutePolicy, fragUrl, formats) => {
 	if (!unmutePolicy) unmutePolicy = SAME_FORMAT_SLUGS.includes(currentFormatSlug) ? SAME_FORMAT : QUALITY;
 	if (unmutePolicy === SAME_FORMAT) {
 		const url = fragUrl.replace("-muted", "");
-		const [available, availableGzip] = await isUrlsAvailable(downloader, [url]);
-		if (available) return {
-			sameFormat: true,
-			url,
-			gzip: false
-		};
-		if (availableGzip) return {
-			sameFormat: true,
-			url,
-			gzip: true
-		};
-		return null;
+		const [availability] = await isUrlsAvailable(downloader, [url]);
+		return getFragResponse(availability, true, url);
 	}
 	if (unmutePolicy === ANY || unmutePolicy === QUALITY) {
 		const urls = [];
@@ -567,33 +613,11 @@ const getUnmutedFrag = async (downloader, unmutePolicy, fragUrl, formats) => {
 			urls.push(fragUrl.replace("-muted", "").replace(`/${currentFormatSlug}/`, `/${formatSlug}/`));
 		}
 		const responses = await isUrlsAvailable(downloader, urls);
-		let [available, availableGzip] = responses[currentFormatIdx];
-		let url = urls[currentFormatIdx];
-		if (available) return {
-			sameFormat: true,
-			url,
-			gzip: false
-		};
-		if (availableGzip) return {
-			sameFormat: true,
-			url,
-			gzip: true
-		};
+		const unmutedSameFormat = getFragResponse(responses[currentFormatIdx], true, urls[currentFormatIdx]);
+		if (unmutedSameFormat) return unmutedSameFormat;
 		const idx = responses.findLastIndex(([av, avGzip]) => av || avGzip);
 		if (idx === -1) return null;
-		[available, availableGzip] = responses[idx];
-		url = urls[idx];
-		if (available) return {
-			sameFormat: false,
-			url,
-			gzip: false
-		};
-		if (availableGzip) return {
-			sameFormat: false,
-			url,
-			gzip: true
-		};
-		return null;
+		return getFragResponse(responses[idx], false, urls[idx]);
 	}
 	throw new Error(`Unknown unmute policy: ${unmutePolicy}. Available: ${UNMUTE_POLICIES}`);
 };
@@ -781,7 +805,7 @@ const downloadVideo = async (formats, videoInfo, args, getLiveVideoStatus$1 = ()
 		if (!playlist && liveVideoStatus === LIVE_VIDEO_STATUS.FINALIZED) throw new Error("Cannot download the playlist");
 		if (!playlist) {
 			console.warn(`[live-from-start] Waiting for the playlist. ${RETRY_MESSAGE}`);
-			await setTimeout(WAIT_BETWEEN_CYCLES_SEC * 1e3);
+			await setTimeout$1(WAIT_BETWEEN_CYCLES_SEC * 1e3);
 			continue;
 		}
 		frags = getFragsForDownloading(playlistUrl, playlist, args["download-sections"]);
@@ -792,7 +816,7 @@ const downloadVideo = async (formats, videoInfo, args, getLiveVideoStatus$1 = ()
 			let message = "[live-from-start] ";
 			message += liveVideoStatus === LIVE_VIDEO_STATUS.ONLINE ? `${COLOR.green}VOD ONLINE${COLOR.reset}: waiting for new fragments` : `${COLOR.red}VOD OFFLINE${COLOR.reset}: waiting for the finalization`;
 			console.log(`${message}. ${RETRY_MESSAGE}`);
-			await setTimeout(WAIT_BETWEEN_CYCLES_SEC * 1e3);
+			await setTimeout$1(WAIT_BETWEEN_CYCLES_SEC * 1e3);
 			continue;
 		}
 		let downloadedFragments = 0;
@@ -906,22 +930,9 @@ const downloadWithStreamlink = async (link, streamMeta, channelLogin, args) => {
 
 //#endregion
 //#region src/utils/getDownloader.ts
-const FETCH_WARNING = "Warning: --limit-rate (-r) option is not supported by default downloader. Install aria2c or curl";
 const [ARIA2C, CURL, FETCH] = DOWNLOADERS;
-const getDownloader = async (downloaderArg, limitRateArg) => {
-	if (downloaderArg === FETCH) {
-		if (!limitRateArg) return FETCH;
-		console.warn(FETCH_WARNING);
-		return FETCH;
-	}
-	if (!downloaderArg) {
-		if (!limitRateArg) return FETCH;
-		const [aria2cInstalled, curlInstalled] = await Promise.all([isInstalled(ARIA2C), isInstalled(CURL)]);
-		if (curlInstalled) return CURL;
-		if (aria2cInstalled) return ARIA2C;
-		console.warn(FETCH_WARNING);
-		return FETCH;
-	}
+const getDownloader = async (downloaderArg) => {
+	if (!downloaderArg || downloaderArg === FETCH) return FETCH;
 	if (downloaderArg === ARIA2C) {
 		if (await isInstalled(ARIA2C)) return ARIA2C;
 		throw new Error(`${ARIA2C} is not installed. Install it from https://aria2.github.io/`);
@@ -1180,7 +1191,7 @@ const main = async () => {
 		console.log(sections.Dependencies.replaceAll("**", ""));
 		return;
 	}
-	args.downloader = await getDownloader(args.downloader, args["limit-rate"]);
+	args.downloader = await getDownloader(args.downloader);
 	if (!MERGE_METHODS.includes(args["merge-method"])) throw new Error(`Unknown merge method. Available: ${MERGE_METHODS}`);
 	if (args["merge-fragments"]) {
 		const [outputPath] = positionals;
@@ -1243,7 +1254,7 @@ const main = async () => {
 				}
 			}
 		}
-		await setTimeout(retryStreamsDelay * 1e3);
+		await setTimeout$1(retryStreamsDelay * 1e3);
 	}
 };
 main().catch((e) => {
