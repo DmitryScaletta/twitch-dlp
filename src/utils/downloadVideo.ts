@@ -68,7 +68,6 @@ export const downloadVideo = async (
   args: AppArgs,
 ) => {
   if (args['list-formats']) {
-    console.log(formats[0].url);
     console.table(formats.map(({ url, ...rest }) => rest));
     process.exit();
   }
@@ -127,7 +126,7 @@ export const downloadVideo = async (
     fragsCount = frags.length;
     if (!hasNewFrags && !isFinalized) {
       console.log(
-        `No new fragments. Retry every ${WAIT_BETWEEN_CYCLES_SEC} second(s)`,
+        `Waiting for new fragments. Retry every ${WAIT_BETWEEN_CYCLES_SEC} second(s)`,
       );
       await sleep(WAIT_BETWEEN_CYCLES_SEC * 1000);
       continue;
