@@ -1,8 +1,11 @@
 {
   "cSpell.words": [
+    "demuxer",
+    "downloaders",
     "extinf",
     "ffconcat",
     "positionals",
-    "streamlink"
+    "streamlink",
+    "unmute"
   ]
 }
