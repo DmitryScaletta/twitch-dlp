@@ -26,8 +26,9 @@ export const downloadFile = async (
     if (downloader === FETCH) {
       retCode = await fetch.downloadFile(url, destPath, gzip);
     }
-    if (retCode === RET_CODE.OK) return true;
-    if (retCode === RET_CODE.HTTP_RETURNED_ERROR) return false;
+    if (retCode === RET_CODE.OK || retCode === RET_CODE.HTTP_RETURNED_ERROR) {
+      return retCode;
+    }
     sleep(1000);
     console.error(`Can't download a url. Retry ${i + 1}`);
   }

@@ -1,16 +1,14 @@
-import path from 'node:path';
 import fsp from 'node:fs/promises';
+import path from 'node:path';
 import { spawn } from '../lib/spawn.ts';
-import { getPath } from './getPath.ts';
 import type { Frag } from '../types.ts';
+import { getPath } from './getPath.ts';
 
 export const processUnmutedFrags = async (
   frags: Frag[],
   outputPath: string,
-  _dir?: string[],
+  dir: string[],
 ) => {
-  const dir = _dir || (await fsp.readdir(path.parse(outputPath).dir));
-
   for (const frag of frags) {
     const fragPath = getPath.frag(outputPath, frag.idx + 1);
     const fragUnmutedPath = getPath.fragUnmuted(fragPath);
@@ -19,7 +17,7 @@ export const processUnmutedFrags = async (
 
     const fragUnmutedPathTmp = `${fragPath}.ts`;
     // prettier-ignore
-    const returnCode = await spawn('ffmpeg', [
+    const retCode = await spawn('ffmpeg', [
       '-hide_banner',
       '-loglevel', 'error',
       '-i', fragPath,
@@ -34,7 +32,7 @@ export const processUnmutedFrags = async (
 
     const message = `[unmute] Adding audio in Frag${frag.idx + 1}`;
 
-    if (returnCode) {
+    if (retCode) {
       try {
         await fsp.unlink(fragUnmutedPathTmp);
       } catch {}

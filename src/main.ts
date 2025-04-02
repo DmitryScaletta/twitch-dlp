@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 import fsp from 'node:fs/promises';
-import path from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { parseArgs } from 'node:util';
 import * as api from './api/twitch.ts';
@@ -14,6 +13,7 @@ import type { Downloader, MergeMethod } from './types.ts';
 import { downloadVideo } from './utils/downloadVideo.ts';
 import { downloadWithStreamlink } from './utils/downloadWithStreamlink.ts';
 import { getDownloader } from './utils/getDownloader.ts';
+import { getExistingFrags } from './utils/getExistingFrags.ts';
 import { getFragsForDownloading } from './utils/getFragsForDownloading.ts';
 import { getIsStreamFinalized } from './utils/getIsVodFinalized.ts';
 import { getLiveVideoInfo } from './utils/getLiveVideoInfo.ts';
@@ -30,6 +30,7 @@ import {
 } from './utils/getVideoInfo.ts';
 import { parseLink } from './utils/parseLink.ts';
 import { processUnmutedFrags } from './utils/processUnmutedFrags.ts';
+import { readOutputDir } from './utils/readOutputDir.ts';
 
 const getArgs = () =>
   parseArgs({
@@ -154,17 +155,14 @@ const main = async () => {
     const [outputPath] = positionals;
     const [playlist, dir] = await Promise.all([
       fsp.readFile(getPath.playlist(outputPath), 'utf8'),
-      fsp.readdir(path.parse(outputPath).dir || '.'),
+      readOutputDir(outputPath),
     ]);
     const frags = getFragsForDownloading(
       '.',
       playlist,
       args['download-sections'],
     );
-    const existingFrags = frags.filter((frag) => {
-      const fragPath = getPath.frag(outputPath, frag.idx + 1);
-      return dir.includes(path.parse(fragPath).base);
-    });
+    const existingFrags = getExistingFrags(frags, outputPath, dir);
     await processUnmutedFrags(existingFrags, outputPath, dir);
     await mergeFrags(args['merge-method'], existingFrags, outputPath, true);
     return;

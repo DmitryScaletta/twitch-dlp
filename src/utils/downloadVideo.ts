@@ -1,5 +1,6 @@
 import fsp from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { RET_CODE } from '../constants.ts';
 import { downloadFile } from '../downloaders/index.ts';
 import { isInstalled } from '../lib/isInstalled.ts';
 import { statsOrNull } from '../lib/statsOrNull.ts';
@@ -12,10 +13,12 @@ import type {
   VideoInfo,
 } from '../types.ts';
 import { fetchText } from './fetchText.ts';
+import { getExistingFrags } from './getExistingFrags.ts';
 import { getFragsForDownloading } from './getFragsForDownloading.ts';
 import { getPath } from './getPath.ts';
 import { getUnmutedFrag } from './getUnmutedFrag.ts';
 import { processUnmutedFrags } from './processUnmutedFrags.ts';
+import { readOutputDir } from './readOutputDir.ts';
 import { showProgress } from './showProgress.ts';
 
 const DEFAULT_OUTPUT_TEMPLATE = '%(title)s [%(id)s].%(ext)s';
@@ -31,8 +34,20 @@ const downloadFrag = async (
   const destPathTmp = `${destPath}.part`;
   if (await statsOrNull(destPathTmp)) await fsp.unlink(destPathTmp);
   const startTime = Date.now();
-  await downloadFile(downloader, url, destPathTmp, limitRateArg, gzip);
+  const retCode = await downloadFile(
+    downloader,
+    url,
+    destPathTmp,
+    limitRateArg,
+    gzip,
+  );
   const endTime = Date.now();
+  if (retCode !== RET_CODE.OK) {
+    try {
+      await fsp.unlink(destPathTmp);
+    } catch {}
+    return { size: 0, time: 0 };
+  }
   await fsp.rename(destPathTmp, destPath);
   const { size } = await fsp.stat(destPath);
   return { size, time: endTime - startTime };
@@ -176,10 +191,13 @@ export const downloadVideo = async (
     if (isFinalized) break;
   }
 
-  await processUnmutedFrags(frags, outputPath);
+  const dir = await readOutputDir(outputPath);
+  const existingFrags = getExistingFrags(frags, outputPath, dir);
+
+  await processUnmutedFrags(existingFrags, outputPath, dir);
   await mergeFrags(
     args['merge-method'],
-    frags,
+    existingFrags,
     outputPath,
     args['keep-fragments'],
   );
