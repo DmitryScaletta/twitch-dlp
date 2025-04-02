@@ -4,7 +4,6 @@ import { setTimeout } from "node:timers/promises";
 import { parseArgs } from "node:util";
 import childProcess from "node:child_process";
 import path from "node:path";
-import { setTimeout as setTimeout$1 } from "timers/promises";
 import os from "node:os";
 import fs from "node:fs";
 import stream from "node:stream";
@@ -160,6 +159,12 @@ const RET_CODE = {
 };
 
 //#endregion
+//#region src/merge/append.ts
+const mergeFrags$2 = async (frags, outputPath, keepFragments) => {
+	throw new Error("Not implemented yet");
+};
+
+//#endregion
 //#region src/utils/getPath.ts
 const getPath = {
 	output: (template, videoInfo) => {
@@ -237,7 +242,7 @@ const generateFfconcat = (files) => {
 	].join("\n")).join("\n");
 	return ffconcat;
 };
-const mergeFrags$2 = async (frags, outputPath, keepFragments) => {
+const mergeFrags$1 = async (frags, outputPath, keepFragments) => {
 	const fragFiles = frags.map((frag) => [getPath.frag(outputPath, frag.idx + 1), frag.duration]);
 	const ffconcat = generateFfconcat(fragFiles);
 	const ffconcatPath = getPath.ffconcat(outputPath);
@@ -249,17 +254,11 @@ const mergeFrags$2 = async (frags, outputPath, keepFragments) => {
 };
 
 //#endregion
-//#region src/merge/append.ts
-const mergeFrags$1 = async (frags, outputPath, keepFragments) => {
-	throw new Error("Not implemented yet");
-};
-
-//#endregion
 //#region src/merge/index.ts
 const [FFCONCAT, APPEND] = MERGE_METHODS;
 const mergeFrags = async (method, frags, outputPath, keepFragments) => {
-	if (method === FFCONCAT) return mergeFrags$2(frags, outputPath, keepFragments);
-	if (method === APPEND) return mergeFrags$1(frags, outputPath, keepFragments);
+	if (method === FFCONCAT) return mergeFrags$1(frags, outputPath, keepFragments);
+	if (method === APPEND) return mergeFrags$2(frags, outputPath, keepFragments);
 	throw new Error(`Unknown merge method: ${method}. Available methods: ${MERGE_METHODS}`);
 };
 
@@ -397,7 +396,7 @@ const downloadFile = async (downloader, url, destPath, rateLimit, gzip, retries 
 		if (downloader === ARIA2C$1) retCode = await downloadFile$3(url, destPath, rateLimit, gzip);
 		if (downloader === FETCH$1) retCode = await downloadFile$1(url, destPath, gzip);
 		if (retCode === RET_CODE.OK || retCode === RET_CODE.HTTP_RETURNED_ERROR) return retCode;
-		setTimeout$1(1e3);
+		setTimeout(1e3);
 		console.error(`Can't download a url. Retry ${i + 1}`);
 	}
 	return RET_CODE.UNKNOWN_ERROR;
@@ -634,7 +633,7 @@ const processUnmutedFrags = async (frags, outputPath, dir) => {
 			"-y",
 			fragUnmutedPathTmp
 		]);
-		const message = `[unmute] Adding audio in Frag${frag.idx + 1}`;
+		const message = `[unmute] Adding audio to Frag${frag.idx + 1}`;
 		if (retCode) {
 			try {
 				await fsp.unlink(fragUnmutedPathTmp);
@@ -654,7 +653,6 @@ const readOutputDir = (outputPath) => fsp.readdir(path.parse(outputPath).dir || 
 
 //#endregion
 //#region src/utils/showProgress.ts
-const LOCALE = "en-US";
 const UNITS = [
 	"B",
 	"KB",
@@ -666,12 +664,13 @@ const UNITS = [
 	"ZB",
 	"YB"
 ];
+const LOCALE = "en-GB";
 const percentFormatter = new Intl.NumberFormat(LOCALE, {
 	style: "percent",
 	minimumFractionDigits: 1,
 	maximumFractionDigits: 1
 });
-const timeFormatter = new Intl.DateTimeFormat("en-GB", {
+const timeFormatter = new Intl.DateTimeFormat(LOCALE, {
 	hour: "numeric",
 	minute: "numeric",
 	second: "numeric",
@@ -689,17 +688,17 @@ const formatSize = (n) => {
 };
 const showProgress = (downloadedFrags, fragsCount) => {
 	const downloadedSize = downloadedFrags.reduce((acc, f) => acc + f.size, 0);
-	const avgFragSize = downloadedFrags.length === 0 ? 0 : downloadedSize / downloadedFrags.length;
-	const last5frags = downloadedFrags.filter((f) => f.time !== 0).slice(-5);
-	const currentSpeedBps = last5frags.length === 0 ? 0 : last5frags.map((f) => f.size / f.time * 1e3).reduce((a, b) => a + b, 0) / last5frags.length;
+	const avgFragSize = downloadedFrags.length ? downloadedSize / downloadedFrags.length : 0;
+	const last5 = downloadedFrags.filter((f) => f.time !== 0).slice(-5);
+	const currentSpeedBps = last5.length ? last5.map((f) => f.size / f.time * 1e3).reduce((a, b) => a + b, 0) / last5.length : 0;
 	const estFullSize = avgFragSize * fragsCount;
 	const estSizeLeft = estFullSize - downloadedSize;
-	let estTimeLeftSec = currentSpeedBps === 0 ? 0 : estSizeLeft / currentSpeedBps;
-	let downloadedPercent = estFullSize === 0 ? 0 : downloadedSize / estFullSize;
+	const estTimeLeftSec = currentSpeedBps ? estSizeLeft / currentSpeedBps : 0;
+	const downloadedPercent = estFullSize ? downloadedSize / estFullSize : 0;
 	const progress = [
-		"[download]",
+		"[download] ",
 		COLOR.cyan,
-		percentFormatter.format(downloadedPercent || 0).padStart(7, " "),
+		percentFormatter.format(downloadedPercent || 0).padStart(6, " "),
 		COLOR.reset,
 		" of ~ ",
 		formatSize(estFullSize || 0).padStart(9, " "),
@@ -1194,7 +1193,7 @@ const main = async () => {
 	if (parsedLink.type === "vodPath") {
 		const formats = await getVideoFormatsByFullVodPath(getFullVodPath(parsedLink.vodPath));
 		const videoInfo = getVideoInfoByVodPath(parsedLink);
-		return downloadVideo(formats, videoInfo, () => false, args);
+		return downloadVideo(formats, videoInfo, () => true, args);
 	}
 	if (parsedLink.type === "video") {
 		let [formats, videoMeta] = await Promise.all([getVideoFormats(parsedLink.videoId), getVideoMetadata(parsedLink.videoId)]);
