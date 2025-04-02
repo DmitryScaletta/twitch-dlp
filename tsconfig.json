@@ -3,6 +3,7 @@
     "target": "esnext",
     "module": "nodenext",
     "strict": true,
+    "erasableSyntaxOnly": true,
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
     "verbatimModuleSyntax": true
