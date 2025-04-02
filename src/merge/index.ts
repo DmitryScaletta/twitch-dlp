@@ -1,7 +1,7 @@
-import * as ffconcat from './ffconcat.ts';
-import * as append from './append.ts';
-import type { Frag, MergeMethod } from '../types.ts';
 import { MERGE_METHODS } from '../constants.ts';
+import type { Frag, MergeMethod } from '../types.ts';
+import * as append from './append.ts';
+import * as ffconcat from './ffconcat.ts';
 
 const [FFCONCAT, APPEND] = MERGE_METHODS;
 

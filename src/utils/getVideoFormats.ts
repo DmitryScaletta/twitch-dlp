@@ -1,8 +1,8 @@
 import crypto from 'node:crypto';
 import * as api from '../api/twitch.ts';
+import { VOD_DOMAINS } from '../constants.ts';
 import type { BroadcastType, DownloadFormat } from '../types.ts';
 import { parseDownloadFormats } from './parseDownloadFormats.ts';
-import { VOD_DOMAINS } from '../constants.ts';
 
 const FORMATS = [
   'chunked',

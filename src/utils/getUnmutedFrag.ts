@@ -1,6 +1,6 @@
 import { UNMUTE_POLICIES } from '../constants.ts';
-import type { Downloader, DownloadFormat } from '../types.ts';
 import { isUrlsAvailable } from '../downloaders/index.ts';
+import type { Downloader, DownloadFormat } from '../types.ts';
 
 const [QUALITY, ANY, SAME_FORMAT, NONE] = UNMUTE_POLICIES;
 

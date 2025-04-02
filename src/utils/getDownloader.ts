@@ -1,6 +1,6 @@
 import os from 'node:os';
-import { isInstalled } from '../lib/isInstalled.ts';
 import { DOWNLOADERS } from '../constants.ts';
+import { isInstalled } from '../lib/isInstalled.ts';
 
 const FETCH_WARNING =
   'Warning: --limit-rate (-r) option is not supported by default downloader. Install aria2c or curl';
