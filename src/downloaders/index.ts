@@ -1,4 +1,4 @@
-import { setTimeout as sleep } from 'timers/promises';
+import { setTimeout as sleep } from 'node:timers/promises';
 import { DOWNLOADERS, RET_CODE } from '../constants.ts';
 import type { Downloader } from '../types.ts';
 import * as aria2c from './aria2c.ts';
