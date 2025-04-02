@@ -157,6 +157,11 @@ const RET_CODE = {
 	UNKNOWN_ERROR: 1,
 	HTTP_RETURNED_ERROR: 22
 };
+const LIVE_VIDEO_STATUS = {
+	ONLINE: 0,
+	OFFLINE: 1,
+	FINALIZED: 2
+};
 
 //#endregion
 //#region src/merge/append.ts
@@ -397,7 +402,7 @@ const downloadFile = async (downloader, url, destPath, rateLimit, gzip, retries 
 		if (downloader === FETCH$1) retCode = await downloadFile$1(url, destPath, gzip);
 		if (retCode === RET_CODE.OK || retCode === RET_CODE.HTTP_RETURNED_ERROR) return retCode;
 		setTimeout(1e3);
-		console.error(`Can't download a url. Retry ${i + 1}`);
+		console.error(`[download] Cannot download the url. Retry ${i + 1}`);
 	}
 	return RET_CODE.UNKNOWN_ERROR;
 };
@@ -719,6 +724,7 @@ const showProgress = (downloadedFrags, fragsCount) => {
 //#region src/utils/downloadVideo.ts
 const DEFAULT_OUTPUT_TEMPLATE = "%(title)s [%(id)s].%(ext)s";
 const WAIT_BETWEEN_CYCLES_SEC = 60;
+const RETRY_MESSAGE = `Retry every ${WAIT_BETWEEN_CYCLES_SEC} second(s)`;
 const downloadFrag = async (downloader, url, destPath, limitRateArg, gzip) => {
 	const destPathTmp = `${destPath}.part`;
 	if (await statsOrNull(destPathTmp)) await fsp.unlink(destPathTmp);
@@ -748,9 +754,8 @@ const isVideoOlderThat24h = (videoInfo) => {
 	const videoDateMs = new Date(videoDate).getTime();
 	return now - videoDateMs > 24 * 60 * 60 * 1e3;
 };
-const downloadVideo = async (formats, videoInfo, getIsFinalized, args) => {
+const downloadVideo = async (formats, videoInfo, args, getLiveVideoStatus$1 = () => LIVE_VIDEO_STATUS.FINALIZED) => {
 	if (args["list-formats"]) {
-		console.log(formats[0].url);
 		console.table(formats.map(({ url,...rest }) => rest));
 		process.exit();
 	}
@@ -758,14 +763,14 @@ const downloadVideo = async (formats, videoInfo, getIsFinalized, args) => {
 	const dlFormat = args.format === "best" ? formats[0] : formats.find((f) => f.format_id === args.format);
 	if (!dlFormat) throw new Error("Wrong format");
 	const outputPath = getPath.output(args.output || DEFAULT_OUTPUT_TEMPLATE, videoInfo);
-	let isFinalized;
+	let liveVideoStatus;
 	let frags;
 	let fragsCount = 0;
 	let playlistUrl = dlFormat.url;
 	const downloadedFrags = [];
 	while (true) {
 		let playlist;
-		[playlist, isFinalized] = await Promise.all([fetchText(playlistUrl, "playlist"), getIsFinalized()]);
+		[playlist, liveVideoStatus] = await Promise.all([fetchText(playlistUrl, "playlist"), getLiveVideoStatus$1()]);
 		if (!playlist) {
 			const newPlaylistUrl = dlFormat.url.replace(/-muted-\w+(?=\.m3u8$)/, "");
 			if (newPlaylistUrl !== playlistUrl) {
@@ -773,8 +778,9 @@ const downloadVideo = async (formats, videoInfo, getIsFinalized, args) => {
 				playlist = await fetchText(playlistUrl, "playlist (attempt #2)");
 			}
 		}
+		if (!playlist && liveVideoStatus === LIVE_VIDEO_STATUS.FINALIZED) throw new Error("Cannot download the playlist");
 		if (!playlist) {
-			console.warn(`Cannot download the playlist. Retry every ${WAIT_BETWEEN_CYCLES_SEC} second(s)`);
+			console.warn(`[live-from-start] Waiting for the playlist. ${RETRY_MESSAGE}`);
 			await setTimeout(WAIT_BETWEEN_CYCLES_SEC * 1e3);
 			continue;
 		}
@@ -782,8 +788,10 @@ const downloadVideo = async (formats, videoInfo, getIsFinalized, args) => {
 		await fsp.writeFile(getPath.playlist(outputPath), playlist);
 		const hasNewFrags = frags.length > fragsCount;
 		fragsCount = frags.length;
-		if (!hasNewFrags && !isFinalized) {
-			console.log(`No new fragments. Retry every ${WAIT_BETWEEN_CYCLES_SEC} second(s)`);
+		if (!hasNewFrags && liveVideoStatus !== LIVE_VIDEO_STATUS.FINALIZED) {
+			let message = "[live-from-start] ";
+			message += liveVideoStatus === LIVE_VIDEO_STATUS.ONLINE ? `${COLOR.green}VOD ONLINE${COLOR.reset}: waiting for new fragments` : `${COLOR.red}VOD OFFLINE${COLOR.reset}: waiting for the finalization`;
+			console.log(`${message}. ${RETRY_MESSAGE}`);
 			await setTimeout(WAIT_BETWEEN_CYCLES_SEC * 1e3);
 			continue;
 		}
@@ -816,8 +824,8 @@ const downloadVideo = async (formats, videoInfo, getIsFinalized, args) => {
 			if (unmutedFrag && !unmutedFrag.sameFormat) await downloadFrag(args.downloader, unmutedFrag.url, getPath.fragUnmuted(fragPath), args["limit-rate"], unmutedFrag.gzip);
 			showProgress(downloadedFrags, fragsCount);
 		}
-		if (downloadedFragments) process.stdout.write("\n");
-		if (isFinalized) break;
+		process.stdout.write("\n");
+		if (liveVideoStatus === LIVE_VIDEO_STATUS.FINALIZED) break;
 	}
 	const dir = await readOutputDir(outputPath);
 	const existingFrags = getExistingFrags(frags, outputPath, dir);
@@ -927,41 +935,6 @@ const getDownloader = async (downloaderArg, limitRateArg) => {
 };
 
 //#endregion
-//#region src/utils/getIsVodFinalized.ts
-const WAIT_AFTER_STREAM_ENDED_SECONDS = 8 * 60;
-let lastLiveTimestamp = Date.now();
-const getIsVodLive = (thumbUrl) => /\/404_processing_[^.?#]+\.png/.test(thumbUrl);
-const getSecondsAfterStreamEnded = (videoMeta) => {
-	const started = new Date(videoMeta.publishedAt);
-	const ended = new Date(started.getTime() + videoMeta.lengthSeconds * 1e3);
-	return Math.floor((Date.now() - ended.getTime()) / 1e3);
-};
-const getIsStreamFinalized = async (videoId, streamId) => {
-	let videoMeta = null;
-	if (videoId) {
-		videoMeta = await getVideoMetadata(videoId);
-		if (videoMeta) {
-			if (getIsVodLive(videoMeta.previewThumbnailURL)) {
-				lastLiveTimestamp = Date.now();
-				return false;
-			}
-			const secondsAfterEnd = getSecondsAfterStreamEnded(videoMeta);
-			return secondsAfterEnd - WAIT_AFTER_STREAM_ENDED_SECONDS > 0;
-		}
-	}
-	if (!videoId || !videoMeta) {
-		const broadcast = await getBroadcast(streamId);
-		if (broadcast?.stream?.id === streamId) {
-			lastLiveTimestamp = Date.now();
-			return false;
-		}
-		const secondsAfterEnd = (Date.now() - lastLiveTimestamp) / 1e3;
-		return secondsAfterEnd - WAIT_AFTER_STREAM_ENDED_SECONDS > 0;
-	}
-	throw new Error();
-};
-
-//#endregion
 //#region src/utils/parseDownloadFormats.ts
 const parseDownloadFormats = (playlistContent) => {
 	const formats = [];
@@ -1052,22 +1025,53 @@ const getLiveVideoInfo = async (streamMeta, channelLogin) => {
 		if (videoMeta) videoInfo = getVideoInfoByVideoMeta(videoMeta);
 	}
 	if (!broadcast?.stream?.archiveVideo || formats.length === 0) {
-		console.warn("Couldn't find an archived video for the broadcast. Trying to recover a VOD url");
+		console.warn("[live-from-start] Recovering the playlist");
 		const startTimestamp = new Date(streamMeta.stream.createdAt).getTime() / 1e3;
 		const vodPath = `${channelLogin}_${streamMeta.stream.id}_${startTimestamp}`;
 		formats = await getVideoFormatsByFullVodPath(getFullVodPath(vodPath));
 		videoInfo = getVideoInfoByStreamMeta(streamMeta, channelLogin);
 	}
-	if (formats.length === 0) {
-		console.warn("Couldn't find a VOD url");
-		return null;
-	}
-	if (!videoInfo) return null;
+	if (formats.length === 0 || !videoInfo) return null;
 	return {
 		formats,
 		videoInfo,
 		videoId
 	};
+};
+
+//#endregion
+//#region src/utils/getLiveVideoStatus.ts
+const WAIT_AFTER_STREAM_ENDED_SECONDS = 8 * 60;
+let lastLiveTimestamp = Date.now();
+const getIsVideoLive = (thumbUrl) => /\/404_processing_[^.?#]+\.png/.test(thumbUrl);
+const getSecondsAfterStreamEnded = (videoMeta) => {
+	const started = new Date(videoMeta.publishedAt);
+	const ended = new Date(started.getTime() + videoMeta.lengthSeconds * 1e3);
+	return Math.floor((Date.now() - ended.getTime()) / 1e3);
+};
+const getLiveVideoStatus = async (videoId, streamId, channelLogin) => {
+	let videoMeta = null;
+	if (videoId) {
+		videoMeta = await getVideoMetadata(videoId);
+		if (videoMeta) {
+			if (getIsVideoLive(videoMeta.previewThumbnailURL)) {
+				lastLiveTimestamp = Date.now();
+				return LIVE_VIDEO_STATUS.ONLINE;
+			}
+			const secondsAfterEnd = getSecondsAfterStreamEnded(videoMeta);
+			return secondsAfterEnd - WAIT_AFTER_STREAM_ENDED_SECONDS > 0 ? LIVE_VIDEO_STATUS.FINALIZED : LIVE_VIDEO_STATUS.OFFLINE;
+		}
+	}
+	if (!videoId || !videoMeta) {
+		const streamMeta = await getStreamMetadata(channelLogin);
+		if (streamMeta?.stream?.id === streamId) {
+			lastLiveTimestamp = Date.now();
+			return LIVE_VIDEO_STATUS.ONLINE;
+		}
+		const secondsAfterEnd = (Date.now() - lastLiveTimestamp) / 1e3;
+		return secondsAfterEnd - WAIT_AFTER_STREAM_ENDED_SECONDS > 0 ? LIVE_VIDEO_STATUS.FINALIZED : LIVE_VIDEO_STATUS.OFFLINE;
+	}
+	throw new Error("Cannot determine stream status");
 };
 
 //#endregion
@@ -1193,17 +1197,17 @@ const main = async () => {
 	if (parsedLink.type === "vodPath") {
 		const formats = await getVideoFormatsByFullVodPath(getFullVodPath(parsedLink.vodPath));
 		const videoInfo = getVideoInfoByVodPath(parsedLink);
-		return downloadVideo(formats, videoInfo, () => true, args);
+		return downloadVideo(formats, videoInfo, args);
 	}
 	if (parsedLink.type === "video") {
 		let [formats, videoMeta] = await Promise.all([getVideoFormats(parsedLink.videoId), getVideoMetadata(parsedLink.videoId)]);
 		if (formats.length === 0 && videoMeta !== null) {
-			console.log("Trying to get playlist url from video metadata");
+			console.log("Trying to get playlist from video metadata");
 			formats = await getVideoFormatsByThumbUrl(videoMeta.broadcastType, videoMeta.id, videoMeta.previewThumbnailURL);
 		}
 		if (formats.length === 0 || !videoMeta) return console.log(PRIVATE_VIDEO_INSTRUCTIONS);
 		const videoInfo = getVideoInfoByVideoMeta(videoMeta);
-		return downloadVideo(formats, videoInfo, () => true, args);
+		return downloadVideo(formats, videoInfo, args);
 	}
 	const { channelLogin } = parsedLink;
 	let retryStreamsDelay = 0;
@@ -1216,9 +1220,9 @@ const main = async () => {
 	while (true) {
 		const streamMeta = await getStreamMetadata(channelLogin);
 		const isLive = !!streamMeta?.stream;
-		if (!isLive) if (isRetry) console.log(`Waiting for streams, retrying every ${retryStreamsDelay} second(s)`);
+		if (!isLive) if (isRetry) console.log(`[retry-streams] Waiting for streams. Retry every ${retryStreamsDelay} second(s)`);
 		else {
-			console.warn("The channel is not currently live");
+			console.warn("[download] The channel is not currently live");
 			return;
 		}
 		if (isLive && !isLiveFromStart) await downloadWithStreamlink(`https://www.twitch.tv/${channelLogin}`, streamMeta, channelLogin, args);
@@ -1226,10 +1230,18 @@ const main = async () => {
 			const liveVideoInfo = await getLiveVideoInfo(streamMeta, channelLogin);
 			if (liveVideoInfo) {
 				const { formats, videoInfo, videoId } = liveVideoInfo;
-				await downloadVideo(formats, videoInfo, () => getIsStreamFinalized(videoId, streamMeta.stream.id), args);
+				const getLiveVideoStatusFn = () => getLiveVideoStatus(videoId, streamMeta.stream.id, channelLogin);
+				await downloadVideo(formats, videoInfo, args, getLiveVideoStatusFn);
+			} else {
+				let message = `[live-from-start] Cannot find the playlist`;
+				if (isRetry) {
+					message += `. Retry every ${retryStreamsDelay} second(s)`;
+					console.warn(message);
+				} else {
+					console.warn(message);
+					return;
+				}
 			}
-			if (!isRetry) return;
-			console.log(`Waiting for VOD, retrying every ${retryStreamsDelay} second(s)`);
 		}
 		await setTimeout(retryStreamsDelay * 1e3);
 	}
