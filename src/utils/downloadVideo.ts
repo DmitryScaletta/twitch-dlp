@@ -17,7 +17,7 @@ import { fetchText } from './fetchText.ts';
 import { getExistingFrags } from './getExistingFrags.ts';
 import { getFragsForDownloading } from './getFragsForDownloading.ts';
 import { getPath } from './getPath.ts';
-import { getUnmutedFrag } from './getUnmutedFrag.ts';
+import { getUnmutedFrag, type UnmutedFrag } from './getUnmutedFrag.ts';
 import { processUnmutedFrags } from './processUnmutedFrags.ts';
 import { readOutputDir } from './readOutputDir.ts';
 import { showProgress } from './showProgress.ts';
@@ -49,7 +49,7 @@ const downloadFrag = async (
     try {
       await fsp.unlink(destPathTmp);
     } catch {}
-    return { size: 0, time: 0 };
+    return null;
   }
   await fsp.rename(destPathTmp, destPath);
   const { size } = await fsp.stat(destPath);
@@ -144,7 +144,6 @@ export const downloadVideo = async (
       continue;
     }
 
-    let downloadedFragments = 0;
     for (const [i, frag] of frags.entries()) {
       showProgress(downloadedFrags, fragsCount);
 
@@ -161,14 +160,16 @@ export const downloadVideo = async (
       if (frag.url.endsWith('-unmuted.ts')) {
         frag.url = frag.url.replace('-unmuted', '-muted');
       }
-      let unmutedFrag: Awaited<ReturnType<typeof getUnmutedFrag>> | null = null;
-      if (frag.url.endsWith('-muted.ts') && !isVideoOlderThat24h(videoInfo)) {
-        unmutedFrag = await getUnmutedFrag(
-          args.downloader,
-          args.unmute,
-          frag.url,
-          formats,
-        );
+      let unmutedFrag: UnmutedFrag | null = null;
+      if (frag.url.endsWith('-muted.ts')) {
+        if (!!isVideoOlderThat24h(videoInfo)) {
+          unmutedFrag = await getUnmutedFrag(
+            args.downloader,
+            args.unmute,
+            frag.url,
+            formats,
+          );
+        }
       }
 
       let fragGzip: boolean | undefined = undefined;
@@ -176,18 +177,17 @@ export const downloadVideo = async (
         frag.url = unmutedFrag.url;
         fragGzip = unmutedFrag.gzip;
       }
-      const fragMeta = await downloadFrag(
+      let fragMeta = await downloadFrag(
         args.downloader,
         frag.url,
         fragPath,
         args['limit-rate'],
         fragGzip,
       );
-      downloadedFrags.push(fragMeta);
-      downloadedFragments += 1;
+      downloadedFrags.push(fragMeta || { size: 0, time: 0 });
 
       if (unmutedFrag && !unmutedFrag.sameFormat) {
-        await downloadFrag(
+        fragMeta = await downloadFrag(
           args.downloader,
           unmutedFrag.url,
           getPath.fragUnmuted(fragPath),

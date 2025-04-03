@@ -7,6 +7,12 @@ const [QUALITY, ANY, SAME_FORMAT, NONE] = UNMUTE_POLICIES;
 const LOWER_AUDIO_QUALITY = ['160p30', '360p30'];
 const SAME_FORMAT_SLUGS = ['audio_only', ...LOWER_AUDIO_QUALITY];
 
+export type UnmutedFrag = {
+  sameFormat: boolean;
+  url: string;
+  gzip: boolean;
+};
+
 const getFormatSlug = (url: string) => url.split('/').at(-2)!;
 
 const getFragResponse = (
@@ -24,7 +30,7 @@ export const getUnmutedFrag = async (
   unmutePolicy: string | undefined,
   fragUrl: string,
   formats: DownloadFormat[],
-) => {
+): Promise<UnmutedFrag | null> => {
   if (unmutePolicy === NONE) return null;
 
   const currentFormatSlug = getFormatSlug(fragUrl);

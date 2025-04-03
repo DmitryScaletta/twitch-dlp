@@ -5,7 +5,6 @@ import { parseArgs } from 'node:util';
 import * as api from './api/twitch.ts';
 import {
   COLOR,
-  LIVE_VIDEO_STATUS,
   MERGE_METHODS,
   PRIVATE_VIDEO_INSTRUCTIONS,
 } from './constants.ts';

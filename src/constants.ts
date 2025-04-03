@@ -41,7 +41,7 @@ export const RET_CODE = {
 } as const;
 
 export const LIVE_VIDEO_STATUS = {
-  ONLINE: 0,
-  OFFLINE: 1,
-  FINALIZED: 2,
+  ONLINE: 'ONLINE',
+  OFFLINE: 'OFFLINE',
+  FINALIZED: 'FINALIZED',
 } as const;

@@ -7,7 +7,6 @@ export const getExistingFrags = (
   outputPath: string,
   dir: string[],
 ) =>
-  frags.filter((frag) => {
-    const fragPath = getPath.frag(outputPath, frag.idx + 1);
-    return dir.includes(path.parse(fragPath).base);
-  });
+  frags.filter((frag) =>
+    dir.includes(path.parse(getPath.frag(outputPath, frag.idx + 1)).base),
+  );

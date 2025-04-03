@@ -3,29 +3,28 @@ import fsp from 'node:fs/promises';
 import type { Frag } from '../types.ts';
 import { getPath } from '../utils/getPath.ts';
 
+const MAX_INT_STR = '2147483647';
+
 export type FragFile = [filename: string, duration: string];
 
 export const spawnFfmpeg = (args: string[]) =>
   new Promise((resolve, reject) => {
     let isInputSection = true;
-    let prevLine = '';
+    let prevLinePart = '';
     const handleFfmpegData = (stream: NodeJS.WriteStream) => (data: Buffer) => {
       if (!isInputSection) return stream.write(data);
 
-      const str = data.toString();
-      const lines = str.split('\n');
-      lines[0] = prevLine + lines[0];
-      prevLine = lines.pop() || '';
+      const lines = data.toString().split('\n');
+      lines[0] = prevLinePart + lines[0];
+      prevLinePart = lines.pop() || '';
 
       for (const line of lines) {
         if (line.startsWith('  Stream #')) continue;
-        if (line.startsWith('Stream mapping:')) {
-          isInputSection = false;
-        }
+        if (line.startsWith('Stream mapping:')) isInputSection = false;
         stream.write(line + '\n');
       }
 
-      if (!isInputSection) stream.write(prevLine);
+      if (!isInputSection) stream.write(prevLinePart);
     };
 
     const child = childProcess.spawn('ffmpeg', args);
@@ -41,9 +40,9 @@ const runFfconcat = (ffconcatFilename: string, outputFilename: string) =>
   spawnFfmpeg([
     '-hide_banner',
     '-avoid_negative_ts', 'make_zero',
-    '-analyzeduration', '2147483647',
-    '-probesize', '2147483647',
-    '-max_streams', '2147483647',
+    '-analyzeduration', MAX_INT_STR,
+    '-probesize', MAX_INT_STR,
+    '-max_streams', MAX_INT_STR,
     '-n',
     '-f', 'concat',
     '-safe', '0',
