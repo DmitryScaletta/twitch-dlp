@@ -131,6 +131,6 @@ dist
 
 *.part-Frag*
 *.mp4
-*-playlist.txt
+*-playlist.m3u8
 *-ffconcat.txt
-*.m3u8
+*-log.tsv
