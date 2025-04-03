@@ -158,9 +158,9 @@ const RET_CODE = {
 	HTTP_RETURNED_ERROR: 22
 };
 const LIVE_VIDEO_STATUS = {
-	ONLINE: 0,
-	OFFLINE: 1,
-	FINALIZED: 2
+	ONLINE: "ONLINE",
+	OFFLINE: "OFFLINE",
+	FINALIZED: "FINALIZED"
 };
 
 //#endregion
@@ -184,44 +184,45 @@ const getPath = {
 	},
 	ffconcat: (filePath) => `${filePath}-ffconcat.txt`,
 	playlist: (filePath) => `${filePath}-playlist.m3u8`,
+	log: (filePath) => `${filePath}-log.tsv`,
 	frag: (filePath, i) => `${filePath}.part-Frag${i}`,
 	fragUnmuted: (fragPath) => `${fragPath}-unmuted`
 };
 
 //#endregion
 //#region src/merge/ffconcat.ts
+const MAX_INT_STR = "2147483647";
 const spawnFfmpeg = (args) => new Promise((resolve, reject) => {
 	let isInputSection = true;
-	let prevLine = "";
+	let prevLinePart = "";
 	const handleFfmpegData = (stream$1) => (data) => {
 		if (!isInputSection) return stream$1.write(data);
-		const str = data.toString();
-		const lines = str.split("\n");
-		lines[0] = prevLine + lines[0];
-		prevLine = lines.pop() || "";
+		const lines = data.toString().split("\n");
+		lines[0] = prevLinePart + lines[0];
+		prevLinePart = lines.pop() || "";
 		for (const line of lines) {
 			if (line.startsWith("  Stream #")) continue;
 			if (line.startsWith("Stream mapping:")) isInputSection = false;
 			stream$1.write(line + "\n");
 		}
-		if (!isInputSection) stream$1.write(prevLine);
+		if (!isInputSection) stream$1.write(prevLinePart);
 	};
 	const child = childProcess.spawn("ffmpeg", args);
 	child.stdout.on("data", handleFfmpegData(process.stdout));
 	child.stderr.on("data", handleFfmpegData(process.stderr));
-	child.on("error", (err) => reject(err));
-	child.on("close", (code) => resolve(code));
+	child.on("error", () => reject(1));
+	child.on("close", (code) => resolve(code || 0));
 });
 const runFfconcat = (ffconcatFilename, outputFilename) => spawnFfmpeg([
 	"-hide_banner",
 	"-avoid_negative_ts",
 	"make_zero",
 	"-analyzeduration",
-	"2147483647",
+	MAX_INT_STR,
 	"-probesize",
-	"2147483647",
+	MAX_INT_STR,
 	"-max_streams",
-	"2147483647",
+	MAX_INT_STR,
 	"-n",
 	"-f",
 	"concat",
@@ -254,8 +255,8 @@ const mergeFrags$1 = async (frags, outputPath, keepFragments) => {
 	await fsp.writeFile(ffconcatPath, ffconcat);
 	const retCode = await runFfconcat(ffconcatPath, outputPath);
 	fsp.unlink(ffconcatPath);
-	if (keepFragments || retCode) return;
-	await Promise.all([...fragFiles.map(([filename]) => fsp.unlink(filename)), fsp.unlink(getPath.playlist(outputPath))]);
+	if (!keepFragments) await Promise.all([...fragFiles.map(([filename]) => fsp.unlink(filename)), fsp.unlink(getPath.playlist(outputPath))]);
+	return retCode;
 };
 
 //#endregion
@@ -397,7 +398,7 @@ var ThrottleTransform = class extends stream.Transform {
 //#region src/downloaders/fetch.ts
 const WRONG_LIMIT_RATE_SYNTAX = "Wrong --limit-rate syntax";
 const RATE_LIMIT_MULTIPLIER = {
-	"": 1,
+	B: 1,
 	K: 1024,
 	M: 1024 * 1024
 };
@@ -406,7 +407,7 @@ const parseRateLimit = (rateLimit) => {
 	if (!m) throw new Error(WRONG_LIMIT_RATE_SYNTAX);
 	const { value, unit } = m.groups;
 	const v = Number.parseFloat(value);
-	const u = unit ? unit.toUpperCase() : "";
+	const u = unit ? unit.toUpperCase() : "B";
 	if (Number.isNaN(v)) throw new Error(WRONG_LIMIT_RATE_SYNTAX);
 	const multiplier = RATE_LIMIT_MULTIPLIER[u];
 	return Math.round(v * multiplier);
@@ -424,10 +425,11 @@ const isUrlsAvailable$1 = async (urls) => {
 	return urls.map((_, i) => [urlsNoGzip[i], urlsGzip[i]]);
 };
 const downloadFile$1 = async (url, destPath, rateLimit, gzip = true) => {
+	const rateLimitN = rateLimit ? parseRateLimit(rateLimit) : null;
 	try {
 		const res = await fetch(url, { headers: { "Accept-Encoding": gzip ? "deflate, gzip" : "" } });
 		if (!res.ok) return RET_CODE.HTTP_RETURNED_ERROR;
-		await stream.promises.pipeline(stream.Readable.fromWeb(res.body), rateLimit ? new ThrottleTransform(parseRateLimit(rateLimit)) : new stream.PassThrough(), fs.createWriteStream(destPath, { flags: "wx" }));
+		await stream.promises.pipeline(stream.Readable.fromWeb(res.body), rateLimitN ? new ThrottleTransform(rateLimitN) : new stream.PassThrough(), fs.createWriteStream(destPath, { flags: "wx" }));
 		return RET_CODE.OK;
 	} catch (e) {
 		return RET_CODE.UNKNOWN_ERROR;
@@ -475,11 +477,84 @@ const statsOrNull = async (path$1) => {
 };
 
 //#endregion
+//#region src/stats.ts
+const DL_EVENT = {
+	INIT: "INIT",
+	FETCH_PLAYLIST_SUCCESS: "FETCH_PLAYLIST_SUCCESS",
+	FETCH_PLAYLIST_FAILURE: "FETCH_PLAYLIST_FAILURE",
+	FETCH_PLAYLIST_OLD_MUTED_SUCCESS: "FETCH_PLAYLIST_OLD_MUTED_SUCCESS",
+	FETCH_PLAYLIST_OLD_MUTED_FAILURE: "FETCH_PLAYLIST_OLD_MUTED_FAILURE",
+	LIVE_VIDEO_STATUS: "LIVE_VIDEO_STATUS",
+	FRAGS_FOR_DOWNLOADING: "FRAGS_FOR_DOWNLOADING",
+	FRAGS_EXISTING: "FRAGS_EXISTING",
+	FRAG_ALREADY_EXISTS: "FRAG_ALREADY_EXISTS",
+	FRAG_RENAME_UNMUTED: "FRAG_RENAME_UNMUTED",
+	FRAG_MUTED: "FRAG_MUTED",
+	FRAG_UNMUTE_RESULT: "FRAG_UNMUTE_RESULT",
+	FRAG_DOWNLOAD_SUCCESS: "FRAG_DOWNLOAD_SUCCESS",
+	FRAG_DOWNLOAD_FAILURE: "FRAG_DOWNLOAD_FAILURE",
+	FRAG_DOWNLOAD_UNMUTED_SUCCESS: "FRAG_DOWNLOAD_UNMUTED_SUCCESS",
+	FRAG_DOWNLOAD_UNMUTED_FAILURE: "FRAG_DOWNLOAD_UNMUTED_FAILURE",
+	FRAG_REPLACE_AUDIO_SUCCESS: "FRAG_REPLACE_AUDIO_SUCCESS",
+	FRAG_REPLACE_AUDIO_FAILURE: "FRAG_REPLACE_AUDIO_FAILURE",
+	MERGE_FRAGS_SUCCESS: "MERGE_FRAGS_SUCCESS",
+	MERGE_FRAGS_FAILURE: "MERGE_FRAGS_FAILURE"
+};
+const createLogger = (logPath) => (event) => {
+	const line = event.map((v) => JSON.stringify(v)).join("	");
+	return fsp.appendFile(logPath, `${line}\n`);
+};
+const nameEq = (name) => (event) => event[0] === name;
+const getLog = async (logPath) => {
+	const logContent = await fsp.readFile(logPath, "utf8");
+	return logContent.split("\n").filter(Boolean).map((line) => line.split("	").map((v) => JSON.parse(v)));
+};
+const showStats = async (logPath) => {
+	let log;
+	try {
+		log = await getLog(logPath);
+	} catch (e) {
+		console.error("[stats] Cannot read log file");
+		return;
+	}
+	const frags = log.findLast(nameEq(DL_EVENT.FRAGS_FOR_DOWNLOADING))[1];
+	const downloaded = log.filter(nameEq(DL_EVENT.FRAG_DOWNLOAD_SUCCESS)).length;
+	let muted = 0;
+	let unmutedSameFormat = 0;
+	let unmutedReplacedAudio = 0;
+	const fragsGroupedByIdx = Object.groupBy(log.filter(([name]) => name.startsWith("FRAG_")), (e) => e[1]);
+	for (const events of Object.values(fragsGroupedByIdx)) {
+		if (!events) continue;
+		const isMuted = events.findLast(nameEq(DL_EVENT.FRAG_MUTED));
+		if (!isMuted) continue;
+		muted += 1;
+		const unmuteResult = events.findLast(nameEq(DL_EVENT.FRAG_UNMUTE_RESULT));
+		if (!unmuteResult) continue;
+		const unmuteResultValue = unmuteResult[2];
+		if (!unmuteResultValue) continue;
+		const dlSuccess = events.findLast(nameEq(DL_EVENT.FRAG_DOWNLOAD_SUCCESS));
+		if (!dlSuccess) continue;
+		if (unmuteResultValue.sameFormat) unmutedSameFormat += 1;
+		else {
+			const dlUnmutedSuccess = events.findLast(nameEq(DL_EVENT.FRAG_DOWNLOAD_UNMUTED_SUCCESS));
+			const replaceAudioSuccess = events.findLast(nameEq(DL_EVENT.FRAG_REPLACE_AUDIO_SUCCESS));
+			if (dlUnmutedSuccess && replaceAudioSuccess) unmutedReplacedAudio += 1;
+		}
+	}
+	console.log("[stats] Fragments");
+	console.table({
+		Total: frags.length,
+		Downloaded: downloaded,
+		Muted: muted,
+		"Unmuted total": unmutedSameFormat + unmutedReplacedAudio,
+		"Unmuted (same format)": unmutedSameFormat,
+		"Unmuted (replaced audio)": unmutedReplacedAudio
+	});
+};
+
+//#endregion
 //#region src/utils/getExistingFrags.ts
-const getExistingFrags = (frags, outputPath, dir) => frags.filter((frag) => {
-	const fragPath = getPath.frag(outputPath, frag.idx + 1);
-	return dir.includes(path.parse(fragPath).base);
-});
+const getExistingFrags = (frags, outputPath, dir) => frags.filter((frag) => dir.includes(path.parse(getPath.frag(outputPath, frag.idx + 1)).base));
 
 //#endregion
 //#region src/lib/m3u8.ts
@@ -636,7 +711,7 @@ const spawn = (command, args = [], silent = false) => new Promise((resolve, reje
 
 //#endregion
 //#region src/utils/processUnmutedFrags.ts
-const processUnmutedFrags = async (frags, outputPath, dir) => {
+const processUnmutedFrags = async (frags, outputPath, dir, onSuccess = () => {}, onFailure = () => {}) => {
 	for (const frag of frags) {
 		const fragPath = getPath.frag(outputPath, frag.idx + 1);
 		const fragUnmutedPath = getPath.fragUnmuted(fragPath);
@@ -668,11 +743,13 @@ const processUnmutedFrags = async (frags, outputPath, dir) => {
 				await fsp.unlink(fragUnmutedPathTmp);
 			} catch {}
 			console.error(`${message}. Failure`);
+			onFailure(frag);
 			continue;
 		}
 		await Promise.all([fsp.unlink(fragPath), fsp.unlink(fragUnmutedPath)]);
 		await fsp.rename(fragUnmutedPathTmp, fragPath);
 		console.log(`${message}. Success`);
+		onSuccess(frag);
 	}
 };
 
@@ -759,10 +836,7 @@ const downloadFrag = async (downloader, url, destPath, limitRateArg, gzip) => {
 		try {
 			await fsp.unlink(destPathTmp);
 		} catch {}
-		return {
-			size: 0,
-			time: 0
-		};
+		return null;
 	}
 	await fsp.rename(destPathTmp, destPath);
 	const { size } = await fsp.stat(destPath);
@@ -792,14 +866,27 @@ const downloadVideo = async (formats, videoInfo, args, getLiveVideoStatus$1 = ()
 	let fragsCount = 0;
 	let playlistUrl = dlFormat.url;
 	const downloadedFrags = [];
+	const logPath = getPath.log(outputPath);
+	const writeLog = createLogger(logPath);
+	writeLog([DL_EVENT.INIT, {
+		args,
+		formats,
+		outputPath,
+		playlistUrl
+	}]);
 	while (true) {
 		let playlist;
 		[playlist, liveVideoStatus] = await Promise.all([fetchText(playlistUrl, "playlist"), getLiveVideoStatus$1()]);
+		writeLog([DL_EVENT.LIVE_VIDEO_STATUS, liveVideoStatus]);
 		if (!playlist) {
+			writeLog([DL_EVENT.FETCH_PLAYLIST_FAILURE]);
 			const newPlaylistUrl = dlFormat.url.replace(/-muted-\w+(?=\.m3u8$)/, "");
 			if (newPlaylistUrl !== playlistUrl) {
-				playlistUrl = newPlaylistUrl;
 				playlist = await fetchText(playlistUrl, "playlist (attempt #2)");
+				if (playlist) {
+					playlistUrl = newPlaylistUrl;
+					writeLog([DL_EVENT.FETCH_PLAYLIST_OLD_MUTED_SUCCESS, playlistUrl]);
+				} else writeLog([DL_EVENT.FETCH_PLAYLIST_OLD_MUTED_FAILURE]);
 			}
 		}
 		if (!playlist && liveVideoStatus === LIVE_VIDEO_STATUS.FINALIZED) throw new Error("Cannot download the playlist");
@@ -808,7 +895,9 @@ const downloadVideo = async (formats, videoInfo, args, getLiveVideoStatus$1 = ()
 			await setTimeout$1(WAIT_BETWEEN_CYCLES_SEC * 1e3);
 			continue;
 		}
+		writeLog([DL_EVENT.FETCH_PLAYLIST_SUCCESS]);
 		frags = getFragsForDownloading(playlistUrl, playlist, args["download-sections"]);
+		writeLog([DL_EVENT.FRAGS_FOR_DOWNLOADING, frags]);
 		await fsp.writeFile(getPath.playlist(outputPath), playlist);
 		const hasNewFrags = frags.length > fragsCount;
 		fragsCount = frags.length;
@@ -819,12 +908,12 @@ const downloadVideo = async (formats, videoInfo, args, getLiveVideoStatus$1 = ()
 			await setTimeout$1(WAIT_BETWEEN_CYCLES_SEC * 1e3);
 			continue;
 		}
-		let downloadedFragments = 0;
 		for (const [i, frag] of frags.entries()) {
 			showProgress(downloadedFrags, fragsCount);
 			const fragPath = getPath.frag(outputPath, frag.idx + 1);
 			const fragStats = await statsOrNull(fragPath);
 			if (fragStats) {
+				writeLog([DL_EVENT.FRAG_ALREADY_EXISTS, frag.idx]);
 				if (!downloadedFrags[i]) {
 					downloadedFrags[i] = {
 						size: fragStats.size,
@@ -834,18 +923,37 @@ const downloadVideo = async (formats, videoInfo, args, getLiveVideoStatus$1 = ()
 				}
 				continue;
 			}
-			if (frag.url.endsWith("-unmuted.ts")) frag.url = frag.url.replace("-unmuted", "-muted");
+			if (frag.url.endsWith("-unmuted.ts")) {
+				writeLog([DL_EVENT.FRAG_RENAME_UNMUTED, frag.idx]);
+				frag.url = frag.url.replace("-unmuted", "-muted");
+			}
 			let unmutedFrag = null;
-			if (frag.url.endsWith("-muted.ts") && !isVideoOlderThat24h(videoInfo)) unmutedFrag = await getUnmutedFrag(args.downloader, args.unmute, frag.url, formats);
+			if (frag.url.endsWith("-muted.ts")) {
+				writeLog([DL_EVENT.FRAG_MUTED, frag.idx]);
+				if (!isVideoOlderThat24h(videoInfo)) {
+					unmutedFrag = await getUnmutedFrag(args.downloader, args.unmute, frag.url, formats);
+					writeLog([
+						DL_EVENT.FRAG_UNMUTE_RESULT,
+						frag.idx,
+						unmutedFrag
+					]);
+				}
+			}
 			let fragGzip = void 0;
 			if (unmutedFrag && unmutedFrag.sameFormat) {
 				frag.url = unmutedFrag.url;
 				fragGzip = unmutedFrag.gzip;
 			}
-			const fragMeta = await downloadFrag(args.downloader, frag.url, fragPath, args["limit-rate"], fragGzip);
-			downloadedFrags.push(fragMeta);
-			downloadedFragments += 1;
-			if (unmutedFrag && !unmutedFrag.sameFormat) await downloadFrag(args.downloader, unmutedFrag.url, getPath.fragUnmuted(fragPath), args["limit-rate"], unmutedFrag.gzip);
+			let fragMeta = await downloadFrag(args.downloader, frag.url, fragPath, args["limit-rate"], fragGzip);
+			downloadedFrags.push(fragMeta || {
+				size: 0,
+				time: 0
+			});
+			writeLog([fragMeta ? DL_EVENT.FRAG_DOWNLOAD_SUCCESS : DL_EVENT.FRAG_DOWNLOAD_FAILURE, frag.idx]);
+			if (unmutedFrag && !unmutedFrag.sameFormat) {
+				fragMeta = await downloadFrag(args.downloader, unmutedFrag.url, getPath.fragUnmuted(fragPath), args["limit-rate"], unmutedFrag.gzip);
+				writeLog([fragMeta ? DL_EVENT.FRAG_DOWNLOAD_UNMUTED_SUCCESS : DL_EVENT.FRAG_DOWNLOAD_UNMUTED_FAILURE, frag.idx]);
+			}
 			showProgress(downloadedFrags, fragsCount);
 		}
 		process.stdout.write("\n");
@@ -853,8 +961,12 @@ const downloadVideo = async (formats, videoInfo, args, getLiveVideoStatus$1 = ()
 	}
 	const dir = await readOutputDir(outputPath);
 	const existingFrags = getExistingFrags(frags, outputPath, dir);
-	await processUnmutedFrags(existingFrags, outputPath, dir);
-	await mergeFrags(args["merge-method"], existingFrags, outputPath, args["keep-fragments"]);
+	writeLog([DL_EVENT.FRAGS_EXISTING, existingFrags.length]);
+	await processUnmutedFrags(existingFrags, outputPath, dir, (frag) => writeLog([DL_EVENT.FRAG_REPLACE_AUDIO_SUCCESS, frag.idx]), (frag) => writeLog([DL_EVENT.FRAG_REPLACE_AUDIO_FAILURE, frag.idx]));
+	const retCode = await mergeFrags(args["merge-method"], existingFrags, outputPath, args["keep-fragments"]);
+	writeLog([retCode ? DL_EVENT.MERGE_FRAGS_FAILURE : DL_EVENT.MERGE_FRAGS_SUCCESS]);
+	await showStats(logPath);
+	if (!args["keep-fragments"]) await fsp.unlink(logPath);
 };
 
 //#endregion
