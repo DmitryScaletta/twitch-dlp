@@ -6,6 +6,7 @@
     "ffconcat",
     "positionals",
     "streamlink",
-    "unmute"
+    "unmute",
+    "unmuted"
   ]
 }
