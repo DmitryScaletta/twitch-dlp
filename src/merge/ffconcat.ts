@@ -7,7 +7,7 @@ const MAX_INT_STR = '2147483647';
 
 export type FragFile = [filename: string, duration: string];
 
-export const spawnFfmpeg = (args: string[]) =>
+export const spawnFfmpeg = (args: string[]): Promise<number> =>
   new Promise((resolve, reject) => {
     let isInputSection = true;
     let prevLinePart = '';
@@ -30,8 +30,8 @@ export const spawnFfmpeg = (args: string[]) =>
     const child = childProcess.spawn('ffmpeg', args);
     child.stdout.on('data', handleFfmpegData(process.stdout));
     child.stderr.on('data', handleFfmpegData(process.stderr));
-    child.on('error', (err) => reject(err));
-    child.on('close', (code) => resolve(code));
+    child.on('error', () => reject(1));
+    child.on('close', (code) => resolve(code || 0));
   });
 
 // https://github.com/lay295/TwitchDownloader/blob/master/TwitchDownloaderCore/VideoDownloader.cs#L393
@@ -87,10 +87,12 @@ export const mergeFrags = async (
   const retCode = await runFfconcat(ffconcatPath, outputPath);
   fsp.unlink(ffconcatPath);
 
-  if (keepFragments || retCode) return;
+  if (!keepFragments) {
+    await Promise.all([
+      ...fragFiles.map(([filename]) => fsp.unlink(filename)),
+      fsp.unlink(getPath.playlist(outputPath)),
+    ]);
+  }
 
-  await Promise.all([
-    ...fragFiles.map(([filename]) => fsp.unlink(filename)),
-    fsp.unlink(getPath.playlist(outputPath)),
-  ]);
+  return retCode;
 };
