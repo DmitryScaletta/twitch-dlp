@@ -6,6 +6,7 @@ import { isInstalled } from '../lib/isInstalled.ts';
 import { statsOrNull } from '../lib/statsOrNull.ts';
 import type { AppArgs } from '../main.ts';
 import { mergeFrags } from '../merge/index.ts';
+import { createLogger, DL_EVENT, showStats } from '../stats.ts';
 import type {
   Downloader,
   DownloadFormat,
@@ -99,18 +100,31 @@ export const downloadVideo = async (
   let fragsCount = 0;
   let playlistUrl = dlFormat.url;
   const downloadedFrags: FragMetadata[] = [];
+
+  const logPath = getPath.log(outputPath);
+  const writeLog = createLogger(logPath);
+
+  writeLog([DL_EVENT.INIT, { args, formats, outputPath, playlistUrl }]);
+
   while (true) {
     let playlist;
     [playlist, liveVideoStatus] = await Promise.all([
       fetchText(playlistUrl, 'playlist'),
       getLiveVideoStatus(),
     ]);
+    writeLog([DL_EVENT.LIVE_VIDEO_STATUS, liveVideoStatus]);
     // workaround for some old muted highlights
     if (!playlist) {
+      writeLog([DL_EVENT.FETCH_PLAYLIST_FAILURE]);
       const newPlaylistUrl = dlFormat.url.replace(/-muted-\w+(?=\.m3u8$)/, '');
       if (newPlaylistUrl !== playlistUrl) {
-        playlistUrl = newPlaylistUrl;
         playlist = await fetchText(playlistUrl, 'playlist (attempt #2)');
+        if (playlist) {
+          playlistUrl = newPlaylistUrl;
+          writeLog([DL_EVENT.FETCH_PLAYLIST_OLD_MUTED_SUCCESS, playlistUrl]);
+        } else {
+          writeLog([DL_EVENT.FETCH_PLAYLIST_OLD_MUTED_FAILURE]);
+        }
       }
     }
     if (!playlist && liveVideoStatus === LIVE_VIDEO_STATUS.FINALIZED) {
@@ -123,11 +137,14 @@ export const downloadVideo = async (
       await sleep(WAIT_BETWEEN_CYCLES_SEC * 1000);
       continue;
     }
+    writeLog([DL_EVENT.FETCH_PLAYLIST_SUCCESS]);
+
     frags = getFragsForDownloading(
       playlistUrl,
       playlist,
       args['download-sections'],
     );
+    writeLog([DL_EVENT.FRAGS_FOR_DOWNLOADING, frags]);
 
     await fsp.writeFile(getPath.playlist(outputPath), playlist);
 
@@ -150,6 +167,7 @@ export const downloadVideo = async (
       const fragPath = getPath.frag(outputPath, frag.idx + 1);
       const fragStats = await statsOrNull(fragPath);
       if (fragStats) {
+        writeLog([DL_EVENT.FRAG_ALREADY_EXISTS, frag.idx]);
         if (!downloadedFrags[i]) {
           downloadedFrags[i] = { size: fragStats.size, time: 0 };
           showProgress(downloadedFrags, fragsCount);
@@ -158,17 +176,20 @@ export const downloadVideo = async (
       }
 
       if (frag.url.endsWith('-unmuted.ts')) {
+        writeLog([DL_EVENT.FRAG_RENAME_UNMUTED, frag.idx]);
         frag.url = frag.url.replace('-unmuted', '-muted');
       }
       let unmutedFrag: UnmutedFrag | null = null;
       if (frag.url.endsWith('-muted.ts')) {
-        if (!!isVideoOlderThat24h(videoInfo)) {
+        writeLog([DL_EVENT.FRAG_MUTED, frag.idx]);
+        if (!isVideoOlderThat24h(videoInfo)) {
           unmutedFrag = await getUnmutedFrag(
             args.downloader,
             args.unmute,
             frag.url,
             formats,
           );
+          writeLog([DL_EVENT.FRAG_UNMUTE_RESULT, frag.idx, unmutedFrag]);
         }
       }
 
@@ -185,6 +206,12 @@ export const downloadVideo = async (
         fragGzip,
       );
       downloadedFrags.push(fragMeta || { size: 0, time: 0 });
+      writeLog([
+        fragMeta
+          ? DL_EVENT.FRAG_DOWNLOAD_SUCCESS
+          : DL_EVENT.FRAG_DOWNLOAD_FAILURE,
+        frag.idx,
+      ]);
 
       if (unmutedFrag && !unmutedFrag.sameFormat) {
         fragMeta = await downloadFrag(
@@ -194,6 +221,12 @@ export const downloadVideo = async (
           args['limit-rate'],
           unmutedFrag.gzip,
         );
+        writeLog([
+          fragMeta
+            ? DL_EVENT.FRAG_DOWNLOAD_UNMUTED_SUCCESS
+            : DL_EVENT.FRAG_DOWNLOAD_UNMUTED_FAILURE,
+          frag.idx,
+        ]);
       }
 
       showProgress(downloadedFrags, fragsCount);
@@ -205,12 +238,26 @@ export const downloadVideo = async (
 
   const dir = await readOutputDir(outputPath);
   const existingFrags = getExistingFrags(frags, outputPath, dir);
+  writeLog([DL_EVENT.FRAGS_EXISTING, existingFrags.length]);
 
-  await processUnmutedFrags(existingFrags, outputPath, dir);
-  await mergeFrags(
+  await processUnmutedFrags(
+    existingFrags,
+    outputPath,
+    dir,
+    (frag) => writeLog([DL_EVENT.FRAG_REPLACE_AUDIO_SUCCESS, frag.idx]),
+    (frag) => writeLog([DL_EVENT.FRAG_REPLACE_AUDIO_FAILURE, frag.idx]),
+  );
+
+  const retCode = await mergeFrags(
     args['merge-method'],
     existingFrags,
     outputPath,
     args['keep-fragments'],
   );
+  writeLog([
+    retCode ? DL_EVENT.MERGE_FRAGS_FAILURE : DL_EVENT.MERGE_FRAGS_SUCCESS,
+  ]);
+
+  await showStats(logPath);
+  if (!args['keep-fragments']) await fsp.unlink(logPath);
 };

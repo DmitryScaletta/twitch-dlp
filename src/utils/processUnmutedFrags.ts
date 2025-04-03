@@ -8,6 +8,8 @@ export const processUnmutedFrags = async (
   frags: Frag[],
   outputPath: string,
   dir: string[],
+  onSuccess: (frag: Frag) => void = () => {},
+  onFailure: (frag: Frag) => void = () => {},
 ) => {
   for (const frag of frags) {
     const fragPath = getPath.frag(outputPath, frag.idx + 1);
@@ -37,6 +39,7 @@ export const processUnmutedFrags = async (
         await fsp.unlink(fragUnmutedPathTmp);
       } catch {}
       console.error(`${message}. Failure`);
+      onFailure(frag);
       continue;
     }
 
@@ -44,5 +47,6 @@ export const processUnmutedFrags = async (
     await fsp.rename(fragUnmutedPathTmp, fragPath);
 
     console.log(`${message}. Success`);
+    onSuccess(frag);
   }
 };

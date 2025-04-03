@@ -14,6 +14,7 @@ export const getPath = {
   },
   ffconcat: (filePath: string) => `${filePath}-ffconcat.txt`,
   playlist: (filePath: string) => `${filePath}-playlist.m3u8`,
+  log: (filePath: string) => `${filePath}-log.tsv`,
   frag: (filePath: string, i: number) => `${filePath}.part-Frag${i}`,
   fragUnmuted: (fragPath: string) => `${fragPath}-unmuted`,
 };
