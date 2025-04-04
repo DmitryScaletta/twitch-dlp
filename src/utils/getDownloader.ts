@@ -4,8 +4,8 @@ import { isInstalled } from '../lib/isInstalled.ts';
 
 const [ARIA2C, CURL, FETCH] = DOWNLOADERS;
 
-export const getDownloader = async (downloaderArg?: string) => {
-  if (!downloaderArg || downloaderArg === FETCH) return FETCH;
+export const getDownloader = async (downloaderArg: string) => {
+  if (downloaderArg === FETCH) return FETCH;
 
   if (downloaderArg === ARIA2C) {
     if (await isInstalled(ARIA2C)) return ARIA2C;

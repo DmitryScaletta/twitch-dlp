@@ -19,12 +19,12 @@ export const VOD_DOMAINS = [
 
 export const DOWNLOADERS = ['aria2c', 'curl', 'fetch'] as const;
 export const MERGE_METHODS = ['ffconcat', 'append'] as const;
-export const UNMUTE_POLICIES = [
-  'quality',
-  'any',
-  'same_format',
-  'none',
-] as const;
+export const UNMUTE = {
+  QUALITY: 'quality',
+  ANY: 'any',
+  SAME_FORMAT: 'same_format',
+  OFF: 'off',
+} as const;
 
 export const RET_CODE = {
   OK: 0,

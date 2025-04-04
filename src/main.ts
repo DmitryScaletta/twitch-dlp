@@ -39,6 +39,7 @@ const getArgs = () =>
       },
       downloader: {
         type: 'string',
+        default: 'fetch',
       },
       'keep-fragments': {
         type: 'boolean',
@@ -122,7 +123,9 @@ const main = async () => {
   if (args.version) return showVersion();
   if (args.help || positionals.length === 0) return showHelp();
 
-  if (positionals.length !== 1) throw new Error('Expected only one link');
+  if (positionals.length !== 1) {
+    throw new Error('Expected exactly one positional argument');
+  }
 
   if (args['merge-fragments']) return mergeFragments(positionals[0], args);
 
