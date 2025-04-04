@@ -5,9 +5,9 @@ import { getPath } from '../utils/getPath.ts';
 
 const MAX_INT_STR = '2147483647';
 
-export type FragFile = [filename: string, duration: string];
+type FragFile = [filename: string, duration: string];
 
-export const spawnFfmpeg = (args: string[]): Promise<number> =>
+const spawnFfmpeg = (args: string[]): Promise<number> =>
   new Promise((resolve, reject) => {
     let isInputSection = true;
     let prevLinePart = '';

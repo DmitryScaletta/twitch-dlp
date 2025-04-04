@@ -69,7 +69,7 @@ export const downloadVideo = async (
   const writeLog = createLogger(logPath);
 
   const tryUnmute = getTryUnmute(videoInfo);
-  if (!tryUnmute) console.warn(NO_TRY_UNMUTE_MESSAGE);
+  if (tryUnmute === false) console.warn(NO_TRY_UNMUTE_MESSAGE);
 
   writeLog([
     DL_EVENT.INIT,
