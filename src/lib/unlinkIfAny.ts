@@ -1,7 +1,7 @@
 import fsp from 'node:fs/promises';
 
-export const unlinkIfAny = (path: string) => {
+export const unlinkIfAny = async (path: string) => {
   try {
-    return fsp.unlink(path);
+    return await fsp.unlink(path);
   } catch {}
 };

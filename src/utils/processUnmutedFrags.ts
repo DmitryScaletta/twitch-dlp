@@ -1,6 +1,8 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from '../lib/spawn.ts';
+import { unlinkIfAny } from '../lib/unlinkIfAny.ts';
+import { DL_EVENT, type createLogger } from '../stats.ts';
 import type { Frag } from '../types.ts';
 import { getPath } from './getPath.ts';
 
@@ -8,8 +10,7 @@ export const processUnmutedFrags = async (
   frags: Frag[],
   outputPath: string,
   dir: string[],
-  onSuccess: (frag: Frag) => void = () => {},
-  onFailure: (frag: Frag) => void = () => {},
+  writeLog?: ReturnType<typeof createLogger>,
 ) => {
   for (const frag of frags) {
     const fragPath = getPath.frag(outputPath, frag.idx + 1);
@@ -35,11 +36,9 @@ export const processUnmutedFrags = async (
     const message = `[unmute] Adding audio to Frag${frag.idx + 1}`;
 
     if (retCode) {
-      try {
-        await fsp.unlink(fragUnmutedPathTmp);
-      } catch {}
+      await unlinkIfAny(fragUnmutedPathTmp);
       console.error(`${message}. Failure`);
-      onFailure(frag);
+      writeLog?.([DL_EVENT.FRAG_REPLACE_AUDIO_FAILURE, frag.idx]);
       continue;
     }
 
@@ -47,6 +46,6 @@ export const processUnmutedFrags = async (
     await fsp.rename(fragUnmutedPathTmp, fragPath);
 
     console.log(`${message}. Success`);
-    onSuccess(frag);
+    writeLog?.([DL_EVENT.FRAG_REPLACE_AUDIO_SUCCESS, frag.idx]);
   }
 };

@@ -1,6 +1,11 @@
 import fsp from 'node:fs/promises';
 import type { AppArgs } from './main.ts';
-import type { DownloadFormat, Frag, LiveVideoStatus } from './types.ts';
+import type {
+  DownloadFormat,
+  Frag,
+  LiveVideoStatus,
+  VideoInfo,
+} from './types.ts';
 import type { UnmutedFrag } from './utils/getUnmutedFrag.ts';
 
 export const DL_EVENT = {
@@ -28,15 +33,16 @@ export const DL_EVENT = {
 
 type EvNames = typeof DL_EVENT;
 
-type InitPayload = {
+export type InitPayload = {
   args: AppArgs;
   formats: DownloadFormat[];
   outputPath: string;
   playlistUrl: string;
+  videoInfo: VideoInfo;
 };
 
 // prettier-ignore
-type DlEvent =
+export type DlEvent =
   | [name: EvNames['INIT'], payload: InitPayload]
   | [name: EvNames['FETCH_PLAYLIST_SUCCESS']]
   | [name: EvNames['FETCH_PLAYLIST_FAILURE']]
@@ -58,6 +64,14 @@ type DlEvent =
   | [name: EvNames['MERGE_FRAGS_SUCCESS']]
   | [name: EvNames['MERGE_FRAGS_FAILURE']];
 
+type FragInfo = {
+  isMuted: boolean | null;
+  unmuteResult: UnmutedFrag | null;
+  dlSuccess: boolean | null;
+  dlUnmutedSuccess: boolean | null;
+  replaceAudioSuccess: boolean | null;
+};
+
 export const createLogger = (logPath: string) => (event: DlEvent) => {
   const line = event.map((v) => JSON.stringify(v)).join('\t');
   return fsp.appendFile(logPath, `${line}\n`);
@@ -65,57 +79,78 @@ export const createLogger = (logPath: string) => (event: DlEvent) => {
 
 const nameEq = (name: keyof EvNames) => (event: DlEvent) => event[0] === name;
 
-const getLog = async (logPath: string) => {
-  const logContent = await fsp.readFile(logPath, 'utf8');
-  return logContent
-    .split('\n')
-    .filter(Boolean)
-    .map((line) => line.split('\t').map((v) => JSON.parse(v)) as DlEvent);
+export const getLog = async (logPath: string) => {
+  try {
+    const logContent = await fsp.readFile(logPath, 'utf8');
+    return logContent
+      .split('\n')
+      .filter(Boolean)
+      .map((line) => line.split('\t').map((v) => JSON.parse(v)) as DlEvent);
+  } catch {
+    return null;
+  }
 };
 
+export const getFragsInfo = (log: DlEvent[]) => {
+  const fragsInfo: Record<string | number, FragInfo> = {};
+  const fragsGroupedByIdx = Object.groupBy(
+    log.filter(([name]) => name.startsWith('FRAG_')),
+    (e) => e[1] as number,
+  );
+  for (const [fragIdx, events] of Object.entries(fragsGroupedByIdx)) {
+    const fragInfo: FragInfo = {
+      isMuted: null,
+      unmuteResult: null,
+      dlSuccess: null,
+      dlUnmutedSuccess: null,
+      replaceAudioSuccess: null,
+    };
+    fragsInfo[fragIdx] = fragInfo;
+    if (!events) continue;
+    fragInfo.isMuted = !!events.findLast(nameEq(DL_EVENT.FRAG_MUTED));
+    fragInfo.unmuteResult =
+      events.findLast(nameEq(DL_EVENT.FRAG_UNMUTE_RESULT))?.[2] || null;
+    fragInfo.dlSuccess = !!events.findLast(
+      nameEq(DL_EVENT.FRAG_DOWNLOAD_SUCCESS),
+    );
+    fragInfo.dlUnmutedSuccess = !!events.findLast(
+      nameEq(DL_EVENT.FRAG_DOWNLOAD_UNMUTED_SUCCESS),
+    );
+    fragInfo.replaceAudioSuccess = !!events.findLast(
+      nameEq(DL_EVENT.FRAG_REPLACE_AUDIO_SUCCESS),
+    );
+  }
+  return fragsInfo;
+};
+
+export const getInitPayload = (log: DlEvent[]) =>
+  (log.findLast(nameEq(DL_EVENT.INIT))?.[1] as InitPayload | undefined) || null;
+
 export const showStats = async (logPath: string) => {
-  let log: DlEvent[];
-  try {
-    log = await getLog(logPath);
-  } catch (e) {
+  const log = await getLog(logPath);
+  if (!log) {
     console.error('[stats] Cannot read log file');
     return;
   }
 
   // prettier-ignore
   const frags = log.findLast(nameEq(DL_EVENT.FRAGS_FOR_DOWNLOADING))![1] as Frag[];
-  const downloaded = log.filter(nameEq(DL_EVENT.FRAG_DOWNLOAD_SUCCESS)).length;
+  const fragsInfo = getFragsInfo(log);
 
+  let downloaded = 0;
   let muted = 0;
   let unmutedSameFormat = 0;
   let unmutedReplacedAudio = 0;
-  const fragsGroupedByIdx = Object.groupBy(
-    log.filter(([name]) => name.startsWith('FRAG_')),
-    (e) => e[1] as number,
-  );
-  for (const events of Object.values(fragsGroupedByIdx)) {
-    if (!events) continue;
-    const isMuted = events.findLast(nameEq(DL_EVENT.FRAG_MUTED));
-    if (!isMuted) continue;
-    muted += 1;
-    const unmuteResult = events.findLast(nameEq(DL_EVENT.FRAG_UNMUTE_RESULT));
-    if (!unmuteResult) continue;
-    const unmuteResultValue = unmuteResult[2];
-    if (!unmuteResultValue) continue;
-    const dlSuccess = events.findLast(nameEq(DL_EVENT.FRAG_DOWNLOAD_SUCCESS));
-    if (!dlSuccess) continue;
-    if (unmuteResultValue.sameFormat) {
+  for (const frag of frags) {
+    const fragInfo = fragsInfo[frag.idx];
+    if (fragInfo.dlSuccess) downloaded += 1;
+    if (fragInfo.isMuted) muted += 1;
+    if (!fragInfo.unmuteResult) continue;
+    if (!fragInfo.dlSuccess) continue;
+    if (fragInfo.unmuteResult.sameFormat) {
       unmutedSameFormat += 1;
-    } else {
-      const dlUnmutedSuccess = events.findLast(
-        nameEq(DL_EVENT.FRAG_DOWNLOAD_UNMUTED_SUCCESS),
-      );
-      const replaceAudioSuccess = events.findLast(
-        nameEq(DL_EVENT.FRAG_REPLACE_AUDIO_SUCCESS),
-      );
-      if (dlUnmutedSuccess && replaceAudioSuccess) {
-        unmutedReplacedAudio += 1;
-      }
+    } else if (fragInfo.dlUnmutedSuccess && fragInfo.replaceAudioSuccess) {
+      unmutedReplacedAudio += 1;
     }
   }
 

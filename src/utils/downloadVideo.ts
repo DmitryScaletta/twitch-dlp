@@ -1,7 +1,6 @@
 import fsp from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { LIVE_VIDEO_STATUS, RET_CODE } from '../constants.ts';
-import { downloadFile } from '../downloaders/index.ts';
+import { LIVE_VIDEO_STATUS, NO_TRY_UNMUTE_MESSAGE } from '../constants.ts';
 import { chalk } from '../lib/chalk.ts';
 import { isInstalled } from '../lib/isInstalled.ts';
 import { statsOrNull } from '../lib/statsOrNull.ts';
@@ -9,16 +8,17 @@ import type { AppArgs } from '../main.ts';
 import { mergeFrags } from '../merge/index.ts';
 import { createLogger, DL_EVENT, showStats } from '../stats.ts';
 import type {
-  Downloader,
   DownloadFormat,
   FragMetadata,
   LiveVideoStatus,
   VideoInfo,
 } from '../types.ts';
+import { downloadFrag } from './downloadFrag.ts';
 import { fetchText } from './fetchText.ts';
 import { getExistingFrags } from './getExistingFrags.ts';
 import { getFragsForDownloading } from './getFragsForDownloading.ts';
 import { getPath } from './getPath.ts';
+import { getTryUnmute } from './getTryUnmute.ts';
 import { getUnmutedFrag, type UnmutedFrag } from './getUnmutedFrag.ts';
 import { processUnmutedFrags } from './processUnmutedFrags.ts';
 import { readOutputDir } from './readOutputDir.ts';
@@ -28,43 +28,6 @@ const DEFAULT_OUTPUT_TEMPLATE = '%(title)s [%(id)s].%(ext)s';
 const WAIT_BETWEEN_CYCLES_SEC = 60;
 
 const RETRY_MESSAGE = `Retry every ${WAIT_BETWEEN_CYCLES_SEC} second(s)`;
-
-const downloadFrag = async (
-  downloader: Downloader,
-  url: string,
-  destPath: string,
-  limitRateArg?: string,
-  gzip?: boolean,
-) => {
-  const destPathTmp = `${destPath}.part`;
-  if (await statsOrNull(destPathTmp)) await fsp.unlink(destPathTmp);
-  const startTime = Date.now();
-  const retCode = await downloadFile(
-    downloader,
-    url,
-    destPathTmp,
-    limitRateArg,
-    gzip,
-  );
-  const endTime = Date.now();
-  if (retCode !== RET_CODE.OK) {
-    try {
-      await fsp.unlink(destPathTmp);
-    } catch {}
-    return null;
-  }
-  await fsp.rename(destPathTmp, destPath);
-  const { size } = await fsp.stat(destPath);
-  return { size, time: endTime - startTime };
-};
-
-const isVideoOlderThat24h = (videoInfo: VideoInfo) => {
-  const videoDate = videoInfo.upload_date || videoInfo.release_date;
-  if (!videoDate) return null;
-  const now = Date.now();
-  const videoDateMs = new Date(videoDate).getTime();
-  return now - videoDateMs > 24 * 60 * 60 * 1000;
-};
 
 export const downloadVideo = async (
   formats: DownloadFormat[],
@@ -105,7 +68,13 @@ export const downloadVideo = async (
   const logPath = getPath.log(outputPath);
   const writeLog = createLogger(logPath);
 
-  writeLog([DL_EVENT.INIT, { args, formats, outputPath, playlistUrl }]);
+  const tryUnmute = getTryUnmute(videoInfo);
+  if (!tryUnmute) console.warn(NO_TRY_UNMUTE_MESSAGE);
+
+  writeLog([
+    DL_EVENT.INIT,
+    { args, formats, outputPath, playlistUrl, videoInfo },
+  ]);
 
   while (true) {
     let playlist;
@@ -179,7 +148,7 @@ export const downloadVideo = async (
       let unmutedFrag: UnmutedFrag | null = null;
       if (frag.url.endsWith('-muted.ts')) {
         writeLog([DL_EVENT.FRAG_MUTED, frag.idx]);
-        if (!isVideoOlderThat24h(videoInfo)) {
+        if (tryUnmute) {
           unmutedFrag = await getUnmutedFrag(
             args.downloader,
             args.unmute,
@@ -237,13 +206,7 @@ export const downloadVideo = async (
   const existingFrags = getExistingFrags(frags, outputPath, dir);
   writeLog([DL_EVENT.FRAGS_EXISTING, existingFrags.length]);
 
-  await processUnmutedFrags(
-    existingFrags,
-    outputPath,
-    dir,
-    (frag) => writeLog([DL_EVENT.FRAG_REPLACE_AUDIO_SUCCESS, frag.idx]),
-    (frag) => writeLog([DL_EVENT.FRAG_REPLACE_AUDIO_FAILURE, frag.idx]),
-  );
+  await processUnmutedFrags(existingFrags, outputPath, dir, writeLog);
 
   const retCode = await mergeFrags(
     args['merge-method'],
