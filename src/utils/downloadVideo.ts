@@ -1,7 +1,8 @@
 import fsp from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { COLOR, LIVE_VIDEO_STATUS, RET_CODE } from '../constants.ts';
+import { LIVE_VIDEO_STATUS, RET_CODE } from '../constants.ts';
 import { downloadFile } from '../downloaders/index.ts';
+import { chalk } from '../lib/chalk.ts';
 import { isInstalled } from '../lib/isInstalled.ts';
 import { statsOrNull } from '../lib/statsOrNull.ts';
 import type { AppArgs } from '../main.ts';
@@ -154,8 +155,8 @@ export const downloadVideo = async (
       let message = '[live-from-start] ';
       message +=
         liveVideoStatus === LIVE_VIDEO_STATUS.ONLINE
-          ? `${COLOR.green}VOD ONLINE${COLOR.reset}: waiting for new fragments`
-          : `${COLOR.red}VOD OFFLINE${COLOR.reset}: waiting for the finalization`;
+          ? `${chalk.green('VOD ONLINE')}: waiting for new fragments`
+          : `${chalk.red('VOD OFFLINE')}: waiting for the finalization`;
       console.log(`${message}. ${RETRY_MESSAGE}`);
       await sleep(WAIT_BETWEEN_CYCLES_SEC * 1000);
       continue;

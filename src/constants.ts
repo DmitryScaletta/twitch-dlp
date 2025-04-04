@@ -26,14 +26,6 @@ export const UNMUTE_POLICIES = [
   'none',
 ] as const;
 
-export const COLOR = {
-  reset: '\x1b[0m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  cyan: '\x1b[36m',
-  red: '\x1b[31m',
-};
-
 export const RET_CODE = {
   OK: 0,
   UNKNOWN_ERROR: 1,

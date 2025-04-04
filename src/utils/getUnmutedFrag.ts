@@ -36,6 +36,7 @@ export const getUnmutedFrag = async (
   const currentFormatSlug = getFormatSlug(fragUrl);
 
   if (unmutePolicy === ANY && currentFormatSlug === 'audio_only') {
+    console.warn('[unmute] Unmuting audio_only format is not supported');
     unmutePolicy = SAME_FORMAT;
   }
 

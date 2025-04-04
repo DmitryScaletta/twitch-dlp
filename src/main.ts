@@ -3,11 +3,8 @@ import fsp from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { parseArgs } from 'node:util';
 import * as api from './api/twitch.ts';
-import {
-  COLOR,
-  MERGE_METHODS,
-  PRIVATE_VIDEO_INSTRUCTIONS,
-} from './constants.ts';
+import { MERGE_METHODS, PRIVATE_VIDEO_INSTRUCTIONS } from './constants.ts';
+import { chalk } from './lib/chalk.ts';
 import { mergeFrags } from './merge/index.ts';
 import type { Downloader, MergeMethod } from './types.ts';
 import { downloadVideo } from './utils/downloadVideo.ts';
@@ -51,7 +48,6 @@ const getArgs = () =>
       'list-formats': {
         type: 'boolean',
         short: 'F',
-        default: false,
       },
       output: {
         type: 'string',
@@ -89,26 +85,12 @@ const getArgs = () =>
       },
       // streamlink twitch plugin args
       // https://streamlink.github.io/cli.html#twitch
-      'twitch-disable-ads': {
-        type: 'boolean',
-      },
-      'twitch-low-latency': {
-        type: 'boolean',
-      },
-      'twitch-api-header': {
-        type: 'string',
-        multiple: true,
-      },
-      'twitch-access-token-param': {
-        type: 'string',
-        multiple: true,
-      },
-      'twitch-force-client-integrity': {
-        type: 'boolean',
-      },
-      'twitch-purge-client-integrity': {
-        type: 'boolean',
-      },
+      'twitch-disable-ads': { type: 'boolean' },
+      'twitch-low-latency': { type: 'boolean' },
+      'twitch-api-header': { type: 'string', multiple: true },
+      'twitch-access-token-param': { type: 'string', multiple: true },
+      'twitch-force-client-integrity': { type: 'boolean' },
+      'twitch-purge-client-integrity': { type: 'boolean' },
     },
     allowPositionals: true,
   });
@@ -264,6 +246,4 @@ const main = async () => {
   }
 };
 
-main().catch((e) => {
-  console.error(`${COLOR.red}ERROR:${COLOR.reset} ${e.message}`);
-});
+main().catch((e) => console.error(chalk.red('ERROR:'), e.message));

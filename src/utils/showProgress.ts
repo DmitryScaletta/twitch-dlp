@@ -1,16 +1,16 @@
-import { COLOR } from '../constants.ts';
+import { chalk } from '../lib/chalk.ts';
 import type { FragMetadata } from '../types.ts';
 
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
 const LOCALE = 'en-GB';
 
-const percentFormatter = new Intl.NumberFormat(LOCALE, {
+const percentFmt = new Intl.NumberFormat(LOCALE, {
   style: 'percent',
   minimumFractionDigits: 1,
   maximumFractionDigits: 1,
 });
 
-const timeFormatter = new Intl.DateTimeFormat(LOCALE, {
+const timeFmt = new Intl.DateTimeFormat(LOCALE, {
   hour: 'numeric',
   minute: 'numeric',
   second: 'numeric',
@@ -50,19 +50,13 @@ export const showProgress = (
 
   const progress = [
     '[download] ',
-    COLOR.cyan,
-    percentFormatter.format(downloadedPercent || 0).padStart(6, ' '),
-    COLOR.reset,
+    chalk.cyan(percentFmt.format(downloadedPercent || 0).padStart(6, ' ')),
     ' of ~ ',
     formatSize(estFullSize || 0).padStart(9, ' '),
     ' at ',
-    COLOR.green,
-    formatSpeed(currentSpeedBps || 0).padStart(11, ' '),
-    COLOR.reset,
+    chalk.green(formatSpeed(currentSpeedBps || 0).padStart(11, ' ')),
     ' ETA ',
-    COLOR.yellow,
-    timeFormatter.format((estTimeLeftSec || 0) * 1000),
-    COLOR.reset,
+    chalk.yellow(timeFmt.format((estTimeLeftSec || 0) * 1000)),
     ` (frag ${downloadedFrags.length}/${fragsCount})\r`,
   ].join('');
   process.stdout.write(progress);
