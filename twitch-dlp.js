@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import fsp from "node:fs/promises";
-import { setTimeout as setTimeout$1 } from "node:timers/promises";
 import { parseArgs } from "node:util";
+import { setTimeout as setTimeout$1 } from "node:timers/promises";
+import fsp from "node:fs/promises";
 import childProcess from "node:child_process";
 import path from "node:path";
 import os from "node:os";
@@ -117,6 +117,7 @@ const getManifest = (videoId, accessToken) => {
 //#endregion
 //#region src/constants.ts
 const PRIVATE_VIDEO_INSTRUCTIONS = "This video might be private. Follow this article to download it: https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md";
+const NO_TRY_UNMUTE_MESSAGE = "[unmute] The video is old, not trying to unmute";
 const VOD_DOMAINS = [
 	"https://d2e2de1etea730.cloudfront.net",
 	"https://dqrpb9wgowsf5.cloudfront.net",
@@ -139,18 +140,11 @@ const DOWNLOADERS = [
 	"fetch"
 ];
 const MERGE_METHODS = ["ffconcat", "append"];
-const UNMUTE_POLICIES = [
-	"quality",
-	"any",
-	"same_format",
-	"none"
-];
-const COLOR = {
-	reset: "\x1B[0m",
-	green: "\x1B[32m",
-	yellow: "\x1B[33m",
-	cyan: "\x1B[36m",
-	red: "\x1B[31m"
+const UNMUTE = {
+	QUALITY: "quality",
+	ANY: "any",
+	SAME_FORMAT: "same_format",
+	OFF: "off"
 };
 const RET_CODE = {
 	OK: 0,
@@ -161,6 +155,41 @@ const LIVE_VIDEO_STATUS = {
 	ONLINE: "ONLINE",
 	OFFLINE: "OFFLINE",
 	FINALIZED: "FINALIZED"
+};
+
+//#endregion
+//#region src/lib/chalk.ts
+const styles = { color: {
+	black: [30, 39],
+	red: [31, 39],
+	green: [32, 39],
+	yellow: [33, 39],
+	blue: [34, 39],
+	magenta: [35, 39],
+	cyan: [36, 39],
+	white: [37, 39]
+} };
+const chalk = Object.entries(styles.color).reduce((acc, [color, [open, close]]) => {
+	acc[color] = (s) => `\x1b[${open}m${s}\x1b[${close}m`;
+	return acc;
+}, {});
+
+//#endregion
+//#region src/lib/isInstalled.ts
+const isInstalled = (cmd) => new Promise((resolve) => {
+	const child = childProcess.spawn(cmd);
+	child.on("error", (e) => resolve(e.code !== "ENOENT"));
+	child.on("close", () => resolve(true));
+});
+
+//#endregion
+//#region src/lib/statsOrNull.ts
+const statsOrNull = async (path$1) => {
+	try {
+		return await fsp.stat(path$1);
+	} catch (e) {
+		return null;
+	}
 };
 
 //#endregion
@@ -266,6 +295,97 @@ const mergeFrags = async (method, frags, outputPath, keepFragments) => {
 	if (method === FFCONCAT) return mergeFrags$1(frags, outputPath, keepFragments);
 	if (method === APPEND) return mergeFrags$2(frags, outputPath, keepFragments);
 	throw new Error(`Unknown merge method: ${method}. Available methods: ${MERGE_METHODS}`);
+};
+
+//#endregion
+//#region src/stats.ts
+const DL_EVENT = {
+	INIT: "INIT",
+	FETCH_PLAYLIST_SUCCESS: "FETCH_PLAYLIST_SUCCESS",
+	FETCH_PLAYLIST_FAILURE: "FETCH_PLAYLIST_FAILURE",
+	FETCH_PLAYLIST_OLD_MUTED_SUCCESS: "FETCH_PLAYLIST_OLD_MUTED_SUCCESS",
+	FETCH_PLAYLIST_OLD_MUTED_FAILURE: "FETCH_PLAYLIST_OLD_MUTED_FAILURE",
+	LIVE_VIDEO_STATUS: "LIVE_VIDEO_STATUS",
+	FRAGS_FOR_DOWNLOADING: "FRAGS_FOR_DOWNLOADING",
+	FRAGS_EXISTING: "FRAGS_EXISTING",
+	FRAG_ALREADY_EXISTS: "FRAG_ALREADY_EXISTS",
+	FRAG_RENAME_UNMUTED: "FRAG_RENAME_UNMUTED",
+	FRAG_MUTED: "FRAG_MUTED",
+	FRAG_UNMUTE_RESULT: "FRAG_UNMUTE_RESULT",
+	FRAG_DOWNLOAD_SUCCESS: "FRAG_DOWNLOAD_SUCCESS",
+	FRAG_DOWNLOAD_FAILURE: "FRAG_DOWNLOAD_FAILURE",
+	FRAG_DOWNLOAD_UNMUTED_SUCCESS: "FRAG_DOWNLOAD_UNMUTED_SUCCESS",
+	FRAG_DOWNLOAD_UNMUTED_FAILURE: "FRAG_DOWNLOAD_UNMUTED_FAILURE",
+	FRAG_REPLACE_AUDIO_SUCCESS: "FRAG_REPLACE_AUDIO_SUCCESS",
+	FRAG_REPLACE_AUDIO_FAILURE: "FRAG_REPLACE_AUDIO_FAILURE",
+	MERGE_FRAGS_SUCCESS: "MERGE_FRAGS_SUCCESS",
+	MERGE_FRAGS_FAILURE: "MERGE_FRAGS_FAILURE"
+};
+const createLogger = (logPath) => (event) => {
+	const line = event.map((v) => JSON.stringify(v)).join("	");
+	return fsp.appendFile(logPath, `${line}\n`);
+};
+const nameEq = (name) => (event) => event[0] === name;
+const getLog = async (logPath) => {
+	try {
+		const logContent = await fsp.readFile(logPath, "utf8");
+		return logContent.split("\n").filter(Boolean).map((line) => line.split("	").map((v) => JSON.parse(v)));
+	} catch {
+		return null;
+	}
+};
+const getFragsInfo = (log) => {
+	const fragsInfo = {};
+	const fragsGroupedByIdx = Object.groupBy(log.filter(([name]) => name.startsWith("FRAG_")), (e) => e[1]);
+	for (const [fragIdx, events] of Object.entries(fragsGroupedByIdx)) {
+		const fragInfo = {
+			isMuted: null,
+			unmuteResult: null,
+			dlSuccess: null,
+			dlUnmutedSuccess: null,
+			replaceAudioSuccess: null
+		};
+		fragsInfo[fragIdx] = fragInfo;
+		if (!events) continue;
+		fragInfo.isMuted = !!events.findLast(nameEq(DL_EVENT.FRAG_MUTED));
+		fragInfo.unmuteResult = events.findLast(nameEq(DL_EVENT.FRAG_UNMUTE_RESULT))?.[2] || null;
+		fragInfo.dlSuccess = !!events.findLast(nameEq(DL_EVENT.FRAG_DOWNLOAD_SUCCESS));
+		fragInfo.dlUnmutedSuccess = !!events.findLast(nameEq(DL_EVENT.FRAG_DOWNLOAD_UNMUTED_SUCCESS));
+		fragInfo.replaceAudioSuccess = !!events.findLast(nameEq(DL_EVENT.FRAG_REPLACE_AUDIO_SUCCESS));
+	}
+	return fragsInfo;
+};
+const getInitPayload = (log) => log.findLast(nameEq(DL_EVENT.INIT))?.[1] || null;
+const showStats = async (logPath) => {
+	const log = await getLog(logPath);
+	if (!log) {
+		console.error("[stats] Cannot read log file");
+		return;
+	}
+	const frags = log.findLast(nameEq(DL_EVENT.FRAGS_FOR_DOWNLOADING))[1];
+	const fragsInfo = getFragsInfo(log);
+	let downloaded = 0;
+	let muted = 0;
+	let unmutedSameFormat = 0;
+	let unmutedReplacedAudio = 0;
+	for (const frag of frags) {
+		const fragInfo = fragsInfo[frag.idx];
+		if (fragInfo.dlSuccess) downloaded += 1;
+		if (fragInfo.isMuted) muted += 1;
+		if (!fragInfo.unmuteResult) continue;
+		if (!fragInfo.dlSuccess) continue;
+		if (fragInfo.unmuteResult.sameFormat) unmutedSameFormat += 1;
+		else if (fragInfo.dlUnmutedSuccess && fragInfo.replaceAudioSuccess) unmutedReplacedAudio += 1;
+	}
+	console.log("[stats] Fragments");
+	console.table({
+		Total: frags.length,
+		Downloaded: downloaded,
+		Muted: muted,
+		"Unmuted total": unmutedSameFormat + unmutedReplacedAudio,
+		"Unmuted (same format)": unmutedSameFormat,
+		"Unmuted (replaced audio)": unmutedReplacedAudio
+	});
 };
 
 //#endregion
@@ -459,97 +579,31 @@ const IS_URLS_AVAILABLE_MAP = {
 const isUrlsAvailable = async (downloader, urls) => IS_URLS_AVAILABLE_MAP[downloader](urls);
 
 //#endregion
-//#region src/lib/isInstalled.ts
-const isInstalled = (cmd) => new Promise((resolve) => {
-	const child = childProcess.spawn(cmd);
-	child.on("error", (e) => resolve(e.code !== "ENOENT"));
-	child.on("close", () => resolve(true));
-});
+//#region src/lib/unlinkIfAny.ts
+const unlinkIfAny = async (path$1) => {
+	try {
+		return await fsp.unlink(path$1);
+	} catch {}
+};
 
 //#endregion
-//#region src/lib/statsOrNull.ts
-const statsOrNull = async (path$1) => {
-	try {
-		return await fsp.stat(path$1);
-	} catch (e) {
+//#region src/utils/downloadFrag.ts
+const downloadFrag = async (downloader, url, destPath, limitRateArg, gzip) => {
+	const destPathTmp = `${destPath}.part`;
+	if (await statsOrNull(destPathTmp)) await fsp.unlink(destPathTmp);
+	const startTime = Date.now();
+	const retCode = await downloadFile(downloader, url, destPathTmp, limitRateArg, gzip);
+	const endTime = Date.now();
+	if (retCode !== RET_CODE.OK) {
+		await unlinkIfAny(destPathTmp);
 		return null;
 	}
-};
-
-//#endregion
-//#region src/stats.ts
-const DL_EVENT = {
-	INIT: "INIT",
-	FETCH_PLAYLIST_SUCCESS: "FETCH_PLAYLIST_SUCCESS",
-	FETCH_PLAYLIST_FAILURE: "FETCH_PLAYLIST_FAILURE",
-	FETCH_PLAYLIST_OLD_MUTED_SUCCESS: "FETCH_PLAYLIST_OLD_MUTED_SUCCESS",
-	FETCH_PLAYLIST_OLD_MUTED_FAILURE: "FETCH_PLAYLIST_OLD_MUTED_FAILURE",
-	LIVE_VIDEO_STATUS: "LIVE_VIDEO_STATUS",
-	FRAGS_FOR_DOWNLOADING: "FRAGS_FOR_DOWNLOADING",
-	FRAGS_EXISTING: "FRAGS_EXISTING",
-	FRAG_ALREADY_EXISTS: "FRAG_ALREADY_EXISTS",
-	FRAG_RENAME_UNMUTED: "FRAG_RENAME_UNMUTED",
-	FRAG_MUTED: "FRAG_MUTED",
-	FRAG_UNMUTE_RESULT: "FRAG_UNMUTE_RESULT",
-	FRAG_DOWNLOAD_SUCCESS: "FRAG_DOWNLOAD_SUCCESS",
-	FRAG_DOWNLOAD_FAILURE: "FRAG_DOWNLOAD_FAILURE",
-	FRAG_DOWNLOAD_UNMUTED_SUCCESS: "FRAG_DOWNLOAD_UNMUTED_SUCCESS",
-	FRAG_DOWNLOAD_UNMUTED_FAILURE: "FRAG_DOWNLOAD_UNMUTED_FAILURE",
-	FRAG_REPLACE_AUDIO_SUCCESS: "FRAG_REPLACE_AUDIO_SUCCESS",
-	FRAG_REPLACE_AUDIO_FAILURE: "FRAG_REPLACE_AUDIO_FAILURE",
-	MERGE_FRAGS_SUCCESS: "MERGE_FRAGS_SUCCESS",
-	MERGE_FRAGS_FAILURE: "MERGE_FRAGS_FAILURE"
-};
-const createLogger = (logPath) => (event) => {
-	const line = event.map((v) => JSON.stringify(v)).join("	");
-	return fsp.appendFile(logPath, `${line}\n`);
-};
-const nameEq = (name) => (event) => event[0] === name;
-const getLog = async (logPath) => {
-	const logContent = await fsp.readFile(logPath, "utf8");
-	return logContent.split("\n").filter(Boolean).map((line) => line.split("	").map((v) => JSON.parse(v)));
-};
-const showStats = async (logPath) => {
-	let log;
-	try {
-		log = await getLog(logPath);
-	} catch (e) {
-		console.error("[stats] Cannot read log file");
-		return;
-	}
-	const frags = log.findLast(nameEq(DL_EVENT.FRAGS_FOR_DOWNLOADING))[1];
-	const downloaded = log.filter(nameEq(DL_EVENT.FRAG_DOWNLOAD_SUCCESS)).length;
-	let muted = 0;
-	let unmutedSameFormat = 0;
-	let unmutedReplacedAudio = 0;
-	const fragsGroupedByIdx = Object.groupBy(log.filter(([name]) => name.startsWith("FRAG_")), (e) => e[1]);
-	for (const events of Object.values(fragsGroupedByIdx)) {
-		if (!events) continue;
-		const isMuted = events.findLast(nameEq(DL_EVENT.FRAG_MUTED));
-		if (!isMuted) continue;
-		muted += 1;
-		const unmuteResult = events.findLast(nameEq(DL_EVENT.FRAG_UNMUTE_RESULT));
-		if (!unmuteResult) continue;
-		const unmuteResultValue = unmuteResult[2];
-		if (!unmuteResultValue) continue;
-		const dlSuccess = events.findLast(nameEq(DL_EVENT.FRAG_DOWNLOAD_SUCCESS));
-		if (!dlSuccess) continue;
-		if (unmuteResultValue.sameFormat) unmutedSameFormat += 1;
-		else {
-			const dlUnmutedSuccess = events.findLast(nameEq(DL_EVENT.FRAG_DOWNLOAD_UNMUTED_SUCCESS));
-			const replaceAudioSuccess = events.findLast(nameEq(DL_EVENT.FRAG_REPLACE_AUDIO_SUCCESS));
-			if (dlUnmutedSuccess && replaceAudioSuccess) unmutedReplacedAudio += 1;
-		}
-	}
-	console.log("[stats] Fragments");
-	console.table({
-		Total: frags.length,
-		Downloaded: downloaded,
-		Muted: muted,
-		"Unmuted total": unmutedSameFormat + unmutedReplacedAudio,
-		"Unmuted (same format)": unmutedSameFormat,
-		"Unmuted (replaced audio)": unmutedReplacedAudio
-	});
+	await fsp.rename(destPathTmp, destPath);
+	const { size } = await fsp.stat(destPath);
+	return {
+		size,
+		time: endTime - startTime
+	};
 };
 
 //#endregion
@@ -600,33 +654,8 @@ const parseVod = (playlist) => {
 };
 
 //#endregion
-//#region src/utils/parseDownloadSectionsArg.ts
-const DOWNLOAD_SECTIONS_ERROR = "Wrong --download-sections syntax";
-const DOWNLOAD_SECTIONS_REGEX = /^\*(?:(?:(?<startH>\d{1,2}):)?(?<startM>\d{1,2}):)?(?:(?<startS>\d{1,2}))-(?:(?:(?:(?<endH>\d{1,2}):)?(?<endM>\d{1,2}):)?(?:(?<endS>\d{1,2}))|(?<inf>inf))$/;
-const parseDownloadSectionsArg = (downloadSectionsArg) => {
-	if (!downloadSectionsArg) return null;
-	const m = downloadSectionsArg.match(DOWNLOAD_SECTIONS_REGEX);
-	if (!m) throw new Error(DOWNLOAD_SECTIONS_ERROR);
-	const { startH, startM, startS, endH, endM, endS, inf } = m.groups;
-	const startHN = startH ? Number.parseInt(startH) : 0;
-	const startMN = startM ? Number.parseInt(startM) : 0;
-	const startSN = startS ? Number.parseInt(startS) : 0;
-	const endHN = endH ? Number.parseInt(endH) : 0;
-	const endMN = endM ? Number.parseInt(endM) : 0;
-	const endSN = endS ? Number.parseInt(endS) : 0;
-	if (startMN >= 60 || startSN >= 60 || endMN >= 60 || endSN >= 60) throw new Error(DOWNLOAD_SECTIONS_ERROR);
-	const startTime = startSN + startMN * 60 + startHN * 60 * 60;
-	const endTime = inf ? Infinity : endSN + endMN * 60 + endHN * 60 * 60;
-	if (startTime >= endTime) throw new Error(DOWNLOAD_SECTIONS_ERROR);
-	return {
-		startTime,
-		endTime
-	};
-};
-
-//#endregion
 //#region src/utils/getFragsForDownloading.ts
-const getFragsForDownloading = (playlistUrl, playlistContent, downloadSectionsArg) => {
+const getFragsForDownloading = (playlistUrl, playlistContent, args) => {
 	const baseUrl = playlistUrl.split("/").slice(0, -1).join("/");
 	const frags = [];
 	let offset = 0;
@@ -641,17 +670,25 @@ const getFragsForDownloading = (playlistUrl, playlistContent, downloadSectionsAr
 		offset += Number.parseFloat(duration);
 		idx += 1;
 	}
-	const downloadSections = parseDownloadSectionsArg(downloadSectionsArg);
-	if (!downloadSections) return frags;
-	const { startTime, endTime } = downloadSections;
+	if (!args["download-sections"]) return frags;
+	const [startTime, endTime] = args["download-sections"];
 	const firstFragIdx = frags.findLastIndex((frag) => frag.offset <= startTime);
 	const lastFragIdx = endTime === Infinity ? frags.length - 1 : frags.findIndex((frag) => frag.offset >= endTime);
 	return frags.slice(firstFragIdx, lastFragIdx + 1);
 };
 
 //#endregion
+//#region src/utils/getTryUnmute.ts
+const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1e3;
+const getTryUnmute = (videoInfo) => {
+	const videoDate = videoInfo.upload_date || videoInfo.release_date;
+	if (!videoDate) return null;
+	const videoDateMs = new Date(videoDate).getTime();
+	return Date.now() - videoDateMs > ONE_WEEK_MS;
+};
+
+//#endregion
 //#region src/utils/getUnmutedFrag.ts
-const [QUALITY, ANY, SAME_FORMAT, NONE] = UNMUTE_POLICIES;
 const LOWER_AUDIO_QUALITY = ["160p30", "360p30"];
 const SAME_FORMAT_SLUGS = ["audio_only", ...LOWER_AUDIO_QUALITY];
 const getFormatSlug = (url) => url.split("/").at(-2);
@@ -668,22 +705,25 @@ const getFragResponse = ([available, availableGzip], sameFormat, url) => {
 	};
 	return null;
 };
-const getUnmutedFrag = async (downloader, unmutePolicy, fragUrl, formats) => {
-	if (unmutePolicy === NONE) return null;
+const getUnmutedFrag = async (downloader, unmuteArg, fragUrl, formats) => {
+	if (unmuteArg === UNMUTE.OFF) return null;
 	const currentFormatSlug = getFormatSlug(fragUrl);
-	if (unmutePolicy === ANY && currentFormatSlug === "audio_only") unmutePolicy = SAME_FORMAT;
-	if (!unmutePolicy) unmutePolicy = SAME_FORMAT_SLUGS.includes(currentFormatSlug) ? SAME_FORMAT : QUALITY;
-	if (unmutePolicy === SAME_FORMAT) {
+	if (unmuteArg === UNMUTE.ANY && currentFormatSlug === "audio_only") {
+		console.warn("[unmute] Unmuting audio_only format is not supported");
+		unmuteArg = UNMUTE.SAME_FORMAT;
+	}
+	if (!unmuteArg) unmuteArg = SAME_FORMAT_SLUGS.includes(currentFormatSlug) ? UNMUTE.SAME_FORMAT : UNMUTE.QUALITY;
+	if (unmuteArg === UNMUTE.SAME_FORMAT) {
 		const url = fragUrl.replace("-muted", "");
 		const [availability] = await isUrlsAvailable(downloader, [url]);
 		return getFragResponse(availability, true, url);
 	}
-	if (unmutePolicy === ANY || unmutePolicy === QUALITY) {
+	if (unmuteArg === UNMUTE.ANY || unmuteArg === UNMUTE.QUALITY) {
 		const urls = [];
 		let currentFormatIdx = -1;
 		for (let i = 0; i < formats.length; i += 1) {
 			const formatSlug = getFormatSlug(formats[i].url);
-			if (unmutePolicy === QUALITY && LOWER_AUDIO_QUALITY.includes(formatSlug)) continue;
+			if (unmuteArg === UNMUTE.QUALITY && LOWER_AUDIO_QUALITY.includes(formatSlug)) continue;
 			if (formatSlug === currentFormatSlug) currentFormatIdx = i;
 			urls.push(fragUrl.replace("-muted", "").replace(`/${currentFormatSlug}/`, `/${formatSlug}/`));
 		}
@@ -694,7 +734,7 @@ const getUnmutedFrag = async (downloader, unmutePolicy, fragUrl, formats) => {
 		if (idx === -1) return null;
 		return getFragResponse(responses[idx], false, urls[idx]);
 	}
-	throw new Error(`Unknown unmute policy: ${unmutePolicy}. Available: ${UNMUTE_POLICIES}`);
+	throw new Error(`Unknown unmute policy: ${unmuteArg}. Available: ${Object.values(UNMUTE)}`);
 };
 
 //#endregion
@@ -711,7 +751,7 @@ const spawn = (command, args = [], silent = false) => new Promise((resolve, reje
 
 //#endregion
 //#region src/utils/processUnmutedFrags.ts
-const processUnmutedFrags = async (frags, outputPath, dir, onSuccess = () => {}, onFailure = () => {}) => {
+const processUnmutedFrags = async (frags, outputPath, dir, writeLog) => {
 	for (const frag of frags) {
 		const fragPath = getPath.frag(outputPath, frag.idx + 1);
 		const fragUnmutedPath = getPath.fragUnmuted(fragPath);
@@ -739,17 +779,15 @@ const processUnmutedFrags = async (frags, outputPath, dir, onSuccess = () => {},
 		]);
 		const message = `[unmute] Adding audio to Frag${frag.idx + 1}`;
 		if (retCode) {
-			try {
-				await fsp.unlink(fragUnmutedPathTmp);
-			} catch {}
+			await unlinkIfAny(fragUnmutedPathTmp);
 			console.error(`${message}. Failure`);
-			onFailure(frag);
+			writeLog?.([DL_EVENT.FRAG_REPLACE_AUDIO_FAILURE, frag.idx]);
 			continue;
 		}
 		await Promise.all([fsp.unlink(fragPath), fsp.unlink(fragUnmutedPath)]);
 		await fsp.rename(fragUnmutedPathTmp, fragPath);
 		console.log(`${message}. Success`);
-		onSuccess(frag);
+		writeLog?.([DL_EVENT.FRAG_REPLACE_AUDIO_SUCCESS, frag.idx]);
 	}
 };
 
@@ -771,12 +809,12 @@ const UNITS = [
 	"YB"
 ];
 const LOCALE = "en-GB";
-const percentFormatter = new Intl.NumberFormat(LOCALE, {
+const percentFmt = new Intl.NumberFormat(LOCALE, {
 	style: "percent",
 	minimumFractionDigits: 1,
 	maximumFractionDigits: 1
 });
-const timeFormatter = new Intl.DateTimeFormat(LOCALE, {
+const timeFmt = new Intl.DateTimeFormat(LOCALE, {
 	hour: "numeric",
 	minute: "numeric",
 	second: "numeric",
@@ -803,19 +841,13 @@ const showProgress = (downloadedFrags, fragsCount) => {
 	const downloadedPercent = estFullSize ? downloadedSize / estFullSize : 0;
 	const progress = [
 		"[download] ",
-		COLOR.cyan,
-		percentFormatter.format(downloadedPercent || 0).padStart(6, " "),
-		COLOR.reset,
+		chalk.cyan(percentFmt.format(downloadedPercent || 0).padStart(6, " ")),
 		" of ~ ",
 		formatSize(estFullSize || 0).padStart(9, " "),
 		" at ",
-		COLOR.green,
-		formatSpeed(currentSpeedBps || 0).padStart(11, " "),
-		COLOR.reset,
+		chalk.green(formatSpeed(currentSpeedBps || 0).padStart(11, " ")),
 		" ETA ",
-		COLOR.yellow,
-		timeFormatter.format((estTimeLeftSec || 0) * 1e3),
-		COLOR.reset,
+		chalk.yellow(timeFmt.format((estTimeLeftSec || 0) * 1e3)),
 		` (frag ${downloadedFrags.length}/${fragsCount})\r`
 	].join("");
 	process.stdout.write(progress);
@@ -826,32 +858,6 @@ const showProgress = (downloadedFrags, fragsCount) => {
 const DEFAULT_OUTPUT_TEMPLATE = "%(title)s [%(id)s].%(ext)s";
 const WAIT_BETWEEN_CYCLES_SEC = 60;
 const RETRY_MESSAGE = `Retry every ${WAIT_BETWEEN_CYCLES_SEC} second(s)`;
-const downloadFrag = async (downloader, url, destPath, limitRateArg, gzip) => {
-	const destPathTmp = `${destPath}.part`;
-	if (await statsOrNull(destPathTmp)) await fsp.unlink(destPathTmp);
-	const startTime = Date.now();
-	const retCode = await downloadFile(downloader, url, destPathTmp, limitRateArg, gzip);
-	const endTime = Date.now();
-	if (retCode !== RET_CODE.OK) {
-		try {
-			await fsp.unlink(destPathTmp);
-		} catch {}
-		return null;
-	}
-	await fsp.rename(destPathTmp, destPath);
-	const { size } = await fsp.stat(destPath);
-	return {
-		size,
-		time: endTime - startTime
-	};
-};
-const isVideoOlderThat24h = (videoInfo) => {
-	const videoDate = videoInfo.upload_date || videoInfo.release_date;
-	if (!videoDate) return null;
-	const now = Date.now();
-	const videoDateMs = new Date(videoDate).getTime();
-	return now - videoDateMs > 24 * 60 * 60 * 1e3;
-};
 const downloadVideo = async (formats, videoInfo, args, getLiveVideoStatus$1 = () => LIVE_VIDEO_STATUS.FINALIZED) => {
 	if (args["list-formats"]) {
 		console.table(formats.map(({ url,...rest }) => rest));
@@ -868,11 +874,14 @@ const downloadVideo = async (formats, videoInfo, args, getLiveVideoStatus$1 = ()
 	const downloadedFrags = [];
 	const logPath = getPath.log(outputPath);
 	const writeLog = createLogger(logPath);
+	const tryUnmute = getTryUnmute(videoInfo);
+	if (!tryUnmute) console.warn(NO_TRY_UNMUTE_MESSAGE);
 	writeLog([DL_EVENT.INIT, {
 		args,
 		formats,
 		outputPath,
-		playlistUrl
+		playlistUrl,
+		videoInfo
 	}]);
 	while (true) {
 		let playlist;
@@ -896,14 +905,14 @@ const downloadVideo = async (formats, videoInfo, args, getLiveVideoStatus$1 = ()
 			continue;
 		}
 		writeLog([DL_EVENT.FETCH_PLAYLIST_SUCCESS]);
-		frags = getFragsForDownloading(playlistUrl, playlist, args["download-sections"]);
+		frags = getFragsForDownloading(playlistUrl, playlist, args);
 		writeLog([DL_EVENT.FRAGS_FOR_DOWNLOADING, frags]);
 		await fsp.writeFile(getPath.playlist(outputPath), playlist);
 		const hasNewFrags = frags.length > fragsCount;
 		fragsCount = frags.length;
 		if (!hasNewFrags && liveVideoStatus !== LIVE_VIDEO_STATUS.FINALIZED) {
 			let message = "[live-from-start] ";
-			message += liveVideoStatus === LIVE_VIDEO_STATUS.ONLINE ? `${COLOR.green}VOD ONLINE${COLOR.reset}: waiting for new fragments` : `${COLOR.red}VOD OFFLINE${COLOR.reset}: waiting for the finalization`;
+			message += liveVideoStatus === LIVE_VIDEO_STATUS.ONLINE ? `${chalk.green("VOD ONLINE")}: waiting for new fragments` : `${chalk.red("VOD OFFLINE")}: waiting for the finalization`;
 			console.log(`${message}. ${RETRY_MESSAGE}`);
 			await setTimeout$1(WAIT_BETWEEN_CYCLES_SEC * 1e3);
 			continue;
@@ -930,7 +939,7 @@ const downloadVideo = async (formats, videoInfo, args, getLiveVideoStatus$1 = ()
 			let unmutedFrag = null;
 			if (frag.url.endsWith("-muted.ts")) {
 				writeLog([DL_EVENT.FRAG_MUTED, frag.idx]);
-				if (!isVideoOlderThat24h(videoInfo)) {
+				if (tryUnmute) {
 					unmutedFrag = await getUnmutedFrag(args.downloader, args.unmute, frag.url, formats);
 					writeLog([
 						DL_EVENT.FRAG_UNMUTE_RESULT,
@@ -962,7 +971,7 @@ const downloadVideo = async (formats, videoInfo, args, getLiveVideoStatus$1 = ()
 	const dir = await readOutputDir(outputPath);
 	const existingFrags = getExistingFrags(frags, outputPath, dir);
 	writeLog([DL_EVENT.FRAGS_EXISTING, existingFrags.length]);
-	await processUnmutedFrags(existingFrags, outputPath, dir, (frag) => writeLog([DL_EVENT.FRAG_REPLACE_AUDIO_SUCCESS, frag.idx]), (frag) => writeLog([DL_EVENT.FRAG_REPLACE_AUDIO_FAILURE, frag.idx]));
+	await processUnmutedFrags(existingFrags, outputPath, dir, writeLog);
 	const retCode = await mergeFrags(args["merge-method"], existingFrags, outputPath, args["keep-fragments"]);
 	writeLog([retCode ? DL_EVENT.MERGE_FRAGS_FAILURE : DL_EVENT.MERGE_FRAGS_SUCCESS]);
 	await showStats(logPath);
@@ -1038,23 +1047,6 @@ const downloadWithStreamlink = async (link, streamMeta, channelLogin, args) => {
 		args.format,
 		...streamlinkArgs.length ? streamlinkArgs : DEFAULT_STREAMLINK_ARGS
 	]);
-};
-
-//#endregion
-//#region src/utils/getDownloader.ts
-const [ARIA2C, CURL, FETCH] = DOWNLOADERS;
-const getDownloader = async (downloaderArg) => {
-	if (!downloaderArg || downloaderArg === FETCH) return FETCH;
-	if (downloaderArg === ARIA2C) {
-		if (await isInstalled(ARIA2C)) return ARIA2C;
-		throw new Error(`${ARIA2C} is not installed. Install it from https://aria2.github.io/`);
-	}
-	if (downloaderArg === CURL) {
-		if (await isInstalled(CURL)) return CURL;
-		const curlLink = os.platform() === "win32" ? "https://curl.se/windows/" : "https://curl.se/download.html";
-		throw new Error(`${CURL} is not installed. Install it from ${curlLink}`);
-	}
-	throw new Error(`Unknown downloader: ${downloaderArg}. Available: ${DOWNLOADERS}`);
 };
 
 //#endregion
@@ -1198,6 +1190,192 @@ const getLiveVideoStatus = async (videoId, streamId, channelLogin) => {
 };
 
 //#endregion
+//#region src/commands/downloadByChannelLogin.ts
+const downloadByChannelLogin = async (channelLogin, args) => {
+	const delay = args["retry-streams"];
+	const isLiveFromStart = args["live-from-start"];
+	const isRetry = delay > 0;
+	while (true) {
+		const streamMeta = await getStreamMetadata(channelLogin);
+		const isLive = !!streamMeta?.stream;
+		if (!isLive) if (isRetry) console.log(`[retry-streams] Waiting for streams. Retry every ${delay} second(s)`);
+		else {
+			console.warn("[download] The channel is not currently live");
+			return;
+		}
+		if (isLive && !isLiveFromStart) await downloadWithStreamlink(`https://www.twitch.tv/${channelLogin}`, streamMeta, channelLogin, args);
+		if (isLive && isLiveFromStart) {
+			const liveVideoInfo = await getLiveVideoInfo(streamMeta, channelLogin);
+			if (liveVideoInfo) {
+				const { formats, videoInfo, videoId } = liveVideoInfo;
+				const getLiveVideoStatusFn = () => getLiveVideoStatus(videoId, streamMeta.stream.id, channelLogin);
+				await downloadVideo(formats, videoInfo, args, getLiveVideoStatusFn);
+			} else {
+				let message = `[live-from-start] Cannot find the playlist`;
+				if (isRetry) {
+					message += `. Retry every ${delay} second(s)`;
+					console.warn(message);
+				} else {
+					console.warn(message);
+					return;
+				}
+			}
+		}
+		await setTimeout$1(delay * 1e3);
+	}
+};
+
+//#endregion
+//#region src/commands/downloadByVideoId.ts
+const downloadByVideoId = async (videoId, args) => {
+	let [formats, videoMeta] = await Promise.all([getVideoFormats(videoId), getVideoMetadata(videoId)]);
+	if (formats.length === 0 && videoMeta !== null) {
+		console.log("Trying to get playlist from video metadata");
+		formats = await getVideoFormatsByThumbUrl(videoMeta.broadcastType, videoMeta.id, videoMeta.previewThumbnailURL);
+	}
+	if (formats.length === 0 || !videoMeta) return console.log(PRIVATE_VIDEO_INSTRUCTIONS);
+	const videoInfo = getVideoInfoByVideoMeta(videoMeta);
+	return downloadVideo(formats, videoInfo, args);
+};
+
+//#endregion
+//#region src/commands/downloadByVodPath.ts
+const downloadByVodPath = async (parsedLink, args) => {
+	const formats = await getVideoFormatsByFullVodPath(getFullVodPath(parsedLink.vodPath));
+	const videoInfo = getVideoInfoByVodPath(parsedLink);
+	return downloadVideo(formats, videoInfo, args);
+};
+
+//#endregion
+//#region src/commands/mergeFragments.ts
+const tryUnmuteFrags = async (outputPath, log, frags, formats, args, writeLog) => {
+	const fragsInfo = getFragsInfo(log);
+	for (const frag of frags) {
+		const fragN = frag.idx + 1;
+		const info = fragsInfo[frag.idx];
+		if (!info || !info.isMuted || info.replaceAudioSuccess) continue;
+		if (info.unmuteResult?.sameFormat && info.dlSuccess) continue;
+		const unmutedFrag = await getUnmutedFrag(args.downloader, args.unmute, frag.url, formats);
+		writeLog([
+			DL_EVENT.FRAG_UNMUTE_RESULT,
+			frag.idx,
+			unmutedFrag
+		]);
+		if (!unmutedFrag) {
+			console.log(`[unmute] Frag${fragN}: cannot unmute`);
+			continue;
+		}
+		const fragPath = getPath.frag(outputPath, fragN);
+		if (unmutedFrag.sameFormat) {
+			const fragPathTmp = `${fragPath}.tmp`;
+			await fsp.rename(fragPath, fragPathTmp);
+			const fragMeta = await downloadFrag(args.downloader, unmutedFrag.url, fragPath, args["limit-rate"], unmutedFrag.gzip);
+			if (fragMeta) {
+				await fsp.unlink(fragPathTmp);
+				console.log(`[unmute] Frag${fragN}: successfully unmuted`);
+			} else {
+				await fsp.rename(fragPathTmp, fragPath);
+				console.log(`[unmute] Frag${fragN}: cannot download unmuted fragment`);
+			}
+			writeLog([fragMeta ? DL_EVENT.FRAG_DOWNLOAD_SUCCESS : DL_EVENT.FRAG_DOWNLOAD_FAILURE, frag.idx]);
+		} else {
+			const unmutedFragPath = getPath.fragUnmuted(fragPath);
+			const fragMeta = await downloadFrag(args.downloader, unmutedFrag.url, unmutedFragPath, args["limit-rate"], unmutedFrag.gzip);
+			if (fragMeta) console.log(`[unmute] Frag${fragN}: successfully unmuted`);
+			else console.log(`[unmute] Frag${fragN}: cannot download unmuted fragment`);
+			writeLog([fragMeta ? DL_EVENT.FRAG_DOWNLOAD_UNMUTED_SUCCESS : DL_EVENT.FRAG_DOWNLOAD_UNMUTED_FAILURE, frag.idx]);
+		}
+	}
+};
+const mergeFragments = async (outputPath, args) => {
+	outputPath = path.resolve(outputPath);
+	const [playlist, dir] = await Promise.all([fsp.readFile(getPath.playlist(outputPath), "utf8"), readOutputDir(outputPath)]);
+	const logPath = getPath.log(outputPath);
+	const log = await getLog(logPath);
+	const writeLog = createLogger(logPath);
+	const dlInfo = getInitPayload(log || []);
+	const playlistUrl = dlInfo?.playlistUrl || "";
+	const allFrags = getFragsForDownloading(playlistUrl, playlist, args);
+	const frags = getExistingFrags(allFrags, outputPath, dir);
+	if (log && dlInfo && args.unmute && args.unmute !== UNMUTE.OFF) {
+		const { videoInfo, formats } = dlInfo;
+		if (getTryUnmute(videoInfo)) await tryUnmuteFrags(outputPath, log, frags, formats, args, writeLog);
+		else console.warn(NO_TRY_UNMUTE_MESSAGE);
+	}
+	writeLog([DL_EVENT.FRAGS_FOR_DOWNLOADING, frags]);
+	await processUnmutedFrags(frags, outputPath, dir, writeLog);
+	await mergeFrags(args["merge-method"], frags, outputPath, true);
+	await showStats(logPath);
+};
+
+//#endregion
+//#region src/commands/showHelp.ts
+const showHelp = async () => {
+	const readme = await fsp.readFile("./README.md", "utf8");
+	const entries = readme.split(/\s## (.*)/g).slice(1);
+	const sections = {};
+	for (let i = 0; i < entries.length; i += 2) {
+		const header = entries[i];
+		const content = entries[i + 1].trim();
+		sections[header] = content;
+	}
+	const help = [
+		"Options:",
+		sections.Options.replace(/^```\w+\n(.*)\n```$/s, "$1"),
+		"",
+		"Dependencies:",
+		sections.Dependencies.replaceAll("**", "")
+	];
+	console.log(help.join("\n"));
+};
+
+//#endregion
+//#region src/commands/showVersion.ts
+const showVersion = async () => {
+	const pkg = await fsp.readFile("./package.json", "utf8");
+	console.log(JSON.parse(pkg).version);
+};
+
+//#endregion
+//#region src/utils/getDownloader.ts
+const [ARIA2C, CURL, FETCH] = DOWNLOADERS;
+const getDownloader = async (downloaderArg) => {
+	if (downloaderArg === FETCH) return FETCH;
+	if (downloaderArg === ARIA2C) {
+		if (await isInstalled(ARIA2C)) return ARIA2C;
+		throw new Error(`${ARIA2C} is not installed. Install it from https://aria2.github.io/`);
+	}
+	if (downloaderArg === CURL) {
+		if (await isInstalled(CURL)) return CURL;
+		const curlLink = os.platform() === "win32" ? "https://curl.se/windows/" : "https://curl.se/download.html";
+		throw new Error(`${CURL} is not installed. Install it from ${curlLink}`);
+	}
+	throw new Error(`Unknown downloader: ${downloaderArg}. Available: ${DOWNLOADERS}`);
+};
+
+//#endregion
+//#region src/utils/parseDownloadSectionsArg.ts
+const DOWNLOAD_SECTIONS_ERROR = "Wrong --download-sections syntax";
+const DOWNLOAD_SECTIONS_REGEX = /^\*(?:(?:(?<startH>\d{1,2}):)?(?<startM>\d{1,2}):)?(?:(?<startS>\d{1,2}))-(?:(?:(?:(?<endH>\d{1,2}):)?(?<endM>\d{1,2}):)?(?:(?<endS>\d{1,2}))|(?<inf>inf))$/;
+const parseDownloadSectionsArg = (downloadSectionsArg) => {
+	if (!downloadSectionsArg) return null;
+	const m = downloadSectionsArg.match(DOWNLOAD_SECTIONS_REGEX);
+	if (!m) throw new Error(DOWNLOAD_SECTIONS_ERROR);
+	const { startH, startM, startS, endH, endM, endS, inf } = m.groups;
+	const startHN = startH ? Number.parseInt(startH) : 0;
+	const startMN = startM ? Number.parseInt(startM) : 0;
+	const startSN = startS ? Number.parseInt(startS) : 0;
+	const endHN = endH ? Number.parseInt(endH) : 0;
+	const endMN = endM ? Number.parseInt(endM) : 0;
+	const endSN = endS ? Number.parseInt(endS) : 0;
+	if (startMN >= 60 || startSN >= 60 || endMN >= 60 || endSN >= 60) throw new Error(DOWNLOAD_SECTIONS_ERROR);
+	const startTime = startSN + startMN * 60 + startHN * 60 * 60;
+	const endTime = inf ? Infinity : endSN + endMN * 60 + endHN * 60 * 60;
+	if (startTime >= endTime) throw new Error(DOWNLOAD_SECTIONS_ERROR);
+	return [startTime, endTime];
+};
+
+//#endregion
 //#region src/utils/parseLink.ts
 const VOD_PATH_REGEX = /^video:(?<vodPath>(?<channelLogin>\w+)_(?<videoId>\d+)_(?<startTimestamp>\d+))$/;
 const VOD_REGEX = /^https:\/\/(?:www\.)?twitch\.tv\/videos\/(?<videoId>\d+)/;
@@ -1238,14 +1416,16 @@ const getArgs = () => parseArgs({
 		},
 		"list-formats": {
 			type: "boolean",
-			short: "F",
-			default: false
+			short: "F"
 		},
 		output: {
 			type: "string",
 			short: "o"
 		},
-		downloader: { type: "string" },
+		downloader: {
+			type: "string",
+			default: "fetch"
+		},
 		"keep-fragments": {
 			type: "boolean",
 			default: false
@@ -1278,99 +1458,32 @@ const getArgs = () => parseArgs({
 	},
 	allowPositionals: true
 });
+const normalizeArgs = async (args) => {
+	const newArgs = { ...args };
+	newArgs.downloader = await getDownloader(args.downloader);
+	newArgs["download-sections"] = parseDownloadSectionsArg(args["download-sections"]);
+	if (args["retry-streams"]) {
+		const delay = Number.parseInt(args["retry-streams"]);
+		if (!delay) throw new Error("Wrong --retry-streams delay");
+		if (delay < 10) throw new Error("Min --retry-streams delay is 10");
+		newArgs["retry-streams"] = delay;
+	}
+	if (!MERGE_METHODS.includes(args["merge-method"])) throw new Error(`Unknown merge method. Available: ${MERGE_METHODS}`);
+	return newArgs;
+};
 const main = async () => {
 	const parsedArgs = getArgs();
-	const args = parsedArgs.values;
+	const args = await normalizeArgs(parsedArgs.values);
 	const positionals = parsedArgs.positionals;
-	if (args.version) {
-		const pkg = await fsp.readFile("./package.json", "utf8");
-		console.log(JSON.parse(pkg).version);
-		return;
-	}
-	if (args.help || parsedArgs.positionals.length === 0) {
-		const readme = await fsp.readFile("./README.md", "utf8");
-		const entries = readme.split(/\s## (.*)/g).slice(1);
-		const sections = {};
-		for (let i = 0; i < entries.length; i += 2) {
-			const header = entries[i];
-			const content = entries[i + 1].trim();
-			sections[header] = content;
-		}
-		console.log("Options:");
-		console.log(sections.Options.replace(/^```\w+\n(.*)\n```$/s, "$1"));
-		console.log("");
-		console.log("Dependencies:");
-		console.log(sections.Dependencies.replaceAll("**", ""));
-		return;
-	}
-	args.downloader = await getDownloader(args.downloader);
-	if (!MERGE_METHODS.includes(args["merge-method"])) throw new Error(`Unknown merge method. Available: ${MERGE_METHODS}`);
-	if (args["merge-fragments"]) {
-		const [outputPath] = positionals;
-		const [playlist, dir] = await Promise.all([fsp.readFile(getPath.playlist(outputPath), "utf8"), readOutputDir(outputPath)]);
-		const frags = getFragsForDownloading(".", playlist, args["download-sections"]);
-		const existingFrags = getExistingFrags(frags, outputPath, dir);
-		await processUnmutedFrags(existingFrags, outputPath, dir);
-		await mergeFrags(args["merge-method"], existingFrags, outputPath, true);
-		return;
-	}
-	if (positionals.length > 1) throw new Error("Expected only one link");
-	const [link] = positionals;
-	const parsedLink = parseLink(link);
-	if (parsedLink.type === "vodPath") {
-		const formats = await getVideoFormatsByFullVodPath(getFullVodPath(parsedLink.vodPath));
-		const videoInfo = getVideoInfoByVodPath(parsedLink);
-		return downloadVideo(formats, videoInfo, args);
-	}
-	if (parsedLink.type === "video") {
-		let [formats, videoMeta] = await Promise.all([getVideoFormats(parsedLink.videoId), getVideoMetadata(parsedLink.videoId)]);
-		if (formats.length === 0 && videoMeta !== null) {
-			console.log("Trying to get playlist from video metadata");
-			formats = await getVideoFormatsByThumbUrl(videoMeta.broadcastType, videoMeta.id, videoMeta.previewThumbnailURL);
-		}
-		if (formats.length === 0 || !videoMeta) return console.log(PRIVATE_VIDEO_INSTRUCTIONS);
-		const videoInfo = getVideoInfoByVideoMeta(videoMeta);
-		return downloadVideo(formats, videoInfo, args);
-	}
-	const { channelLogin } = parsedLink;
-	let retryStreamsDelay = 0;
-	if (args["retry-streams"]) {
-		retryStreamsDelay = Number.parseInt(args["retry-streams"]);
-		if (!retryStreamsDelay || retryStreamsDelay < 0) throw new Error("Wrong --retry-streams delay");
-	}
-	const isLiveFromStart = args["live-from-start"];
-	const isRetry = retryStreamsDelay > 0;
-	while (true) {
-		const streamMeta = await getStreamMetadata(channelLogin);
-		const isLive = !!streamMeta?.stream;
-		if (!isLive) if (isRetry) console.log(`[retry-streams] Waiting for streams. Retry every ${retryStreamsDelay} second(s)`);
-		else {
-			console.warn("[download] The channel is not currently live");
-			return;
-		}
-		if (isLive && !isLiveFromStart) await downloadWithStreamlink(`https://www.twitch.tv/${channelLogin}`, streamMeta, channelLogin, args);
-		if (isLive && isLiveFromStart) {
-			const liveVideoInfo = await getLiveVideoInfo(streamMeta, channelLogin);
-			if (liveVideoInfo) {
-				const { formats, videoInfo, videoId } = liveVideoInfo;
-				const getLiveVideoStatusFn = () => getLiveVideoStatus(videoId, streamMeta.stream.id, channelLogin);
-				await downloadVideo(formats, videoInfo, args, getLiveVideoStatusFn);
-			} else {
-				let message = `[live-from-start] Cannot find the playlist`;
-				if (isRetry) {
-					message += `. Retry every ${retryStreamsDelay} second(s)`;
-					console.warn(message);
-				} else {
-					console.warn(message);
-					return;
-				}
-			}
-		}
-		await setTimeout$1(retryStreamsDelay * 1e3);
-	}
+	if (args.version) return showVersion();
+	if (args.help || positionals.length === 0) return showHelp();
+	if (positionals.length !== 1) throw new Error("Expected exactly one positional argument");
+	if (args["merge-fragments"]) return mergeFragments(positionals[0], args);
+	const link = parseLink(positionals[0]);
+	if (link.type === "vodPath") return downloadByVodPath(link, args);
+	if (link.type === "video") return downloadByVideoId(link.videoId, args);
+	return downloadByChannelLogin(link.channelLogin, args);
 };
-main().catch((e) => {
-	console.error(`${COLOR.red}ERROR:${COLOR.reset} ${e.message}`);
-});
+main().catch((e) => console.error(chalk.red("ERROR:"), e.message));
 
 //#endregion
