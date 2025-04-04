@@ -72,6 +72,9 @@ npx twitch-dlp https://www.twitch.tv/videos/2022789761 -r 720k
 # Filename must match the fragment names but without ".part-FragN"
 # Use `--download-sections` if you want to merge only specific part of the video
 npx twitch-dlp "./Chillin [v2222470239].mp4" --merge-fragments
+
+# Merge already downloaded fragments and try to unmute muted fragments
+npx twitch-dlp "./Chillin [v2222470239].mp4" --merge-fragments --unmute quality
 ```
 
 ## Options
@@ -81,21 +84,21 @@ npx twitch-dlp "./Chillin [v2222470239].mp4" --merge-fragments
 --version                   Print program version and exit
 -f, --format FORMAT         Select format to download
                             Available formats:
-                            - best: best quality (default)
-                            - FORMAT: select format by format_id
+                            * best: best quality (default)
+                            * FORMAT: select format by format_id
 -F, --list-formats          Print available formats and exit
 -o, --output OUTPUT         Output filename template
                             Available template variables:
-                            - %(title)s
-                            - %(id)s
-                            - %(ext)s
-                            - %(description)s
-                            - %(duration)s
-                            - %(uploader)s
-                            - %(uploader_id)s
-                            - %(upload_date)s
-                            - %(release_date)s
-                            - %(view_count)s
+                            * %(title)s
+                            * %(id)s
+                            * %(ext)s
+                            * %(description)s
+                            * %(duration)s
+                            * %(uploader)s
+                            * %(uploader_id)s
+                            * %(upload_date)s
+                            * %(release_date)s
+                            * %(view_count)s
 --live-from-start           Download live streams from the start
 --retry-streams DELAY       Retry fetching the list of available streams until
                             streams are found while waiting DELAY second(s)
@@ -111,29 +114,35 @@ npx twitch-dlp "./Chillin [v2222470239].mp4" --merge-fragments
 --unmute POLICY             Try to unmute muted fragments. Keep in mind that
                             160p and 360p have slightly worse audio quality.
                             Available values:
-                            - quality (default for 480p and higher) - check all
+                            * quality (default for 480p and higher) - check all
                               formats, unmute only if best audio quality is
                               available
-                            - any - check all formats, unmute if any audio
+                            * any - check all formats, unmute if any audio
                               quality is available
-                            - same_format (default for 360p and lower) - only
+                            * same_format (default for 360p and lower) - only
                               check downloading format, unmute if available
-                            - none - don't try to unmute fragments
+                            * off - don't try to unmute fragments
 --downloader NAME           Name of the external downloader to use.
                             Currently supports: aria2c, curl, fetch (default).
 --merge-method METHOD       How fragments should be merged. Merging happens
                             only after all fragments are downloaded.
                             Available values:
-                            - ffconcat (default) - using ffmpeg's concat 
+                            * ffconcat (default) - using ffmpeg's concat 
                               demuxer, no fixup needed
-                            - append - merge all fragments into one file and
+                            * append - merge all fragments into one file and
                               fixup using ffmpeg (like yt-dlp does)
---merge-fragments           Merge already downloaded fragments.
-                            Example: "npx twitch-dlp FILENAME
-                            --merge-fragments". FILENAME must match
-                            the fragment names but without ".part-FragN".
-                            Works with this options: --download-sections,
-                            --merge-method
+--merge-fragments           Merge already downloaded fragments. A FILENAME
+                            should be passed instead of a video link. The 
+                            FILENAME must match the fragment names but without
+                            ".part-FragN". Example: "npx twitch-dlp FILENAME
+                            --merge-fragments".
+                            Can be used with:
+                            * --download-sections - merge only specific part
+                              of the video
+                            * --unmute - try to unmute downloaded fragments
+                              according to passed unmute policy (off by
+                              default)
+                            * --merge-method - change merge method
 
 It's also possible to pass streamlink twitch plugin args:
 --twitch-disable-ads, --twitch-low-latency, --twitch-api-header,
