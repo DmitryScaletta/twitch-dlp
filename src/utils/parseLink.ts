@@ -5,22 +5,25 @@ const VOD_REGEX = /^https:\/\/(?:www\.)?twitch\.tv\/videos\/(?<videoId>\d+)/;
 const CHANNEL_REGEX =
   /^https:\/\/(?:www\.)?twitch\.tv\/(?<channelLogin>[^/#?]+)/;
 
-type ParsedLinkVodPath = {
+export type ParsedLinkVodPath = {
   type: 'vodPath';
   vodPath: string;
   channelLogin: string;
   videoId: string;
   startTimestamp: number;
 };
-type ParsedLinkVideo = {
+export type ParsedLinkVideo = {
   type: 'video';
   videoId: string;
 };
-type ParsedLinkChannel = {
+export type ParsedLinkChannel = {
   type: 'channel';
   channelLogin: string;
 };
-type ParsedLink = ParsedLinkVodPath | ParsedLinkVideo | ParsedLinkChannel;
+export type ParsedLink =
+  | ParsedLinkVodPath
+  | ParsedLinkVideo
+  | ParsedLinkChannel;
 
 export const parseLink = (link: string): ParsedLink => {
   let m = link.match(VOD_PATH_REGEX);
