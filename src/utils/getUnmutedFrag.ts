@@ -1,8 +1,6 @@
-import { UNMUTE_POLICIES } from '../constants.ts';
+import { UNMUTE } from '../constants.ts';
 import { isUrlsAvailable } from '../downloaders/index.ts';
 import type { Downloader, DownloadFormat } from '../types.ts';
-
-const [QUALITY, ANY, SAME_FORMAT, NONE] = UNMUTE_POLICIES;
 
 const LOWER_AUDIO_QUALITY = ['160p30', '360p30'];
 const SAME_FORMAT_SLUGS = ['audio_only', ...LOWER_AUDIO_QUALITY];
@@ -27,38 +25,38 @@ const getFragResponse = (
 
 export const getUnmutedFrag = async (
   downloader: Downloader,
-  unmutePolicy: string | undefined,
+  unmuteArg: string | undefined,
   fragUrl: string,
   formats: DownloadFormat[],
 ): Promise<UnmutedFrag | null> => {
-  if (unmutePolicy === NONE) return null;
+  if (unmuteArg === UNMUTE.OFF) return null;
 
   const currentFormatSlug = getFormatSlug(fragUrl);
 
-  if (unmutePolicy === ANY && currentFormatSlug === 'audio_only') {
+  if (unmuteArg === UNMUTE.ANY && currentFormatSlug === 'audio_only') {
     console.warn('[unmute] Unmuting audio_only format is not supported');
-    unmutePolicy = SAME_FORMAT;
+    unmuteArg = UNMUTE.SAME_FORMAT;
   }
 
-  if (!unmutePolicy) {
-    unmutePolicy = SAME_FORMAT_SLUGS.includes(currentFormatSlug)
-      ? SAME_FORMAT
-      : QUALITY;
+  if (!unmuteArg) {
+    unmuteArg = SAME_FORMAT_SLUGS.includes(currentFormatSlug)
+      ? UNMUTE.SAME_FORMAT
+      : UNMUTE.QUALITY;
   }
 
-  if (unmutePolicy === SAME_FORMAT) {
+  if (unmuteArg === UNMUTE.SAME_FORMAT) {
     const url = fragUrl.replace('-muted', '');
     const [availability] = await isUrlsAvailable(downloader, [url]);
     return getFragResponse(availability, true, url);
   }
 
-  if (unmutePolicy === ANY || unmutePolicy === QUALITY) {
+  if (unmuteArg === UNMUTE.ANY || unmuteArg === UNMUTE.QUALITY) {
     const urls: string[] = [];
     let currentFormatIdx = -1;
     for (let i = 0; i < formats.length; i += 1) {
       const formatSlug = getFormatSlug(formats[i].url);
       if (
-        unmutePolicy === QUALITY &&
+        unmuteArg === UNMUTE.QUALITY &&
         LOWER_AUDIO_QUALITY.includes(formatSlug)
       ) {
         continue;
@@ -85,6 +83,6 @@ export const getUnmutedFrag = async (
   }
 
   throw new Error(
-    `Unknown unmute policy: ${unmutePolicy}. Available: ${UNMUTE_POLICIES}`,
+    `Unknown unmute policy: ${unmuteArg}. Available: ${Object.values(UNMUTE)}`,
   );
 };
