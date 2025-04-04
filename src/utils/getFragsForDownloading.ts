@@ -1,11 +1,11 @@
 import { parseVod } from '../lib/m3u8.ts';
+import type { AppArgs } from '../main.ts';
 import type { Frag } from '../types.ts';
-import { parseDownloadSectionsArg } from './parseDownloadSectionsArg.ts';
 
 export const getFragsForDownloading = (
   playlistUrl: string,
   playlistContent: string,
-  downloadSectionsArg?: string,
+  args: AppArgs,
 ) => {
   const baseUrl = playlistUrl.split('/').slice(0, -1).join('/');
   const frags: Frag[] = [];
@@ -16,9 +16,8 @@ export const getFragsForDownloading = (
     offset += Number.parseFloat(duration);
     idx += 1;
   }
-  const downloadSections = parseDownloadSectionsArg(downloadSectionsArg);
-  if (!downloadSections) return frags;
-  const { startTime, endTime } = downloadSections;
+  if (!args['download-sections']) return frags;
+  const [startTime, endTime] = args['download-sections'];
   const firstFragIdx = frags.findLastIndex((frag) => frag.offset <= startTime);
   const lastFragIdx =
     endTime === Infinity

@@ -29,11 +29,6 @@ export type FragMetadata = {
   time: number;
 };
 
-export type DownloadSectionsArg = {
-  startTime: number;
-  endTime: number;
-} | null;
-
 export type BroadcastType = 'ARCHIVE' | 'HIGHLIGHT' | 'UPLOAD';
 
 export type DownloadFormat = {

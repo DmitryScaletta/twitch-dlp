@@ -1,5 +1,3 @@
-import type { DownloadSectionsArg } from '../types.ts';
-
 const DOWNLOAD_SECTIONS_ERROR = 'Wrong --download-sections syntax';
 // https://regex101.com/r/d0kteE/1
 const DOWNLOAD_SECTIONS_REGEX =
@@ -15,9 +13,7 @@ type DownloadSectionsGroups = {
   inf?: 'inf';
 };
 
-export const parseDownloadSectionsArg = (
-  downloadSectionsArg?: string,
-): DownloadSectionsArg => {
+export const parseDownloadSectionsArg = (downloadSectionsArg?: string) => {
   if (!downloadSectionsArg) return null;
   const m = downloadSectionsArg.match(DOWNLOAD_SECTIONS_REGEX);
   if (!m) throw new Error(DOWNLOAD_SECTIONS_ERROR);
@@ -35,5 +31,5 @@ export const parseDownloadSectionsArg = (
   const startTime = startSN + startMN * 60 + startHN * 60 * 60;
   const endTime = inf ? Infinity : endSN + endMN * 60 + endHN * 60 * 60;
   if (startTime >= endTime) throw new Error(DOWNLOAD_SECTIONS_ERROR);
-  return { startTime, endTime };
+  return [startTime, endTime] as const;
 };

@@ -140,11 +140,7 @@ export const downloadVideo = async (
     }
     writeLog([DL_EVENT.FETCH_PLAYLIST_SUCCESS]);
 
-    frags = getFragsForDownloading(
-      playlistUrl,
-      playlist,
-      args['download-sections'],
-    );
+    frags = getFragsForDownloading(playlistUrl, playlist, args);
     writeLog([DL_EVENT.FRAGS_FOR_DOWNLOADING, frags]);
 
     await fsp.writeFile(getPath.playlist(outputPath), playlist);

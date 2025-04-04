@@ -10,10 +10,10 @@ describe('parseDownloadSectionsArg', () => {
 
   it('should parse --download-sections arg', () => {
     const cases = [
-      ['*0-inf', { startTime: 0, endTime: Infinity }],
-      ['*5-10', { startTime: 5, endTime: 10 }],
-      ['*3:14:15-inf', { startTime: 11655, endTime: Infinity }],
-      ['*13:14:15-16:17:18', { startTime: 47655, endTime: 58638 }],
+      ['*0-inf', [0, Infinity]],
+      ['*5-10', [5, 10]],
+      ['*3:14:15-inf', [11655, Infinity]],
+      ['*13:14:15-16:17:18', [47655, 58638]],
     ] as const;
     for (const [arg, expected] of cases) {
       assert.deepStrictEqual(parseDownloadSectionsArg(arg), expected);
