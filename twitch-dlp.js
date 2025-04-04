@@ -684,7 +684,7 @@ const getTryUnmute = (videoInfo) => {
 	const videoDate = videoInfo.upload_date || videoInfo.release_date;
 	if (!videoDate) return null;
 	const videoDateMs = new Date(videoDate).getTime();
-	return Date.now() - videoDateMs > ONE_WEEK_MS;
+	return Date.now() - videoDateMs < ONE_WEEK_MS;
 };
 
 //#endregion
