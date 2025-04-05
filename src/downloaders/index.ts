@@ -18,7 +18,7 @@ export const downloadFile = async (
   if (downloader === CURL) {
     return curl.downloadFile(url, destPath, retries, rateLimit, gzip);
   }
-  for (const [i] of Object.entries(Array.from({ length: retries }))) {
+  for (let i = 0; i < retries; i += 1) {
     let retCode: number = RET_CODE.OK;
     if (downloader === ARIA2C) {
       retCode = await aria2c.downloadFile(url, destPath, rateLimit, gzip);
@@ -26,11 +26,8 @@ export const downloadFile = async (
     if (downloader === FETCH) {
       retCode = await fetch.downloadFile(url, destPath, rateLimit, gzip);
     }
-    if (retCode === RET_CODE.OK || retCode === RET_CODE.HTTP_RETURNED_ERROR) {
-      return retCode;
-    }
-    sleep(1000);
-    console.error(`[download] Cannot download the url. Retry ${i + 1}`);
+    if (retCode === RET_CODE.OK) return retCode;
+    await sleep(1000);
   }
   return RET_CODE.UNKNOWN_ERROR;
 };
