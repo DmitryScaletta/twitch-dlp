@@ -9,6 +9,8 @@ import {
   getFragsInfo,
   getInitPayload,
   getLog,
+  logFragsForDownloading,
+  logUnmuteResult,
   showStats,
   type DlEvent,
 } from '../stats.ts';
@@ -36,7 +38,7 @@ const tryUnmuteFrags = async (
     const fragN = frag.idx + 1;
     const info = fragsInfo[frag.idx];
     if (!info || !info.isMuted || info.replaceAudioSuccess) continue;
-    if (info.unmuteResult?.sameFormat && info.dlSuccess) continue;
+    if (info.unmuteSameFormat && info.dlSuccess) continue;
 
     const unmutedFrag = await getUnmutedFrag(
       args.downloader,
@@ -44,7 +46,7 @@ const tryUnmuteFrags = async (
       frag.url,
       formats,
     );
-    writeLog([DL_EVENT.FRAG_UNMUTE_RESULT, frag.idx, unmutedFrag]);
+    writeLog(logUnmuteResult(unmutedFrag, frag.idx));
     if (!unmutedFrag) {
       console.log(`[unmute] Frag${fragN}: cannot unmute`);
       continue;
@@ -120,7 +122,7 @@ export const mergeFragments = async (outputPath: string, args: AppArgs) => {
     }
   }
 
-  writeLog([DL_EVENT.FRAGS_FOR_DOWNLOADING, frags]);
+  writeLog(logFragsForDownloading(frags));
 
   await processUnmutedFrags(frags, outputPath, dir, writeLog);
   await mergeFrags(args['merge-method'], frags, outputPath, true);

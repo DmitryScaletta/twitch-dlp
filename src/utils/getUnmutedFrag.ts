@@ -18,8 +18,8 @@ const getFragResponse = (
   sameFormat: boolean,
   url: string,
 ) => {
-  if (available) return { sameFormat, url, gzip: false };
-  if (availableGzip) return { sameFormat, url, gzip: true };
+  if (available) return { sameFormat, gzip: false, url };
+  if (availableGzip) return { sameFormat, gzip: true, url };
   return null;
 };
 

@@ -20,7 +20,8 @@ export const DL_EVENT = {
   FRAG_ALREADY_EXISTS: 'FRAG_ALREADY_EXISTS',
   FRAG_RENAME_UNMUTED: 'FRAG_RENAME_UNMUTED',
   FRAG_MUTED: 'FRAG_MUTED',
-  FRAG_UNMUTE_RESULT: 'FRAG_UNMUTE_RESULT',
+  FRAG_UNMUTE_SUCCESS: 'FRAG_UNMUTE_SUCCESS',
+  FRAG_UNMUTE_FAILURE: 'FRAG_UNMUTE_FAILURE',
   FRAG_DOWNLOAD_SUCCESS: 'FRAG_DOWNLOAD_SUCCESS',
   FRAG_DOWNLOAD_FAILURE: 'FRAG_DOWNLOAD_FAILURE',
   FRAG_DOWNLOAD_UNMUTED_SUCCESS: 'FRAG_DOWNLOAD_UNMUTED_SUCCESS',
@@ -49,12 +50,12 @@ export type DlEvent =
   | [name: EvNames['FETCH_PLAYLIST_OLD_MUTED_SUCCESS'], newPlaylistUrl: string]
   | [name: EvNames['FETCH_PLAYLIST_OLD_MUTED_FAILURE']]
   | [name: EvNames['LIVE_VIDEO_STATUS'], liveVideoStatus: LiveVideoStatus]
-  | [name: EvNames['FRAGS_FOR_DOWNLOADING'], frags: Frag[]]
+  | [name: EvNames['FRAGS_FOR_DOWNLOADING'], startIdx: number, endIdx: number]
   | [name: EvNames['FRAGS_EXISTING'], fragCount: number]
-  | [name: EvNames['FRAG_ALREADY_EXISTS'], fragIdx: number]
   | [name: EvNames['FRAG_RENAME_UNMUTED'], fragIdx: number]
   | [name: EvNames['FRAG_MUTED'], fragIdx: number]
-  | [name: EvNames['FRAG_UNMUTE_RESULT'], fragIdx: number, unmutedFrag: UnmutedFrag | null]
+  | [name: EvNames['FRAG_UNMUTE_SUCCESS'], fragIdx: number, sameFormat: boolean, gzip: boolean, url: string]
+  | [name: EvNames['FRAG_UNMUTE_FAILURE'], fragIdx: number]
   | [name: EvNames['FRAG_DOWNLOAD_SUCCESS'], fragIdx: number]
   | [name: EvNames['FRAG_DOWNLOAD_FAILURE'], fragIdx: number]
   | [name: EvNames['FRAG_DOWNLOAD_UNMUTED_SUCCESS'], fragIdx: number]
@@ -63,14 +64,6 @@ export type DlEvent =
   | [name: EvNames['FRAG_REPLACE_AUDIO_FAILURE'], fragIdx: number]
   | [name: EvNames['MERGE_FRAGS_SUCCESS']]
   | [name: EvNames['MERGE_FRAGS_FAILURE']];
-
-type FragInfo = {
-  isMuted: boolean | null;
-  unmuteResult: UnmutedFrag | null;
-  dlSuccess: boolean | null;
-  dlUnmutedSuccess: boolean | null;
-  replaceAudioSuccess: boolean | null;
-};
 
 export const createLogger = (logPath: string) => (event: DlEvent) => {
   const line = event.map((v) => JSON.stringify(v)).join('\t');
@@ -91,6 +84,33 @@ export const getLog = async (logPath: string) => {
   }
 };
 
+export const logUnmuteResult = (
+  unmuteResult: UnmutedFrag | null,
+  fragIdx: number,
+): DlEvent => {
+  if (unmuteResult) {
+    const { sameFormat, gzip, url } = unmuteResult;
+    return [DL_EVENT.FRAG_UNMUTE_SUCCESS, fragIdx, sameFormat, gzip, url];
+  } else {
+    return [DL_EVENT.FRAG_UNMUTE_FAILURE, fragIdx];
+  }
+};
+
+export const logFragsForDownloading = (frags: Frag[]): DlEvent => [
+  DL_EVENT.FRAGS_FOR_DOWNLOADING,
+  frags[0]?.idx || 0,
+  frags[frags.length - 1]?.idx || 0,
+];
+
+type FragInfo = {
+  isMuted: boolean | null;
+  unmuteSuccess: boolean | null;
+  unmuteSameFormat: boolean | null;
+  dlSuccess: boolean | null;
+  dlUnmutedSuccess: boolean | null;
+  replaceAudioSuccess: boolean | null;
+};
+
 export const getFragsInfo = (log: DlEvent[]) => {
   const fragsInfo: Record<string | number, FragInfo> = {};
   const fragsGroupedByIdx = Object.groupBy(
@@ -100,7 +120,8 @@ export const getFragsInfo = (log: DlEvent[]) => {
   for (const [fragIdx, events] of Object.entries(fragsGroupedByIdx)) {
     const fragInfo: FragInfo = {
       isMuted: null,
-      unmuteResult: null,
+      unmuteSuccess: null,
+      unmuteSameFormat: null,
       dlSuccess: null,
       dlUnmutedSuccess: null,
       replaceAudioSuccess: null,
@@ -108,8 +129,10 @@ export const getFragsInfo = (log: DlEvent[]) => {
     fragsInfo[fragIdx] = fragInfo;
     if (!events) continue;
     fragInfo.isMuted = !!events.findLast(nameEq(DL_EVENT.FRAG_MUTED));
-    fragInfo.unmuteResult =
-      events.findLast(nameEq(DL_EVENT.FRAG_UNMUTE_RESULT))?.[2] || null;
+    const unmuteSuccess = events.findLast(nameEq(DL_EVENT.FRAG_UNMUTE_SUCCESS));
+    fragInfo.unmuteSuccess = !!unmuteSuccess;
+    fragInfo.unmuteSameFormat =
+      (unmuteSuccess?.[2] as boolean | undefined) || null;
     fragInfo.dlSuccess = !!events.findLast(
       nameEq(DL_EVENT.FRAG_DOWNLOAD_SUCCESS),
     );
@@ -133,21 +156,24 @@ export const showStats = async (logPath: string) => {
     return;
   }
 
-  // prettier-ignore
-  const frags = log.findLast(nameEq(DL_EVENT.FRAGS_FOR_DOWNLOADING))![1] as Frag[];
+  const ffd = log.findLast(nameEq(DL_EVENT.FRAGS_FOR_DOWNLOADING));
+  if (!ffd) return;
+  const [, fragStartIdx, fragEndIdx] = ffd as [string, number, number];
+  if (fragStartIdx === 0 && fragEndIdx === 0) return;
   const fragsInfo = getFragsInfo(log);
 
   let downloaded = 0;
   let muted = 0;
   let unmutedSameFormat = 0;
   let unmutedReplacedAudio = 0;
-  for (const frag of frags) {
-    const fragInfo = fragsInfo[frag.idx];
+  for (let i = fragStartIdx; i <= fragEndIdx; i += 1) {
+    const fragInfo = fragsInfo[i];
+    if (!fragInfo) continue;
     if (fragInfo.dlSuccess) downloaded += 1;
     if (fragInfo.isMuted) muted += 1;
-    if (!fragInfo.unmuteResult) continue;
+    if (!fragInfo.unmuteSuccess) continue;
     if (!fragInfo.dlSuccess) continue;
-    if (fragInfo.unmuteResult.sameFormat) {
+    if (fragInfo.unmuteSameFormat) {
       unmutedSameFormat += 1;
     } else if (fragInfo.dlUnmutedSuccess && fragInfo.replaceAudioSuccess) {
       unmutedReplacedAudio += 1;
@@ -156,7 +182,7 @@ export const showStats = async (logPath: string) => {
 
   console.log('[stats] Fragments');
   console.table({
-    Total: frags.length,
+    Total: fragEndIdx - fragStartIdx + 1,
     Downloaded: downloaded,
     Muted: muted,
     'Unmuted total': unmutedSameFormat + unmutedReplacedAudio,

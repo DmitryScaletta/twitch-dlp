@@ -6,7 +6,13 @@ import { isInstalled } from '../lib/isInstalled.ts';
 import { statsOrNull } from '../lib/statsOrNull.ts';
 import type { AppArgs } from '../main.ts';
 import { mergeFrags } from '../merge/index.ts';
-import { createLogger, DL_EVENT, showStats } from '../stats.ts';
+import {
+  createLogger,
+  DL_EVENT,
+  logFragsForDownloading,
+  logUnmuteResult,
+  showStats,
+} from '../stats.ts';
 import type {
   DownloadFormat,
   FragMetadata,
@@ -110,7 +116,7 @@ export const downloadVideo = async (
     writeLog([DL_EVENT.FETCH_PLAYLIST_SUCCESS]);
 
     frags = getFragsForDownloading(playlistUrl, playlist, args);
-    writeLog([DL_EVENT.FRAGS_FOR_DOWNLOADING, frags]);
+    writeLog(logFragsForDownloading(frags));
 
     await fsp.writeFile(getPath.playlist(outputPath), playlist);
 
@@ -133,7 +139,6 @@ export const downloadVideo = async (
       const fragPath = getPath.frag(outputPath, frag.idx + 1);
       const fragStats = await statsOrNull(fragPath);
       if (fragStats) {
-        writeLog([DL_EVENT.FRAG_ALREADY_EXISTS, frag.idx]);
         if (!downloadedFrags[i]) {
           downloadedFrags[i] = { size: fragStats.size, time: 0 };
           showProgress(downloadedFrags, fragsCount);
@@ -155,7 +160,7 @@ export const downloadVideo = async (
             frag.url,
             formats,
           );
-          writeLog([DL_EVENT.FRAG_UNMUTE_RESULT, frag.idx, unmutedFrag]);
+          writeLog(logUnmuteResult(unmutedFrag, frag.idx));
         }
       }
 
