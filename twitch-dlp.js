@@ -311,7 +311,8 @@ const DL_EVENT = {
 	FRAG_ALREADY_EXISTS: "FRAG_ALREADY_EXISTS",
 	FRAG_RENAME_UNMUTED: "FRAG_RENAME_UNMUTED",
 	FRAG_MUTED: "FRAG_MUTED",
-	FRAG_UNMUTE_RESULT: "FRAG_UNMUTE_RESULT",
+	FRAG_UNMUTE_SUCCESS: "FRAG_UNMUTE_SUCCESS",
+	FRAG_UNMUTE_FAILURE: "FRAG_UNMUTE_FAILURE",
 	FRAG_DOWNLOAD_SUCCESS: "FRAG_DOWNLOAD_SUCCESS",
 	FRAG_DOWNLOAD_FAILURE: "FRAG_DOWNLOAD_FAILURE",
 	FRAG_DOWNLOAD_UNMUTED_SUCCESS: "FRAG_DOWNLOAD_UNMUTED_SUCCESS",
@@ -334,13 +335,31 @@ const getLog = async (logPath) => {
 		return null;
 	}
 };
+const logUnmuteResult = (unmuteResult, fragIdx) => {
+	if (unmuteResult) {
+		const { sameFormat, gzip, url } = unmuteResult;
+		return [
+			DL_EVENT.FRAG_UNMUTE_SUCCESS,
+			fragIdx,
+			sameFormat,
+			gzip,
+			url
+		];
+	} else return [DL_EVENT.FRAG_UNMUTE_FAILURE, fragIdx];
+};
+const logFragsForDownloading = (frags) => [
+	DL_EVENT.FRAGS_FOR_DOWNLOADING,
+	frags[0]?.idx || 0,
+	frags[frags.length - 1]?.idx || 0
+];
 const getFragsInfo = (log) => {
 	const fragsInfo = {};
 	const fragsGroupedByIdx = Object.groupBy(log.filter(([name]) => name.startsWith("FRAG_")), (e) => e[1]);
 	for (const [fragIdx, events] of Object.entries(fragsGroupedByIdx)) {
 		const fragInfo = {
 			isMuted: null,
-			unmuteResult: null,
+			unmuteSuccess: null,
+			unmuteSameFormat: null,
 			dlSuccess: null,
 			dlUnmutedSuccess: null,
 			replaceAudioSuccess: null
@@ -348,7 +367,9 @@ const getFragsInfo = (log) => {
 		fragsInfo[fragIdx] = fragInfo;
 		if (!events) continue;
 		fragInfo.isMuted = !!events.findLast(nameEq(DL_EVENT.FRAG_MUTED));
-		fragInfo.unmuteResult = events.findLast(nameEq(DL_EVENT.FRAG_UNMUTE_RESULT))?.[2] || null;
+		const unmuteSuccess = events.findLast(nameEq(DL_EVENT.FRAG_UNMUTE_SUCCESS));
+		fragInfo.unmuteSuccess = !!unmuteSuccess;
+		fragInfo.unmuteSameFormat = unmuteSuccess?.[2] || null;
 		fragInfo.dlSuccess = !!events.findLast(nameEq(DL_EVENT.FRAG_DOWNLOAD_SUCCESS));
 		fragInfo.dlUnmutedSuccess = !!events.findLast(nameEq(DL_EVENT.FRAG_DOWNLOAD_UNMUTED_SUCCESS));
 		fragInfo.replaceAudioSuccess = !!events.findLast(nameEq(DL_EVENT.FRAG_REPLACE_AUDIO_SUCCESS));
@@ -362,24 +383,28 @@ const showStats = async (logPath) => {
 		console.error("[stats] Cannot read log file");
 		return;
 	}
-	const frags = log.findLast(nameEq(DL_EVENT.FRAGS_FOR_DOWNLOADING))[1];
+	const ffd = log.findLast(nameEq(DL_EVENT.FRAGS_FOR_DOWNLOADING));
+	if (!ffd) return;
+	const [, fragStartIdx, fragEndIdx] = ffd;
+	if (fragStartIdx === 0 && fragEndIdx === 0) return;
 	const fragsInfo = getFragsInfo(log);
 	let downloaded = 0;
 	let muted = 0;
 	let unmutedSameFormat = 0;
 	let unmutedReplacedAudio = 0;
-	for (const frag of frags) {
-		const fragInfo = fragsInfo[frag.idx];
+	for (let i = fragStartIdx; i <= fragEndIdx; i += 1) {
+		const fragInfo = fragsInfo[i];
+		if (!fragInfo) continue;
 		if (fragInfo.dlSuccess) downloaded += 1;
 		if (fragInfo.isMuted) muted += 1;
-		if (!fragInfo.unmuteResult) continue;
+		if (!fragInfo.unmuteSuccess) continue;
 		if (!fragInfo.dlSuccess) continue;
-		if (fragInfo.unmuteResult.sameFormat) unmutedSameFormat += 1;
+		if (fragInfo.unmuteSameFormat) unmutedSameFormat += 1;
 		else if (fragInfo.dlUnmutedSuccess && fragInfo.replaceAudioSuccess) unmutedReplacedAudio += 1;
 	}
 	console.log("[stats] Fragments");
 	console.table({
-		Total: frags.length,
+		Total: fragEndIdx - fragStartIdx + 1,
 		Downloaded: downloaded,
 		Muted: muted,
 		"Unmuted total": unmutedSameFormat + unmutedReplacedAudio,
@@ -561,13 +586,12 @@ const downloadFile$1 = async (url, destPath, rateLimit, gzip = true) => {
 const [ARIA2C$1, CURL$1, FETCH$1] = DOWNLOADERS;
 const downloadFile = async (downloader, url, destPath, rateLimit, gzip, retries = 5) => {
 	if (downloader === CURL$1) return downloadFile$2(url, destPath, retries, rateLimit, gzip);
-	for (const [i] of Object.entries(Array.from({ length: retries }))) {
+	for (let i = 0; i < retries; i += 1) {
 		let retCode = RET_CODE.OK;
 		if (downloader === ARIA2C$1) retCode = await downloadFile$3(url, destPath, rateLimit, gzip);
 		if (downloader === FETCH$1) retCode = await downloadFile$1(url, destPath, rateLimit, gzip);
-		if (retCode === RET_CODE.OK || retCode === RET_CODE.HTTP_RETURNED_ERROR) return retCode;
-		setTimeout$1(1e3);
-		console.error(`[download] Cannot download the url. Retry ${i + 1}`);
+		if (retCode === RET_CODE.OK) return retCode;
+		await setTimeout$1(1e3);
 	}
 	return RET_CODE.UNKNOWN_ERROR;
 };
@@ -695,13 +719,13 @@ const getFormatSlug = (url) => url.split("/").at(-2);
 const getFragResponse = ([available, availableGzip], sameFormat, url) => {
 	if (available) return {
 		sameFormat,
-		url,
-		gzip: false
+		gzip: false,
+		url
 	};
 	if (availableGzip) return {
 		sameFormat,
-		url,
-		gzip: true
+		gzip: true,
+		url
 	};
 	return null;
 };
@@ -906,7 +930,7 @@ const downloadVideo = async (formats, videoInfo, args, getLiveVideoStatus$1 = ()
 		}
 		writeLog([DL_EVENT.FETCH_PLAYLIST_SUCCESS]);
 		frags = getFragsForDownloading(playlistUrl, playlist, args);
-		writeLog([DL_EVENT.FRAGS_FOR_DOWNLOADING, frags]);
+		writeLog(logFragsForDownloading(frags));
 		await fsp.writeFile(getPath.playlist(outputPath), playlist);
 		const hasNewFrags = frags.length > fragsCount;
 		fragsCount = frags.length;
@@ -922,7 +946,6 @@ const downloadVideo = async (formats, videoInfo, args, getLiveVideoStatus$1 = ()
 			const fragPath = getPath.frag(outputPath, frag.idx + 1);
 			const fragStats = await statsOrNull(fragPath);
 			if (fragStats) {
-				writeLog([DL_EVENT.FRAG_ALREADY_EXISTS, frag.idx]);
 				if (!downloadedFrags[i]) {
 					downloadedFrags[i] = {
 						size: fragStats.size,
@@ -941,11 +964,7 @@ const downloadVideo = async (formats, videoInfo, args, getLiveVideoStatus$1 = ()
 				writeLog([DL_EVENT.FRAG_MUTED, frag.idx]);
 				if (tryUnmute) {
 					unmutedFrag = await getUnmutedFrag(args.downloader, args.unmute, frag.url, formats);
-					writeLog([
-						DL_EVENT.FRAG_UNMUTE_RESULT,
-						frag.idx,
-						unmutedFrag
-					]);
+					writeLog(logUnmuteResult(unmutedFrag, frag.idx));
 				}
 			}
 			let fragGzip = void 0;
@@ -1254,13 +1273,9 @@ const tryUnmuteFrags = async (outputPath, log, frags, formats, args, writeLog) =
 		const fragN = frag.idx + 1;
 		const info = fragsInfo[frag.idx];
 		if (!info || !info.isMuted || info.replaceAudioSuccess) continue;
-		if (info.unmuteResult?.sameFormat && info.dlSuccess) continue;
+		if (info.unmuteSameFormat && info.dlSuccess) continue;
 		const unmutedFrag = await getUnmutedFrag(args.downloader, args.unmute, frag.url, formats);
-		writeLog([
-			DL_EVENT.FRAG_UNMUTE_RESULT,
-			frag.idx,
-			unmutedFrag
-		]);
+		writeLog(logUnmuteResult(unmutedFrag, frag.idx));
 		if (!unmutedFrag) {
 			console.log(`[unmute] Frag${fragN}: cannot unmute`);
 			continue;
@@ -1302,7 +1317,7 @@ const mergeFragments = async (outputPath, args) => {
 		if (getTryUnmute(videoInfo)) await tryUnmuteFrags(outputPath, log, frags, formats, args, writeLog);
 		else console.warn(NO_TRY_UNMUTE_MESSAGE);
 	}
-	writeLog([DL_EVENT.FRAGS_FOR_DOWNLOADING, frags]);
+	writeLog(logFragsForDownloading(frags));
 	await processUnmutedFrags(frags, outputPath, dir, writeLog);
 	await mergeFrags(args["merge-method"], frags, outputPath, true);
 	await showStats(logPath);
