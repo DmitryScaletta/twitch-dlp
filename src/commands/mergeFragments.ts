@@ -37,7 +37,7 @@ const tryUnmuteFrags = async (
   for (const frag of frags) {
     const fragN = frag.idx + 1;
     const info = fragsInfo[frag.idx];
-    if (!info || !info.isMuted || info.replaceAudioSuccess) continue;
+    if (!info || !info.muted || info.replaceAudioSuccess) continue;
     if (info.unmuteSameFormat && info.dlSuccess) continue;
 
     const unmutedFrag = await getUnmutedFrag(

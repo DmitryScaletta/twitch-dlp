@@ -103,7 +103,7 @@ export const logFragsForDownloading = (frags: Frag[]): DlEvent => [
 ];
 
 type FragInfo = {
-  isMuted: boolean | null;
+  muted: boolean | null;
   unmuteSuccess: boolean | null;
   unmuteSameFormat: boolean | null;
   dlSuccess: boolean | null;
@@ -119,7 +119,7 @@ export const getFragsInfo = (log: DlEvent[]) => {
   );
   for (const [fragIdx, events] of Object.entries(fragsGroupedByIdx)) {
     const fragInfo: FragInfo = {
-      isMuted: null,
+      muted: null,
       unmuteSuccess: null,
       unmuteSameFormat: null,
       dlSuccess: null,
@@ -128,7 +128,7 @@ export const getFragsInfo = (log: DlEvent[]) => {
     };
     fragsInfo[fragIdx] = fragInfo;
     if (!events) continue;
-    fragInfo.isMuted = !!events.findLast(nameEq(DL_EVENT.FRAG_MUTED));
+    fragInfo.muted = !!events.findLast(nameEq(DL_EVENT.FRAG_MUTED));
     const unmuteSuccess = events.findLast(nameEq(DL_EVENT.FRAG_UNMUTE_SUCCESS));
     fragInfo.unmuteSuccess = !!unmuteSuccess;
     fragInfo.unmuteSameFormat =
@@ -170,7 +170,7 @@ export const showStats = async (logPath: string) => {
     const fragInfo = fragsInfo[i];
     if (!fragInfo) continue;
     if (fragInfo.dlSuccess) downloaded += 1;
-    if (fragInfo.isMuted) muted += 1;
+    if (fragInfo.muted) muted += 1;
     if (!fragInfo.unmuteSuccess) continue;
     if (!fragInfo.dlSuccess) continue;
     if (fragInfo.unmuteSameFormat) {
@@ -180,13 +180,16 @@ export const showStats = async (logPath: string) => {
     }
   }
 
-  console.log('[stats] Fragments');
-  console.table({
+  const stats = {
     Total: fragEndIdx - fragStartIdx + 1,
     Downloaded: downloaded,
     Muted: muted,
+  };
+  const statsUnmuted = {
     'Unmuted total': unmutedSameFormat + unmutedReplacedAudio,
     'Unmuted (same format)': unmutedSameFormat,
     'Unmuted (replaced audio)': unmutedReplacedAudio,
-  });
+  };
+  console.log('[stats] Fragments');
+  console.table(muted > 0 ? { ...stats, ...statsUnmuted } : stats);
 };
