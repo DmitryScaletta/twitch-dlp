@@ -46,11 +46,12 @@ export const showProgress = (
   const estFullSize = avgFragSize * fragsCount;
   const estSizeLeft = estFullSize - downloadedSize;
   const estTimeLeftSec = currentSpeedBps ? estSizeLeft / currentSpeedBps : 0;
-  const downloadedPercent = estFullSize ? downloadedSize / estFullSize : 0;
+  let downloadedPercent = estFullSize ? downloadedSize / estFullSize : 0;
+  downloadedPercent = Math.min(100, downloadedPercent) || 0;
 
   const progress = [
     '[download] ',
-    chalk.cyan(percentFmt.format(downloadedPercent || 0).padStart(6, ' ')),
+    chalk.cyan(percentFmt.format(downloadedPercent).padStart(6, ' ')),
     ' of ~ ',
     formatSize(estFullSize || 0).padStart(9, ' '),
     ' at ',
