@@ -298,6 +298,15 @@ const mergeFrags = async (method, frags, outputPath, keepFragments) => {
 };
 
 //#endregion
+//#region src/lib/groupBy.ts
+const groupBy = (array, getKey) => array.reduce((groups, item) => {
+	const key = getKey(item);
+	if (!groups[key]) groups[key] = [];
+	groups[key].push(item);
+	return groups;
+}, {});
+
+//#endregion
 //#region src/stats.ts
 const DL_EVENT = {
 	INIT: "INIT",
@@ -354,10 +363,10 @@ const logFragsForDownloading = (frags) => [
 ];
 const getFragsInfo = (log) => {
 	const fragsInfo = {};
-	const fragsGroupedByIdx = Object.groupBy(log.filter(([name]) => name.startsWith("FRAG_")), (e) => e[1]);
+	const fragsGroupedByIdx = groupBy(log.filter(([name]) => name.startsWith("FRAG_")), (e) => e[1]);
 	for (const [fragIdx, events] of Object.entries(fragsGroupedByIdx)) {
 		const fragInfo = {
-			isMuted: null,
+			muted: null,
 			unmuteSuccess: null,
 			unmuteSameFormat: null,
 			dlSuccess: null,
@@ -366,7 +375,7 @@ const getFragsInfo = (log) => {
 		};
 		fragsInfo[fragIdx] = fragInfo;
 		if (!events) continue;
-		fragInfo.isMuted = !!events.findLast(nameEq(DL_EVENT.FRAG_MUTED));
+		fragInfo.muted = !!events.findLast(nameEq(DL_EVENT.FRAG_MUTED));
 		const unmuteSuccess = events.findLast(nameEq(DL_EVENT.FRAG_UNMUTE_SUCCESS));
 		fragInfo.unmuteSuccess = !!unmuteSuccess;
 		fragInfo.unmuteSameFormat = unmuteSuccess?.[2] || null;
@@ -396,21 +405,27 @@ const showStats = async (logPath) => {
 		const fragInfo = fragsInfo[i];
 		if (!fragInfo) continue;
 		if (fragInfo.dlSuccess) downloaded += 1;
-		if (fragInfo.isMuted) muted += 1;
+		if (fragInfo.muted) muted += 1;
 		if (!fragInfo.unmuteSuccess) continue;
 		if (!fragInfo.dlSuccess) continue;
 		if (fragInfo.unmuteSameFormat) unmutedSameFormat += 1;
 		else if (fragInfo.dlUnmutedSuccess && fragInfo.replaceAudioSuccess) unmutedReplacedAudio += 1;
 	}
-	console.log("[stats] Fragments");
-	console.table({
+	const stats = {
 		Total: fragEndIdx - fragStartIdx + 1,
 		Downloaded: downloaded,
-		Muted: muted,
+		Muted: muted
+	};
+	const statsUnmuted = {
 		"Unmuted total": unmutedSameFormat + unmutedReplacedAudio,
 		"Unmuted (same format)": unmutedSameFormat,
 		"Unmuted (replaced audio)": unmutedReplacedAudio
-	});
+	};
+	console.log("[stats] Fragments");
+	console.table(muted > 0 ? {
+		...stats,
+		...statsUnmuted
+	} : stats);
 };
 
 //#endregion
@@ -862,10 +877,11 @@ const showProgress = (downloadedFrags, fragsCount) => {
 	const estFullSize = avgFragSize * fragsCount;
 	const estSizeLeft = estFullSize - downloadedSize;
 	const estTimeLeftSec = currentSpeedBps ? estSizeLeft / currentSpeedBps : 0;
-	const downloadedPercent = estFullSize ? downloadedSize / estFullSize : 0;
+	let downloadedPercent = estFullSize ? downloadedSize / estFullSize : 0;
+	downloadedPercent = Math.min(100, downloadedPercent) || 0;
 	const progress = [
 		"[download] ",
-		chalk.cyan(percentFmt.format(downloadedPercent || 0).padStart(6, " ")),
+		chalk.cyan(percentFmt.format(downloadedPercent).padStart(6, " ")),
 		" of ~ ",
 		formatSize(estFullSize || 0).padStart(9, " "),
 		" at ",
@@ -1272,7 +1288,7 @@ const tryUnmuteFrags = async (outputPath, log, frags, formats, args, writeLog) =
 	for (const frag of frags) {
 		const fragN = frag.idx + 1;
 		const info = fragsInfo[frag.idx];
-		if (!info || !info.isMuted || info.replaceAudioSuccess) continue;
+		if (!info || !info.muted || info.replaceAudioSuccess) continue;
 		if (info.unmuteSameFormat && info.dlSuccess) continue;
 		const unmutedFrag = await getUnmutedFrag(args.downloader, args.unmute, frag.url, formats);
 		writeLog(logUnmuteResult(unmutedFrag, frag.idx));
