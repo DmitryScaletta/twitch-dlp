@@ -1,4 +1,5 @@
 import fsp from 'node:fs/promises';
+import { groupBy } from './lib/groupBy.ts';
 import type { AppArgs } from './main.ts';
 import type {
   DownloadFormat,
@@ -113,7 +114,7 @@ type FragInfo = {
 
 export const getFragsInfo = (log: DlEvent[]) => {
   const fragsInfo: Record<string | number, FragInfo> = {};
-  const fragsGroupedByIdx = Object.groupBy(
+  const fragsGroupedByIdx = groupBy(
     log.filter(([name]) => name.startsWith('FRAG_')),
     (e) => e[1] as number,
   );
