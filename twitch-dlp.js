@@ -200,13 +200,25 @@ const mergeFrags$2 = async (frags, outputPath, keepFragments) => {
 
 //#endregion
 //#region src/utils/getPath.ts
+const ILLEGAL_PATH_CHARS_MAP = {
+	"\\": "⧹",
+	"/": "⧸",
+	":": "：",
+	"*": "＊",
+	"?": "？",
+	"\"": "＂",
+	"<": "＜",
+	">": "＞",
+	"|": "｜"
+};
+const sanitizeFilename = (str) => str.replace(/[\\/:*?"<>|]/g, (c) => ILLEGAL_PATH_CHARS_MAP[c]);
 const getPath = {
 	output: (template, videoInfo) => {
 		let finalTemplate = template;
 		for (const [name, value] of Object.entries(videoInfo)) {
 			let newValue = value ? String(value) : "";
 			if (name.endsWith("_date")) newValue = newValue.slice(0, 10);
-			newValue = newValue.replace(/[/\\?%*:|"'<>]/g, "");
+			newValue = sanitizeFilename(newValue);
 			finalTemplate = finalTemplate.replaceAll(`%(${name})s`, newValue);
 		}
 		return path.resolve(finalTemplate);
@@ -292,6 +304,10 @@ const mergeFrags$1 = async (frags, outputPath, keepFragments) => {
 //#region src/merge/index.ts
 const [FFCONCAT, APPEND] = MERGE_METHODS;
 const mergeFrags = async (method, frags, outputPath, keepFragments) => {
+	if (frags.length === 0) {
+		console.error(`${chalk.red("ERROR:")} No fragments were downloaded`);
+		return 1;
+	}
 	if (method === FFCONCAT) return mergeFrags$1(frags, outputPath, keepFragments);
 	if (method === APPEND) return mergeFrags$2(frags, outputPath, keepFragments);
 	throw new Error(`Unknown merge method: ${method}. Available methods: ${MERGE_METHODS}`);
@@ -618,6 +634,23 @@ const IS_URLS_AVAILABLE_MAP = {
 const isUrlsAvailable = async (downloader, urls) => IS_URLS_AVAILABLE_MAP[downloader](urls);
 
 //#endregion
+//#region src/lib/isTsFile.ts
+const PACKET_SIZE = 188;
+const TS_SYNC_BYTE = 71;
+const isTsFile = async (filePath, packetsToCheck = 1) => {
+	const fd = await fsp.open(filePath, "r");
+	try {
+		const buf = Buffer.alloc(PACKET_SIZE * packetsToCheck);
+		const { bytesRead } = await fd.read(buf, 0, buf.length, 0);
+		if (bytesRead < PACKET_SIZE * packetsToCheck) return false;
+		for (let i = 0; i < packetsToCheck; i += 1) if (buf[i * PACKET_SIZE] !== TS_SYNC_BYTE) return false;
+		return true;
+	} finally {
+		await fd.close();
+	}
+};
+
+//#endregion
 //#region src/lib/unlinkIfAny.ts
 const unlinkIfAny = async (path$1) => {
 	try {
@@ -638,7 +671,11 @@ const downloadFrag = async (downloader, url, destPath, limitRateArg, gzip) => {
 		return null;
 	}
 	await fsp.rename(destPathTmp, destPath);
-	const { size } = await fsp.stat(destPath);
+	const [{ size }, isTs] = await Promise.all([fsp.stat(destPath), isTsFile(destPath)]);
+	if (!isTs) {
+		await fsp.unlink(destPath);
+		return null;
+	}
 	return {
 		size,
 		time: endTime - startTime
@@ -714,6 +751,49 @@ const getFragsForDownloading = (playlistUrl, playlistContent, args) => {
 	const firstFragIdx = frags.findLastIndex((frag) => frag.offset <= startTime);
 	const lastFragIdx = endTime === Infinity ? frags.length - 1 : frags.findIndex((frag) => frag.offset >= endTime);
 	return frags.slice(firstFragIdx, lastFragIdx + 1);
+};
+
+//#endregion
+//#region src/utils/getLiveVideoStatus.ts
+const WAIT_AFTER_STREAM_ENDS_SECONDS = 8 * 60;
+let lastLiveTimestamp = Date.now();
+const getIsVideoLive = (thumbUrl) => /\/404_processing_[^.?#]+\.png/.test(thumbUrl);
+const getSecondsAfterStreamEnded = (videoMeta) => {
+	const started = new Date(videoMeta.publishedAt);
+	const ended = new Date(started.getTime() + videoMeta.lengthSeconds * 1e3);
+	return Math.floor((Date.now() - ended.getTime()) / 1e3);
+};
+const checkStatusAfterStreamEnded = (secondsAfterEnd, frags) => {
+	if (frags.length > 10) {
+		const [lastFrag, ...preLast9Frags] = frags.slice(-10).reverse();
+		const duration = preLast9Frags[0].duration;
+		if (preLast9Frags.every((f) => f.duration === duration) && duration !== lastFrag.duration) return LIVE_VIDEO_STATUS.FINALIZED;
+	}
+	return secondsAfterEnd - WAIT_AFTER_STREAM_ENDS_SECONDS > 0 ? LIVE_VIDEO_STATUS.FINALIZED : LIVE_VIDEO_STATUS.OFFLINE;
+};
+const getLiveVideoStatus = async ({ videoId, streamId, channelLogin }, frags) => {
+	let videoMeta = null;
+	if (videoId) {
+		videoMeta = await getVideoMetadata(videoId);
+		if (videoMeta) {
+			if (getIsVideoLive(videoMeta.previewThumbnailURL)) {
+				lastLiveTimestamp = Date.now();
+				return LIVE_VIDEO_STATUS.ONLINE;
+			}
+			const secondsAfterEnd = getSecondsAfterStreamEnded(videoMeta);
+			return checkStatusAfterStreamEnded(secondsAfterEnd, frags);
+		}
+	}
+	if (!videoId || !videoMeta) {
+		const streamMeta = await getStreamMetadata(channelLogin);
+		if (streamMeta?.stream?.id === streamId) {
+			lastLiveTimestamp = Date.now();
+			return LIVE_VIDEO_STATUS.ONLINE;
+		}
+		const secondsAfterEnd = (Date.now() - lastLiveTimestamp) / 1e3;
+		return checkStatusAfterStreamEnded(secondsAfterEnd, frags);
+	}
+	throw new Error("Cannot determine stream status");
 };
 
 //#endregion
@@ -870,15 +950,17 @@ const formatSize = (n) => {
 	return `${value.toFixed(2)}${UNITS[i]}`;
 };
 const showProgress = (downloadedFrags, fragsCount) => {
-	const downloadedSize = downloadedFrags.reduce((acc, f) => acc + f.size, 0);
-	const avgFragSize = downloadedFrags.length ? downloadedSize / downloadedFrags.length : 0;
-	const last5 = downloadedFrags.filter((f) => f.time !== 0).slice(-5);
+	const dlFrags = downloadedFrags.values().toArray();
+	const dlSize = dlFrags.reduce((acc, f) => acc + f.size, 0);
+	const avgFragSize = dlFrags.length ? dlSize / dlFrags.length : 0;
+	const last5 = dlFrags.filter((f) => f.time !== 0).slice(-5);
 	const currentSpeedBps = last5.length ? last5.map((f) => f.size / f.time * 1e3).reduce((a, b) => a + b, 0) / last5.length : 0;
 	const estFullSize = avgFragSize * fragsCount;
-	const estSizeLeft = estFullSize - downloadedSize;
-	const estTimeLeftSec = currentSpeedBps ? estSizeLeft / currentSpeedBps : 0;
-	let downloadedPercent = estFullSize ? downloadedSize / estFullSize : 0;
+	const estSizeLeft = estFullSize - dlSize;
+	let estTimeLeftSec = currentSpeedBps ? estSizeLeft / currentSpeedBps : 0;
+	let downloadedPercent = estFullSize ? dlSize / estFullSize : 0;
 	downloadedPercent = Math.min(100, downloadedPercent) || 0;
+	if (estTimeLeftSec < 0) estTimeLeftSec = 0;
 	const progress = [
 		"[download] ",
 		chalk.cyan(percentFmt.format(downloadedPercent).padStart(6, " ")),
@@ -887,8 +969,8 @@ const showProgress = (downloadedFrags, fragsCount) => {
 		" at ",
 		chalk.green(formatSpeed(currentSpeedBps || 0).padStart(11, " ")),
 		" ETA ",
-		chalk.yellow(timeFmt.format((estTimeLeftSec || 0) * 1e3)),
-		` (frag ${downloadedFrags.length}/${fragsCount})\r`
+		chalk.yellow(timeFmt.format(estTimeLeftSec * 1e3)),
+		` (frag ${dlFrags.length}/${fragsCount})\r`
 	].join("");
 	process.stdout.write(progress);
 };
@@ -898,20 +980,20 @@ const showProgress = (downloadedFrags, fragsCount) => {
 const DEFAULT_OUTPUT_TEMPLATE = "%(title)s [%(id)s].%(ext)s";
 const WAIT_BETWEEN_CYCLES_SEC = 60;
 const RETRY_MESSAGE = `Retry every ${WAIT_BETWEEN_CYCLES_SEC} second(s)`;
-const downloadVideo = async (formats, videoInfo, args, getLiveVideoStatus$1 = () => LIVE_VIDEO_STATUS.FINALIZED) => {
+const downloadVideo = async (formats, videoInfo, args, liveVideoMeta) => {
 	if (args["list-formats"]) {
 		console.table(formats.map(({ url,...rest }) => rest));
 		process.exit();
 	}
 	if (!await isInstalled("ffmpeg")) throw new Error("ffmpeg is not installed. Install it from https://ffmpeg.org/");
-	const dlFormat = args.format === "best" ? formats[0] : formats.find((f) => f.format_id === args.format);
+	const dlFormat = args.format === "best" ? formats[0] : formats.find((f) => f.format_id.toLowerCase() === args.format.toLowerCase());
 	if (!dlFormat) throw new Error("Wrong format");
 	const outputPath = getPath.output(args.output || DEFAULT_OUTPUT_TEMPLATE, videoInfo);
 	let liveVideoStatus;
 	let frags;
 	let fragsCount = 0;
 	let playlistUrl = dlFormat.url;
-	const downloadedFrags = [];
+	const downloadedFrags = new Map();
 	const logPath = getPath.log(outputPath);
 	const writeLog = createLogger(logPath);
 	const tryUnmute = getTryUnmute(videoInfo);
@@ -923,9 +1005,10 @@ const downloadVideo = async (formats, videoInfo, args, getLiveVideoStatus$1 = ()
 		playlistUrl,
 		videoInfo
 	}]);
+	const getLiveVideoStatusFn = liveVideoMeta ? () => getLiveVideoStatus(liveVideoMeta, frags) : () => LIVE_VIDEO_STATUS.FINALIZED;
 	while (true) {
 		let playlist;
-		[playlist, liveVideoStatus] = await Promise.all([fetchText(playlistUrl, "playlist"), getLiveVideoStatus$1()]);
+		[playlist, liveVideoStatus] = await Promise.all([fetchText(playlistUrl, "playlist"), getLiveVideoStatusFn()]);
 		writeLog([DL_EVENT.LIVE_VIDEO_STATUS, liveVideoStatus]);
 		if (!playlist) {
 			writeLog([DL_EVENT.FETCH_PLAYLIST_FAILURE]);
@@ -962,11 +1045,11 @@ const downloadVideo = async (formats, videoInfo, args, getLiveVideoStatus$1 = ()
 			const fragPath = getPath.frag(outputPath, frag.idx + 1);
 			const fragStats = await statsOrNull(fragPath);
 			if (fragStats) {
-				if (!downloadedFrags[i]) {
-					downloadedFrags[i] = {
+				if (!downloadedFrags.has(i)) {
+					downloadedFrags.set(i, {
 						size: fragStats.size,
 						time: 0
-					};
+					});
 					showProgress(downloadedFrags, fragsCount);
 				}
 				continue;
@@ -989,7 +1072,7 @@ const downloadVideo = async (formats, videoInfo, args, getLiveVideoStatus$1 = ()
 				fragGzip = unmutedFrag.gzip;
 			}
 			let fragMeta = await downloadFrag(args.downloader, frag.url, fragPath, args["limit-rate"], fragGzip);
-			downloadedFrags.push(fragMeta || {
+			downloadedFrags.set(i, fragMeta || {
 				size: 0,
 				time: 0
 			});
@@ -1167,6 +1250,7 @@ const getLiveVideoInfo = async (streamMeta, channelLogin) => {
 	let videoInfo = null;
 	let videoId = null;
 	if (!streamMeta.stream) throw new Error();
+	const streamId = streamMeta.stream.id;
 	const broadcast = await getBroadcast(streamMeta.id);
 	if (broadcast?.stream?.archiveVideo) {
 		videoId = broadcast.stream.archiveVideo.id;
@@ -1185,43 +1269,12 @@ const getLiveVideoInfo = async (streamMeta, channelLogin) => {
 	return {
 		formats,
 		videoInfo,
-		videoId
+		liveVideoMeta: {
+			videoId,
+			streamId,
+			channelLogin
+		}
 	};
-};
-
-//#endregion
-//#region src/utils/getLiveVideoStatus.ts
-const WAIT_AFTER_STREAM_ENDED_SECONDS = 8 * 60;
-let lastLiveTimestamp = Date.now();
-const getIsVideoLive = (thumbUrl) => /\/404_processing_[^.?#]+\.png/.test(thumbUrl);
-const getSecondsAfterStreamEnded = (videoMeta) => {
-	const started = new Date(videoMeta.publishedAt);
-	const ended = new Date(started.getTime() + videoMeta.lengthSeconds * 1e3);
-	return Math.floor((Date.now() - ended.getTime()) / 1e3);
-};
-const getLiveVideoStatus = async (videoId, streamId, channelLogin) => {
-	let videoMeta = null;
-	if (videoId) {
-		videoMeta = await getVideoMetadata(videoId);
-		if (videoMeta) {
-			if (getIsVideoLive(videoMeta.previewThumbnailURL)) {
-				lastLiveTimestamp = Date.now();
-				return LIVE_VIDEO_STATUS.ONLINE;
-			}
-			const secondsAfterEnd = getSecondsAfterStreamEnded(videoMeta);
-			return secondsAfterEnd - WAIT_AFTER_STREAM_ENDED_SECONDS > 0 ? LIVE_VIDEO_STATUS.FINALIZED : LIVE_VIDEO_STATUS.OFFLINE;
-		}
-	}
-	if (!videoId || !videoMeta) {
-		const streamMeta = await getStreamMetadata(channelLogin);
-		if (streamMeta?.stream?.id === streamId) {
-			lastLiveTimestamp = Date.now();
-			return LIVE_VIDEO_STATUS.ONLINE;
-		}
-		const secondsAfterEnd = (Date.now() - lastLiveTimestamp) / 1e3;
-		return secondsAfterEnd - WAIT_AFTER_STREAM_ENDED_SECONDS > 0 ? LIVE_VIDEO_STATUS.FINALIZED : LIVE_VIDEO_STATUS.OFFLINE;
-	}
-	throw new Error("Cannot determine stream status");
 };
 
 //#endregion
@@ -1242,9 +1295,8 @@ const downloadByChannelLogin = async (channelLogin, args) => {
 		if (isLive && isLiveFromStart) {
 			const liveVideoInfo = await getLiveVideoInfo(streamMeta, channelLogin);
 			if (liveVideoInfo) {
-				const { formats, videoInfo, videoId } = liveVideoInfo;
-				const getLiveVideoStatusFn = () => getLiveVideoStatus(videoId, streamMeta.stream.id, channelLogin);
-				await downloadVideo(formats, videoInfo, args, getLiveVideoStatusFn);
+				const { formats, videoInfo, liveVideoMeta } = liveVideoInfo;
+				await downloadVideo(formats, videoInfo, args, liveVideoMeta);
 			} else {
 				let message = `[live-from-start] Cannot find the playlist`;
 				if (isRetry) {
@@ -1368,7 +1420,7 @@ const showVersion = async () => {
 };
 
 //#endregion
-//#region src/utils/getDownloader.ts
+//#region src/utils/args/getDownloader.ts
 const [ARIA2C, CURL, FETCH] = DOWNLOADERS;
 const getDownloader = async (downloaderArg) => {
 	if (downloaderArg === FETCH) return FETCH;
@@ -1385,7 +1437,7 @@ const getDownloader = async (downloaderArg) => {
 };
 
 //#endregion
-//#region src/utils/parseDownloadSectionsArg.ts
+//#region src/utils/args/parseDownloadSectionsArg.ts
 const DOWNLOAD_SECTIONS_ERROR = "Wrong --download-sections syntax";
 const DOWNLOAD_SECTIONS_REGEX = /^\*(?:(?:(?<startH>\d{1,2}):)?(?<startM>\d{1,2}):)?(?:(?<startS>\d{1,2}))-(?:(?:(?:(?<endH>\d{1,2}):)?(?<endM>\d{1,2}):)?(?:(?<endS>\d{1,2}))|(?<inf>inf))$/;
 const parseDownloadSectionsArg = (downloadSectionsArg) => {
@@ -1407,7 +1459,23 @@ const parseDownloadSectionsArg = (downloadSectionsArg) => {
 };
 
 //#endregion
-//#region src/utils/parseLink.ts
+//#region src/utils/args/normalizeArgs.ts
+const normalizeArgs = async (args) => {
+	const newArgs = { ...args };
+	newArgs.downloader = await getDownloader(args.downloader);
+	newArgs["download-sections"] = parseDownloadSectionsArg(args["download-sections"]);
+	if (args["retry-streams"]) {
+		const delay = Number.parseInt(args["retry-streams"]);
+		if (!delay) throw new Error("Wrong --retry-streams delay");
+		if (delay < 10) throw new Error("Min --retry-streams delay is 10");
+		newArgs["retry-streams"] = delay;
+	}
+	if (!MERGE_METHODS.includes(args["merge-method"])) throw new Error(`Unknown merge method. Available: ${MERGE_METHODS}`);
+	return newArgs;
+};
+
+//#endregion
+//#region src/utils/args/parseLink.ts
 const VOD_PATH_REGEX = /^video:(?<vodPath>(?<channelLogin>\w+)_(?<videoId>\d+)_(?<startTimestamp>\d+))$/;
 const VOD_REGEX = /^https:\/\/(?:www\.)?twitch\.tv\/videos\/(?<videoId>\d+)/;
 const CHANNEL_REGEX = /^https:\/\/(?:www\.)?twitch\.tv\/(?<channelLogin>[^/#?]+)/;
@@ -1489,19 +1557,6 @@ const getArgs = () => parseArgs({
 	},
 	allowPositionals: true
 });
-const normalizeArgs = async (args) => {
-	const newArgs = { ...args };
-	newArgs.downloader = await getDownloader(args.downloader);
-	newArgs["download-sections"] = parseDownloadSectionsArg(args["download-sections"]);
-	if (args["retry-streams"]) {
-		const delay = Number.parseInt(args["retry-streams"]);
-		if (!delay) throw new Error("Wrong --retry-streams delay");
-		if (delay < 10) throw new Error("Min --retry-streams delay is 10");
-		newArgs["retry-streams"] = delay;
-	}
-	if (!MERGE_METHODS.includes(args["merge-method"])) throw new Error(`Unknown merge method. Available: ${MERGE_METHODS}`);
-	return newArgs;
-};
 const main = async () => {
 	const parsedArgs = getArgs();
 	const args = await normalizeArgs(parsedArgs.values);
@@ -1518,3 +1573,4 @@ const main = async () => {
 main().catch((e) => console.error(chalk.red("ERROR:"), e.message));
 
 //#endregion
+export { getArgs };
