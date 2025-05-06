@@ -82,7 +82,5 @@ export const getUnmutedFrag = async (
     return getFragResponse(responses[idx], false, urls[idx]);
   }
 
-  throw new Error(
-    `Unknown unmute policy: ${unmuteArg}. Available: ${Object.values(UNMUTE)}`,
-  );
+  throw new Error();
 };

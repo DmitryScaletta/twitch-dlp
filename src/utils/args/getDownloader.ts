@@ -24,6 +24,6 @@ export const getDownloader = async (downloaderArg: string) => {
   }
 
   throw new Error(
-    `Unknown downloader: ${downloaderArg}. Available: ${DOWNLOADERS}`,
+    `Unknown downloader: ${downloaderArg}. Available: ${DOWNLOADERS.join(', ')}`,
   );
 };

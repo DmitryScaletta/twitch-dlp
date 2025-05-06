@@ -25,7 +25,5 @@ export const mergeFrags = async (
     return append.mergeFrags(frags, outputPath, keepFragments);
   }
 
-  throw new Error(
-    `Unknown merge method: ${method}. Available methods: ${MERGE_METHODS}`,
-  );
+  throw new Error();
 };
