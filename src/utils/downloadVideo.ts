@@ -58,7 +58,9 @@ export const downloadVideo = async (
   const dlFormat =
     args.format === 'best'
       ? formats[0]
-      : formats.find((f) => f.format_id === args.format);
+      : formats.find(
+          (f) => f.format_id.toLowerCase() === args.format.toLowerCase(),
+        );
   if (!dlFormat) throw new Error('Wrong format');
 
   const outputPath = getPath.output(
