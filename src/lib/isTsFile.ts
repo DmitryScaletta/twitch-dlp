@@ -1,4 +1,4 @@
-import fsp from 'fs/promises';
+import fsp from 'node:fs/promises';
 
 const PACKET_SIZE = 188;
 const TS_SYNC_BYTE = 0x47;
