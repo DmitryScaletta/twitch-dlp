@@ -15,7 +15,9 @@ import {
 import type {
   AppArgs,
   DownloadFormat,
+  Frag,
   FragMetadata,
+  LiveVideoMeta,
   LiveVideoStatus,
   VideoInfo,
 } from '../types.ts';
@@ -23,6 +25,7 @@ import { downloadFrag } from './downloadFrag.ts';
 import { fetchText } from './fetchText.ts';
 import { getExistingFrags } from './getExistingFrags.ts';
 import { getFragsForDownloading } from './getFragsForDownloading.ts';
+import { getLiveVideoStatus } from './getLiveVideoStatus.ts';
 import { getPath } from './getPath.ts';
 import { getTryUnmute } from './getTryUnmute.ts';
 import { getUnmutedFrag, type UnmutedFrag } from './getUnmutedFrag.ts';
@@ -39,10 +42,7 @@ export const downloadVideo = async (
   formats: DownloadFormat[],
   videoInfo: VideoInfo,
   args: AppArgs,
-  getLiveVideoStatus: (
-    currentStreamId?: string,
-  ) => LiveVideoStatus | Promise<LiveVideoStatus> = () =>
-    LIVE_VIDEO_STATUS.FINALIZED,
+  liveVideoMeta?: LiveVideoMeta,
 ) => {
   if (args['list-formats']) {
     console.table(formats.map(({ url, ...rest }) => rest));
@@ -68,7 +68,7 @@ export const downloadVideo = async (
     videoInfo,
   );
   let liveVideoStatus: LiveVideoStatus;
-  let frags;
+  let frags: Frag[];
   let fragsCount = 0;
   let playlistUrl = dlFormat.url;
   const downloadedFrags = new Map<number, FragMetadata>();
@@ -84,11 +84,15 @@ export const downloadVideo = async (
     { args, formats, outputPath, playlistUrl, videoInfo },
   ]);
 
+  const getLiveVideoStatusFn = liveVideoMeta
+    ? () => getLiveVideoStatus(liveVideoMeta, frags)
+    : () => LIVE_VIDEO_STATUS.FINALIZED;
+
   while (true) {
     let playlist;
     [playlist, liveVideoStatus] = await Promise.all([
       fetchText(playlistUrl, 'playlist'),
-      getLiveVideoStatus(),
+      getLiveVideoStatusFn(),
     ]);
     writeLog([DL_EVENT.LIVE_VIDEO_STATUS, liveVideoStatus]);
     // workaround for some old muted highlights

@@ -21,6 +21,11 @@ export type AppArgs = Omit<
 
 export type LiveVideoStatus =
   (typeof LIVE_VIDEO_STATUS)[keyof typeof LIVE_VIDEO_STATUS];
+export type LiveVideoMeta = {
+  videoId: string | null;
+  streamId: string;
+  channelLogin: string;
+};
 
 export type Frag = {
   /** Frag index in the original playlist */

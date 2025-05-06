@@ -20,6 +20,7 @@ export const getLiveVideoInfo = async (
 
   if (!streamMeta.stream) throw new Error(); // make ts happy
 
+  const streamId = streamMeta.stream.id;
   const broadcast = await api.getBroadcast(streamMeta.id);
 
   // public VOD
@@ -45,5 +46,13 @@ export const getLiveVideoInfo = async (
 
   if (formats.length === 0 || !videoInfo) return null;
 
-  return { formats, videoInfo, videoId };
+  return {
+    formats,
+    videoInfo,
+    liveVideoMeta: {
+      videoId,
+      streamId,
+      channelLogin,
+    },
+  };
 };

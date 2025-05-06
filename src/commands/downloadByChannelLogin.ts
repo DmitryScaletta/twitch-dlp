@@ -4,7 +4,6 @@ import type { AppArgs } from '../types.ts';
 import { downloadVideo } from '../utils/downloadVideo.ts';
 import { downloadWithStreamlink } from '../utils/downloadWithStreamlink.ts';
 import { getLiveVideoInfo } from '../utils/getLiveVideoInfo.ts';
-import { getLiveVideoStatus } from '../utils/getLiveVideoStatus.ts';
 
 export const downloadByChannelLogin = async (
   channelLogin: string,
@@ -42,10 +41,8 @@ export const downloadByChannelLogin = async (
     if (isLive && isLiveFromStart) {
       const liveVideoInfo = await getLiveVideoInfo(streamMeta, channelLogin);
       if (liveVideoInfo) {
-        const { formats, videoInfo, videoId } = liveVideoInfo;
-        const getLiveVideoStatusFn = () =>
-          getLiveVideoStatus(videoId, streamMeta.stream!.id, channelLogin);
-        await downloadVideo(formats, videoInfo, args, getLiveVideoStatusFn);
+        const { formats, videoInfo, liveVideoMeta } = liveVideoInfo;
+        await downloadVideo(formats, videoInfo, args, liveVideoMeta);
       } else {
         let message = `[live-from-start] Cannot find the playlist`;
         if (isRetry) {

@@ -1,9 +1,9 @@
 import * as api from '../api/twitch.ts';
 import { LIVE_VIDEO_STATUS } from '../constants.ts';
-import type { LiveVideoStatus } from '../types.ts';
+import type { Frag, LiveVideoMeta, LiveVideoStatus } from '../types.ts';
 
 // To be able to download full vod we need to wait about 5-10 minutes after the end of the stream
-const WAIT_AFTER_STREAM_ENDED_SECONDS = 8 * 60;
+const WAIT_AFTER_STREAM_ENDS_SECONDS = 8 * 60;
 
 let lastLiveTimestamp = Date.now();
 
@@ -16,10 +16,30 @@ const getSecondsAfterStreamEnded = (videoMeta: api.VideoMetadata) => {
   return Math.floor((Date.now() - ended.getTime()) / 1000);
 };
 
+const checkStatusAfterStreamEnded = (
+  secondsAfterEnd: number,
+  frags: Frag[],
+) => {
+  // assume that a video is finalized if last frag duration differs from pre last 9 frags
+  if (frags.length > 10) {
+    const [lastFrag, ...preLast9Frags] = frags.slice(-10).reverse();
+    const duration = preLast9Frags[0].duration;
+    if (
+      preLast9Frags.every((f) => f.duration === duration) &&
+      duration !== lastFrag.duration
+    ) {
+      return LIVE_VIDEO_STATUS.FINALIZED;
+    }
+  }
+
+  return secondsAfterEnd - WAIT_AFTER_STREAM_ENDS_SECONDS > 0
+    ? LIVE_VIDEO_STATUS.FINALIZED
+    : LIVE_VIDEO_STATUS.OFFLINE;
+};
+
 export const getLiveVideoStatus = async (
-  videoId: string | null,
-  streamId: string,
-  channelLogin: string,
+  { videoId, streamId, channelLogin }: LiveVideoMeta,
+  frags: Frag[],
 ): Promise<LiveVideoStatus> => {
   let videoMeta: api.VideoMetadata | null = null;
 
@@ -30,10 +50,9 @@ export const getLiveVideoStatus = async (
         lastLiveTimestamp = Date.now();
         return LIVE_VIDEO_STATUS.ONLINE;
       }
+
       const secondsAfterEnd = getSecondsAfterStreamEnded(videoMeta);
-      return secondsAfterEnd - WAIT_AFTER_STREAM_ENDED_SECONDS > 0
-        ? LIVE_VIDEO_STATUS.FINALIZED
-        : LIVE_VIDEO_STATUS.OFFLINE;
+      return checkStatusAfterStreamEnded(secondsAfterEnd, frags);
     }
   }
 
@@ -46,9 +65,7 @@ export const getLiveVideoStatus = async (
     }
 
     const secondsAfterEnd = (Date.now() - lastLiveTimestamp) / 1000;
-    return secondsAfterEnd - WAIT_AFTER_STREAM_ENDED_SECONDS > 0
-      ? LIVE_VIDEO_STATUS.FINALIZED
-      : LIVE_VIDEO_STATUS.OFFLINE;
+    return checkStatusAfterStreamEnded(secondsAfterEnd, frags);
   }
 
   throw new Error('Cannot determine stream status');
