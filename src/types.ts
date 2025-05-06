@@ -3,9 +3,21 @@ import type {
   LIVE_VIDEO_STATUS,
   MERGE_METHODS,
 } from './constants.ts';
+import type { getArgs } from './main.ts';
 
 export type Downloader = (typeof DOWNLOADERS)[number];
 export type MergeMethod = (typeof MERGE_METHODS)[number];
+
+export type RawArgs = ReturnType<typeof getArgs>;
+export type AppArgs = Omit<
+  RawArgs['values'],
+  'download-sections' | 'retry-streams'
+> & {
+  downloader: Downloader;
+  'download-sections': readonly [startTime: number, endTime: number] | null;
+  'retry-streams': number;
+  'merge-method': MergeMethod;
+};
 
 export type LiveVideoStatus =
   (typeof LIVE_VIDEO_STATUS)[keyof typeof LIVE_VIDEO_STATUS];

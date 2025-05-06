@@ -1,6 +1,5 @@
 import { parseVod } from '../lib/m3u8.ts';
-import type { AppArgs } from '../main.ts';
-import type { Frag } from '../types.ts';
+import type { AppArgs, Frag } from '../types.ts';
 
 export const getFragsForDownloading = (
   playlistUrl: string,

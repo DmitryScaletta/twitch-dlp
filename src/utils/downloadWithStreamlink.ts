@@ -1,7 +1,7 @@
 import * as api from '../api/twitch.ts';
 import { isInstalled } from '../lib/isInstalled.ts';
 import { spawn } from '../lib/spawn.ts';
-import type { AppArgs } from '../main.ts';
+import type { AppArgs } from '../types.ts';
 import { getPath } from './getPath.ts';
 import { getVideoInfoByStreamMeta } from './getVideoInfo.ts';
 

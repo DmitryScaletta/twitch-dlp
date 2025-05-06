@@ -1,7 +1,6 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { NO_TRY_UNMUTE_MESSAGE, UNMUTE } from '../constants.ts';
-import type { AppArgs } from '../main.ts';
 import { mergeFrags } from '../merge/index.ts';
 import {
   createLogger,
@@ -14,7 +13,7 @@ import {
   showStats,
   type DlEvent,
 } from '../stats.ts';
-import type { DownloadFormat, Frag } from '../types.ts';
+import type { AppArgs, DownloadFormat, Frag } from '../types.ts';
 import { downloadFrag } from '../utils/downloadFrag.ts';
 import { getExistingFrags } from '../utils/getExistingFrags.ts';
 import { getFragsForDownloading } from '../utils/getFragsForDownloading.ts';

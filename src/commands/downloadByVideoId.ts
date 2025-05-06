@@ -1,6 +1,6 @@
 import * as api from '../api/twitch.ts';
 import { PRIVATE_VIDEO_INSTRUCTIONS } from '../constants.ts';
-import type { AppArgs } from '../main.ts';
+import type { AppArgs } from '../types.ts';
 import { downloadVideo } from '../utils/downloadVideo.ts';
 import {
   getVideoFormats,

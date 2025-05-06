@@ -1,6 +1,6 @@
 import os from 'node:os';
-import { DOWNLOADERS } from '../constants.ts';
-import { isInstalled } from '../lib/isInstalled.ts';
+import { DOWNLOADERS } from '../../constants.ts';
+import { isInstalled } from '../../lib/isInstalled.ts';
 
 const [ARIA2C, CURL, FETCH] = DOWNLOADERS;
 

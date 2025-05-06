@@ -1,6 +1,6 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import * as api from '../api/twitch.ts';
-import type { AppArgs } from '../main.ts';
+import type { AppArgs } from '../types.ts';
 import { downloadVideo } from '../utils/downloadVideo.ts';
 import { downloadWithStreamlink } from '../utils/downloadWithStreamlink.ts';
 import { getLiveVideoInfo } from '../utils/getLiveVideoInfo.ts';

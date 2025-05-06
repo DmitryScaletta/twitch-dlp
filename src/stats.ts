@@ -1,7 +1,7 @@
 import fsp from 'node:fs/promises';
 import { groupBy } from './lib/groupBy.ts';
-import type { AppArgs } from './main.ts';
 import type {
+  AppArgs,
   DownloadFormat,
   Frag,
   LiveVideoStatus,

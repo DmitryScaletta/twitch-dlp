@@ -1,11 +1,11 @@
-import type { AppArgs } from '../main.ts';
+import type { AppArgs } from '../types.ts';
+import type { ParsedLinkVodPath } from '../utils/args/parseLink.ts';
 import { downloadVideo } from '../utils/downloadVideo.ts';
 import {
   getFullVodPath,
   getVideoFormatsByFullVodPath,
 } from '../utils/getVideoFormats.ts';
 import { getVideoInfoByVodPath } from '../utils/getVideoInfo.ts';
-import type { ParsedLinkVodPath } from '../utils/parseLink.ts';
 
 export const downloadByVodPath = async (
   parsedLink: ParsedLinkVodPath,

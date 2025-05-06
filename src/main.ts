@@ -6,14 +6,11 @@ import { downloadByVodPath } from './commands/downloadByVodPath.ts';
 import { mergeFragments } from './commands/mergeFragments.ts';
 import { showHelp } from './commands/showHelp.ts';
 import { showVersion } from './commands/showVersion.ts';
-import { MERGE_METHODS } from './constants.ts';
 import { chalk } from './lib/chalk.ts';
-import type { Downloader, MergeMethod } from './types.ts';
-import { getDownloader } from './utils/getDownloader.ts';
-import { parseDownloadSectionsArg } from './utils/parseDownloadSectionsArg.ts';
-import { parseLink } from './utils/parseLink.ts';
+import { normalizeArgs } from './utils/args/normalizeArgs.ts';
+import { parseLink } from './utils/args/parseLink.ts';
 
-const getArgs = () =>
+export const getArgs = () =>
   parseArgs({
     args: process.argv.slice(2),
     options: {
@@ -79,41 +76,6 @@ const getArgs = () =>
     },
     allowPositionals: true,
   });
-
-type RawArgs = ReturnType<typeof getArgs>;
-
-export type AppArgs = Omit<
-  RawArgs['values'],
-  'download-sections' | 'retry-streams'
-> & {
-  downloader: Downloader;
-  'download-sections': readonly [startTime: number, endTime: number] | null;
-  'retry-streams': number;
-  'merge-method': MergeMethod;
-};
-
-const normalizeArgs = async (args: RawArgs['values']) => {
-  const newArgs = { ...args } as unknown as AppArgs;
-
-  newArgs.downloader = await getDownloader(args.downloader);
-
-  newArgs['download-sections'] = parseDownloadSectionsArg(
-    args['download-sections'],
-  );
-
-  if (args['retry-streams']) {
-    const delay = Number.parseInt(args['retry-streams']);
-    if (!delay) throw new Error('Wrong --retry-streams delay');
-    if (delay < 10) throw new Error('Min --retry-streams delay is 10');
-    newArgs['retry-streams'] = delay;
-  }
-
-  if (!MERGE_METHODS.includes(args['merge-method'] as any)) {
-    throw new Error(`Unknown merge method. Available: ${MERGE_METHODS}`);
-  }
-
-  return newArgs;
-};
 
 const main = async () => {
   const parsedArgs = getArgs();

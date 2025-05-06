@@ -4,7 +4,6 @@ import { LIVE_VIDEO_STATUS, NO_TRY_UNMUTE_MESSAGE } from '../constants.ts';
 import { chalk } from '../lib/chalk.ts';
 import { isInstalled } from '../lib/isInstalled.ts';
 import { statsOrNull } from '../lib/statsOrNull.ts';
-import type { AppArgs } from '../main.ts';
 import { mergeFrags } from '../merge/index.ts';
 import {
   createLogger,
@@ -14,6 +13,7 @@ import {
   showStats,
 } from '../stats.ts';
 import type {
+  AppArgs,
   DownloadFormat,
   FragMetadata,
   LiveVideoStatus,
