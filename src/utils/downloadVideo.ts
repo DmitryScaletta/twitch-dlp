@@ -69,7 +69,7 @@ export const downloadVideo = async (
   let frags;
   let fragsCount = 0;
   let playlistUrl = dlFormat.url;
-  const downloadedFrags: FragMetadata[] = [];
+  const downloadedFrags = new Map<number, FragMetadata>();
 
   const logPath = getPath.log(outputPath);
   const writeLog = createLogger(logPath);
@@ -139,8 +139,8 @@ export const downloadVideo = async (
       const fragPath = getPath.frag(outputPath, frag.idx + 1);
       const fragStats = await statsOrNull(fragPath);
       if (fragStats) {
-        if (!downloadedFrags[i]) {
-          downloadedFrags[i] = { size: fragStats.size, time: 0 };
+        if (!downloadedFrags.has(i)) {
+          downloadedFrags.set(i, { size: fragStats.size, time: 0 });
           showProgress(downloadedFrags, fragsCount);
         }
         continue;
@@ -176,7 +176,7 @@ export const downloadVideo = async (
         args['limit-rate'],
         fragGzip,
       );
-      downloadedFrags.push(fragMeta || { size: 0, time: 0 });
+      downloadedFrags.set(i, fragMeta || { size: 0, time: 0 });
       writeLog([
         fragMeta
           ? DL_EVENT.FRAG_DOWNLOAD_SUCCESS

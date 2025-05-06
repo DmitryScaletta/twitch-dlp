@@ -30,23 +30,23 @@ const formatSize = (n: number) => {
 };
 
 export const showProgress = (
-  downloadedFrags: FragMetadata[],
+  downloadedFrags: Map<number, FragMetadata>,
   fragsCount: number,
 ) => {
-  const downloadedSize = downloadedFrags.reduce((acc, f) => acc + f.size, 0);
-  const avgFragSize = downloadedFrags.length
-    ? downloadedSize / downloadedFrags.length
-    : 0;
-  const last5 = downloadedFrags.filter((f) => f.time !== 0).slice(-5);
+  const dlFrags = downloadedFrags.values().toArray();
+
+  const dlSize = dlFrags.reduce((acc, f) => acc + f.size, 0);
+  const avgFragSize = dlFrags.length ? dlSize / dlFrags.length : 0;
+  const last5 = dlFrags.filter((f) => f.time !== 0).slice(-5);
   const currentSpeedBps = last5.length
     ? last5.map((f) => (f.size / f.time) * 1000).reduce((a, b) => a + b, 0) /
       last5.length
     : 0;
 
   const estFullSize = avgFragSize * fragsCount;
-  const estSizeLeft = estFullSize - downloadedSize;
+  const estSizeLeft = estFullSize - dlSize;
   let estTimeLeftSec = currentSpeedBps ? estSizeLeft / currentSpeedBps : 0;
-  let downloadedPercent = estFullSize ? downloadedSize / estFullSize : 0;
+  let downloadedPercent = estFullSize ? dlSize / estFullSize : 0;
 
   downloadedPercent = Math.min(100, downloadedPercent) || 0;
   if (estTimeLeftSec < 0) estTimeLeftSec = 0;
@@ -60,7 +60,7 @@ export const showProgress = (
     chalk.green(formatSpeed(currentSpeedBps || 0).padStart(11, ' ')),
     ' ETA ',
     chalk.yellow(timeFmt.format(estTimeLeftSec * 1000)),
-    ` (frag ${downloadedFrags.length}/${fragsCount})\r`,
+    ` (frag ${dlFrags.length}/${fragsCount})\r`,
   ].join('');
   process.stdout.write(progress);
 };
