@@ -45,9 +45,11 @@ export const showProgress = (
 
   const estFullSize = avgFragSize * fragsCount;
   const estSizeLeft = estFullSize - downloadedSize;
-  const estTimeLeftSec = currentSpeedBps ? estSizeLeft / currentSpeedBps : 0;
+  let estTimeLeftSec = currentSpeedBps ? estSizeLeft / currentSpeedBps : 0;
   let downloadedPercent = estFullSize ? downloadedSize / estFullSize : 0;
+
   downloadedPercent = Math.min(100, downloadedPercent) || 0;
+  if (estTimeLeftSec < 0) estTimeLeftSec = 0;
 
   const progress = [
     '[download] ',
@@ -57,7 +59,7 @@ export const showProgress = (
     ' at ',
     chalk.green(formatSpeed(currentSpeedBps || 0).padStart(11, ' ')),
     ' ETA ',
-    chalk.yellow(timeFmt.format((estTimeLeftSec || 0) * 1000)),
+    chalk.yellow(timeFmt.format(estTimeLeftSec * 1000)),
     ` (frag ${downloadedFrags.length}/${fragsCount})\r`,
   ].join('');
   process.stdout.write(progress);
