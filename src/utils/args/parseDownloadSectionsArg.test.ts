@@ -1,4 +1,4 @@
-import assert from 'node:assert';
+import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { parseDownloadSectionsArg } from './parseDownloadSectionsArg.ts';
 
@@ -14,6 +14,7 @@ describe('parseDownloadSectionsArg', () => {
       ['*5-10', [5, 10]],
       ['*3:14:15-inf', [11655, Infinity]],
       ['*13:14:15-16:17:18', [47655, 58638]],
+      ['*99:00:00-inf', [356400, Infinity]],
     ] as const;
     for (const [arg, expected] of cases) {
       assert.deepStrictEqual(parseDownloadSectionsArg(arg), expected);
@@ -28,7 +29,6 @@ describe('parseDownloadSectionsArg', () => {
       '*10-10',
       '*60-inf',
       '*61:00-inf',
-      '*99:00:00-inf',
     ] as const;
     for (const arg of cases) {
       assert.throws(() => parseDownloadSectionsArg(arg));

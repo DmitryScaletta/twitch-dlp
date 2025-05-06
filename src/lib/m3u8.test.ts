@@ -1,4 +1,4 @@
-import assert from 'node:assert';
+import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import * as m3u8 from './m3u8.ts';
 
@@ -91,12 +91,33 @@ const vodWithMuted = `#EXTM3U
 1946-muted.ts
 #EXT-X-ENDLIST`;
 
+const vodWithDiscontinuity = `#EXTM3U
+#EXT-X-VERSION:3
+#EXT-X-TARGETDURATION:6
+#ID3-EQUIV-TDTG:2016-02-20T23:38:02
+#EXT-X-PLAYLIST-TYPE:EVENT
+
+#EXT-X-TWITCH-ELAPSED-SECS:0.0
+#EXT-X-TWITCH-TOTAL-SECS:2296.76
+#EXTINF:8.001,
+transmux-0000000222-1alP.ts?start_offset=0&end_offset=257935
+#EXTINF:8.003,
+transmux-0000000223-H2c2.ts?start_offset=0&end_offset=222779
+#EXTINF:7.936,
+transmux-0000000224-jLDq.ts?start_offset=0&end_offset=247031
+#EXT-X-DISCONTINUITY
+#EXTINF:8.001,
+transmux-0000000000-FbCv.ts?start_offset=0&end_offset=301551
+#EXT-X-DISCONTINUITY
+#EXT-X-ENDLIST
+`;
+
 describe('m3u8', () => {
-  it('should parse all segments', (t) => {
+  it('should parse all segments', () => {
     assert.equal(m3u8.parsePlaylist(playlist1080p60).length, 5);
   });
 
-  it('should parse attributes', (t) => {
+  it('should parse attributes', () => {
     assert.deepStrictEqual(m3u8.parsePlaylist(playlistMuted)[0], {
       groupId: 'chunked',
       name: '1080p60',
@@ -122,19 +143,29 @@ describe('m3u8', () => {
     });
   });
 
-  it('should parse VODs', (t) => {
+  it('should parse VODs', () => {
     assert.deepStrictEqual(m3u8.parseVod(vod), [
       { duration: '10.000', url: '0.ts' },
       { duration: '10.000', url: '1.ts' },
     ]);
   });
 
-  it('should parse VODs with muted segments', (t) => {
+  it('should parse VODs with muted segments', () => {
     assert.deepStrictEqual(m3u8.parseVod(vodWithMuted), [
       { duration: '10.000', url: '0.ts' },
       { duration: '10.000', url: '1.ts' },
       { duration: '10.000', url: '1945-muted.ts' },
       { duration: '10.000', url: '1946-muted.ts' },
+    ]);
+  });
+
+  it('should parse VODs with #EXT-X-DISCONTINUITY', () => {
+    // prettier-ignore
+    assert.deepStrictEqual(m3u8.parseVod(vodWithDiscontinuity), [
+      { duration: '8.001', url: 'transmux-0000000222-1alP.ts?start_offset=0&end_offset=257935' },
+      { duration: '8.003', url: 'transmux-0000000223-H2c2.ts?start_offset=0&end_offset=222779' },
+      { duration: '7.936', url: 'transmux-0000000224-jLDq.ts?start_offset=0&end_offset=247031' },
+      { duration: '8.001', url: 'transmux-0000000000-FbCv.ts?start_offset=0&end_offset=301551' },
     ]);
   });
 });
