@@ -4,8 +4,12 @@
     "downloaders",
     "extinf",
     "ffconcat",
+    "livewire",
     "positionals",
     "streamlink",
+    "streamscharts",
+    "sullygnome",
+    "twitchtracker",
     "unmute",
     "unmuted",
     "unmuting"
