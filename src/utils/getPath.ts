@@ -14,19 +14,24 @@ const ILLEGAL_PATH_CHARS_MAP: Record<string, string> = {
 };
 
 const sanitizeFilename = (str: string) =>
-  str.replace(/[\\/:*?"<>|]/g, (c) => ILLEGAL_PATH_CHARS_MAP[c]);
+  str.replace(
+    new RegExp(`[${Object.keys(ILLEGAL_PATH_CHARS_MAP).join('')}]`, 'g'),
+    (c) => ILLEGAL_PATH_CHARS_MAP[c],
+  );
+
+const getOutputPath = (template: string, videoInfo: VideoInfo) => {
+  let outputPath = template;
+  for (const [key, value] of Object.entries(videoInfo)) {
+    let newValue = value ? `${value}` : '';
+    if (key.endsWith('_date')) newValue = newValue.slice(0, 10);
+    newValue = sanitizeFilename(newValue);
+    outputPath = outputPath.replaceAll(`%(${key})s`, newValue);
+  }
+  return path.resolve(outputPath);
+};
 
 export const getPath = {
-  output: (template: string, videoInfo: VideoInfo) => {
-    let finalTemplate = template;
-    for (const [name, value] of Object.entries(videoInfo)) {
-      let newValue = value ? String(value) : '';
-      if (name.endsWith('_date')) newValue = newValue.slice(0, 10);
-      newValue = sanitizeFilename(newValue);
-      finalTemplate = finalTemplate.replaceAll(`%(${name})s`, newValue);
-    }
-    return path.resolve(finalTemplate);
-  },
+  output: getOutputPath,
   ffconcat: (filePath: string) => `${filePath}-ffconcat.txt`,
   playlist: (filePath: string) => `${filePath}-playlist.m3u8`,
   log: (filePath: string) => `${filePath}-log.tsv`,
