@@ -211,18 +211,19 @@ const ILLEGAL_PATH_CHARS_MAP = {
 	">": "＞",
 	"|": "｜"
 };
-const sanitizeFilename = (str) => str.replace(/[\\/:*?"<>|]/g, (c) => ILLEGAL_PATH_CHARS_MAP[c]);
+const sanitizeFilename = (str) => str.replace(new RegExp(`[${Object.keys(ILLEGAL_PATH_CHARS_MAP).join("")}]`, "g"), (c) => ILLEGAL_PATH_CHARS_MAP[c]);
+const getOutputPath = (template, videoInfo) => {
+	let outputPath = template;
+	for (const [key, value] of Object.entries(videoInfo)) {
+		let newValue = value ? `${value}` : "";
+		if (key.endsWith("_date")) newValue = newValue.slice(0, 10);
+		newValue = sanitizeFilename(newValue);
+		outputPath = outputPath.replaceAll(`%(${key})s`, newValue);
+	}
+	return path.resolve(outputPath);
+};
 const getPath = {
-	output: (template, videoInfo) => {
-		let finalTemplate = template;
-		for (const [name, value] of Object.entries(videoInfo)) {
-			let newValue = value ? String(value) : "";
-			if (name.endsWith("_date")) newValue = newValue.slice(0, 10);
-			newValue = sanitizeFilename(newValue);
-			finalTemplate = finalTemplate.replaceAll(`%(${name})s`, newValue);
-		}
-		return path.resolve(finalTemplate);
-	},
+	output: getOutputPath,
 	ffconcat: (filePath) => `${filePath}-ffconcat.txt`,
 	playlist: (filePath) => `${filePath}-playlist.m3u8`,
 	log: (filePath) => `${filePath}-log.tsv`,
@@ -310,7 +311,7 @@ const mergeFrags = async (method, frags, outputPath, keepFragments) => {
 	}
 	if (method === FFCONCAT) return mergeFrags$1(frags, outputPath, keepFragments);
 	if (method === APPEND) return mergeFrags$2(frags, outputPath, keepFragments);
-	throw new Error(`Unknown merge method: ${method}. Available methods: ${MERGE_METHODS}`);
+	throw new Error();
 };
 
 //#endregion
@@ -853,7 +854,7 @@ const getUnmutedFrag = async (downloader, unmuteArg, fragUrl, formats) => {
 		if (idx === -1) return null;
 		return getFragResponse(responses[idx], false, urls[idx]);
 	}
-	throw new Error(`Unknown unmute policy: ${unmuteArg}. Available: ${Object.values(UNMUTE)}`);
+	throw new Error();
 };
 
 //#endregion
@@ -950,7 +951,7 @@ const formatSize = (n) => {
 	return `${value.toFixed(2)}${UNITS[i]}`;
 };
 const showProgress = (downloadedFrags, fragsCount) => {
-	const dlFrags = downloadedFrags.values().toArray();
+	const dlFrags = Array.from(downloadedFrags.values());
 	const dlSize = dlFrags.reduce((acc, f) => acc + f.size, 0);
 	const avgFragSize = dlFrags.length ? dlSize / dlFrags.length : 0;
 	const last5 = dlFrags.filter((f) => f.time !== 0).slice(-5);
@@ -1433,7 +1434,7 @@ const getDownloader = async (downloaderArg) => {
 		const curlLink = os.platform() === "win32" ? "https://curl.se/windows/" : "https://curl.se/download.html";
 		throw new Error(`${CURL} is not installed. Install it from ${curlLink}`);
 	}
-	throw new Error(`Unknown downloader: ${downloaderArg}. Available: ${DOWNLOADERS}`);
+	throw new Error(`Unknown downloader: ${downloaderArg}. Available: ${DOWNLOADERS.join(", ")}`);
 };
 
 //#endregion
@@ -1470,7 +1471,10 @@ const normalizeArgs = async (args) => {
 		if (delay < 10) throw new Error("Min --retry-streams delay is 10");
 		newArgs["retry-streams"] = delay;
 	}
-	if (!MERGE_METHODS.includes(args["merge-method"])) throw new Error(`Unknown merge method. Available: ${MERGE_METHODS}`);
+	if (newArgs["merge-method"] === "append") throw new Error("Merge method \"append\" is not implemented yet");
+	if (!MERGE_METHODS.includes(args["merge-method"])) throw new Error(`Unknown merge method: ${args["merge-method"]}. Available: ${MERGE_METHODS.join(", ")}`);
+	const unmuteValues = Object.values(UNMUTE);
+	if (args["unmute"] && !unmuteValues.includes(args["unmute"])) throw new Error(`Unknown unmute policy: ${args["unmute"]}. Available: ${unmuteValues.join(", ")}`);
 	return newArgs;
 };
 
