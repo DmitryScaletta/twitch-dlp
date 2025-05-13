@@ -33,7 +33,7 @@ export const showProgress = (
   downloadedFrags: Map<number, FragMetadata>,
   fragsCount: number,
 ) => {
-  const dlFrags = downloadedFrags.values().toArray();
+  const dlFrags = Array.from(downloadedFrags.values());
 
   const dlSize = dlFrags.reduce((acc, f) => acc + f.size, 0);
   const avgFragSize = dlFrags.length ? dlSize / dlFrags.length : 0;
