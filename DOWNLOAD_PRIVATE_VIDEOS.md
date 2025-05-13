@@ -68,8 +68,6 @@ Example:
 Use the result from the previous step to download the VOD with [twitch-dlp](https://github.com/DmitryScaletta/twitch-dlp).
 
 ```bash
-npx twitch-dlp video:%channel_login%_%video_id%_%start_timestamp%
-
 # examples
 npx twitch-dlp video:xqc_51582913581_1721686515
 npx twitch-dlp video:lirik_51579711693_1721664413

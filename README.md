@@ -15,7 +15,7 @@ Download any twitch VODs from start during live broadcast
 
 ## Usage
 
-Install [Node.js](https://nodejs.org/) v20 or newer.
+Install the latest [Node.js](https://nodejs.org/) version (v22 or newer).
 
 ```bash
 # npm
