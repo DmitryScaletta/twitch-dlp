@@ -57,7 +57,7 @@ const generateFfconcat = (files: FragFile[]) => {
   ffconcat += files
     .map(([file, duration]) =>
       [
-        `file '${file}'`,
+        `file '${file.replaceAll("'", "'\\''")}'`,
         'stream',
         'exact_stream_id 0x100', // audio
         'stream',
