@@ -279,7 +279,7 @@ const runFfconcat = (ffconcatFilename, outputFilename) => spawnFfmpeg([
 const generateFfconcat = (files) => {
 	let ffconcat = "ffconcat version 1.0\n";
 	ffconcat += files.map(([file, duration]) => [
-		`file '${file}'`,
+		`file '${file.replaceAll("'", "'\\''")}'`,
 		"stream",
 		"exact_stream_id 0x100",
 		"stream",
@@ -1395,7 +1395,8 @@ const mergeFragments = async (outputPath, args) => {
 //#endregion
 //#region src/commands/showHelp.ts
 const showHelp = async () => {
-	const readme = await fsp.readFile("./README.md", "utf8");
+	const readmePath = path.resolve(import.meta.dirname, "README.md");
+	const readme = await fsp.readFile(readmePath, "utf8");
 	const entries = readme.split(/\s## (.*)/g).slice(1);
 	const sections = {};
 	for (let i = 0; i < entries.length; i += 2) {
@@ -1416,7 +1417,8 @@ const showHelp = async () => {
 //#endregion
 //#region src/commands/showVersion.ts
 const showVersion = async () => {
-	const pkg = await fsp.readFile("./package.json", "utf8");
+	const pkgPath = path.resolve(import.meta.dirname, "package.json");
+	const pkg = await fsp.readFile(pkgPath, "utf8");
 	console.log(JSON.parse(pkg).version);
 };
 
