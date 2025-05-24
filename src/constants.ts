@@ -33,9 +33,3 @@ export const RET_CODE = {
   UNKNOWN_ERROR: 1,
   HTTP_RETURNED_ERROR: 22,
 } as const;
-
-export const LIVE_VIDEO_STATUS = {
-  ONLINE: 'ONLINE',
-  OFFLINE: 'OFFLINE',
-  FINALIZED: 'FINALIZED',
-} as const;

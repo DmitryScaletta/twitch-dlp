@@ -1,8 +1,4 @@
-import type {
-  DOWNLOADERS,
-  LIVE_VIDEO_STATUS,
-  MERGE_METHODS,
-} from './constants.ts';
+import type { DOWNLOADERS, MERGE_METHODS } from './constants.ts';
 import type { getArgs } from './main.ts';
 
 export type Downloader = (typeof DOWNLOADERS)[number];
@@ -19,21 +15,13 @@ export type AppArgs = Omit<
   'merge-method': MergeMethod;
 };
 
-export type LiveVideoStatus =
-  (typeof LIVE_VIDEO_STATUS)[keyof typeof LIVE_VIDEO_STATUS];
-export type LiveVideoMeta = {
-  videoId: string | null;
-  streamId: string;
-  channelLogin: string;
-};
-
 export type Frag = {
   /** Frag index in the original playlist */
   idx: number;
   /** Offset from the start of the video (sec) */
   offset: number;
   /** Frag duration (sec) */
-  duration: string;
+  duration: number;
   /** Full frag url */
   url: string;
 };

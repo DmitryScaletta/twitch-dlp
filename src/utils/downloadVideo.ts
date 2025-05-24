@@ -1,7 +1,8 @@
 import fsp from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { LIVE_VIDEO_STATUS, NO_TRY_UNMUTE_MESSAGE } from '../constants.ts';
+import { NO_TRY_UNMUTE_MESSAGE } from '../constants.ts';
 import { chalk } from '../lib/chalk.ts';
+import * as hlsParser from '../lib/hlsParser.ts';
 import { isInstalled } from '../lib/isInstalled.ts';
 import { statsOrNull } from '../lib/statsOrNull.ts';
 import { mergeFrags } from '../merge/index.ts';
@@ -17,15 +18,12 @@ import type {
   DownloadFormat,
   Frag,
   FragMetadata,
-  LiveVideoMeta,
-  LiveVideoStatus,
   VideoInfo,
 } from '../types.ts';
 import { downloadFrag } from './downloadFrag.ts';
 import { fetchText } from './fetchText.ts';
 import { getExistingFrags } from './getExistingFrags.ts';
 import { getFragsForDownloading } from './getFragsForDownloading.ts';
-import { getLiveVideoStatus } from './getLiveVideoStatus.ts';
 import { getPath } from './getPath.ts';
 import { getTryUnmute } from './getTryUnmute.ts';
 import { getUnmutedFrag, type UnmutedFrag } from './getUnmutedFrag.ts';
@@ -42,7 +40,6 @@ export const downloadVideo = async (
   formats: DownloadFormat[],
   videoInfo: VideoInfo,
   args: AppArgs,
-  liveVideoMeta?: LiveVideoMeta,
 ) => {
   if (args['list-formats']) {
     console.table(formats.map(({ url, ...rest }) => rest));
@@ -67,7 +64,6 @@ export const downloadVideo = async (
     args.output || DEFAULT_OUTPUT_TEMPLATE,
     videoInfo,
   );
-  let liveVideoStatus: LiveVideoStatus;
   let frags: Frag[];
   let fragsCount = 0;
   let playlistUrl = dlFormat.url;
@@ -84,24 +80,15 @@ export const downloadVideo = async (
     { args, formats, outputPath, playlistUrl, videoInfo },
   ]);
 
-  const getLiveVideoStatusFn = liveVideoMeta
-    ? () => getLiveVideoStatus(liveVideoMeta, frags)
-    : () => LIVE_VIDEO_STATUS.FINALIZED;
-
   while (true) {
-    let playlist;
-    [playlist, liveVideoStatus] = await Promise.all([
-      fetchText(playlistUrl, 'playlist'),
-      getLiveVideoStatusFn(),
-    ]);
-    writeLog([DL_EVENT.LIVE_VIDEO_STATUS, liveVideoStatus]);
+    let playlistContent = await fetchText(playlistUrl, 'playlist');
     // workaround for some old muted highlights
-    if (!playlist) {
+    if (!playlistContent) {
       writeLog([DL_EVENT.FETCH_PLAYLIST_FAILURE]);
       const newPlaylistUrl = dlFormat.url.replace(/-muted-\w+(?=\.m3u8$)/, '');
       if (newPlaylistUrl !== playlistUrl) {
-        playlist = await fetchText(playlistUrl, 'playlist (attempt #2)');
-        if (playlist) {
+        playlistContent = await fetchText(playlistUrl, 'playlist (attempt #2)');
+        if (playlistContent) {
           playlistUrl = newPlaylistUrl;
           writeLog([DL_EVENT.FETCH_PLAYLIST_OLD_MUTED_SUCCESS, playlistUrl]);
         } else {
@@ -109,31 +96,31 @@ export const downloadVideo = async (
         }
       }
     }
-    if (!playlist && liveVideoStatus === LIVE_VIDEO_STATUS.FINALIZED) {
+    if (!playlistContent && !args['live-from-start']) {
       throw new Error('Cannot download the playlist');
     }
-    if (!playlist) {
+    if (!playlistContent) {
       console.warn(
         `[live-from-start] Waiting for the playlist. ${RETRY_MESSAGE}`,
       );
       await sleep(WAIT_BETWEEN_CYCLES_SEC * 1000);
       continue;
     }
+
+    const playlist = hlsParser.parse(
+      playlistContent,
+    ) as hlsParser.MediaPlaylist;
     writeLog([DL_EVENT.FETCH_PLAYLIST_SUCCESS]);
 
     frags = getFragsForDownloading(playlistUrl, playlist, args);
     writeLog(logFragsForDownloading(frags));
 
-    await fsp.writeFile(getPath.playlist(outputPath), playlist);
+    await fsp.writeFile(getPath.playlist(outputPath), playlistContent);
 
     const hasNewFrags = frags.length > fragsCount;
     fragsCount = frags.length;
-    if (!hasNewFrags && liveVideoStatus !== LIVE_VIDEO_STATUS.FINALIZED) {
-      let message = '[live-from-start] ';
-      message +=
-        liveVideoStatus === LIVE_VIDEO_STATUS.ONLINE
-          ? `${chalk.green('VOD ONLINE')}: waiting for new fragments`
-          : `${chalk.red('VOD OFFLINE')}: waiting for the finalization`;
+    if (!hasNewFrags && !playlist.endlist) {
+      const message = `[live-from-start] ${chalk.green('VOD ONLINE')}: waiting for new fragments`;
       console.log(`${message}. ${RETRY_MESSAGE}`);
       await sleep(WAIT_BETWEEN_CYCLES_SEC * 1000);
       continue;
@@ -210,7 +197,7 @@ export const downloadVideo = async (
     }
     process.stdout.write('\n');
 
-    if (liveVideoStatus === LIVE_VIDEO_STATUS.FINALIZED) break;
+    if (playlist.endlist) break;
   }
 
   const dir = await readOutputDir(outputPath);

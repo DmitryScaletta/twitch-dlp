@@ -41,8 +41,8 @@ export const downloadByChannelLogin = async (
     if (isLive && isLiveFromStart) {
       const liveVideoInfo = await getLiveVideoInfo(streamMeta, channelLogin);
       if (liveVideoInfo) {
-        const { formats, videoInfo, liveVideoMeta } = liveVideoInfo;
-        await downloadVideo(formats, videoInfo, args, liveVideoMeta);
+        const { formats, videoInfo } = liveVideoInfo;
+        await downloadVideo(formats, videoInfo, args);
       } else {
         let message = `[live-from-start] Cannot find the playlist`;
         if (isRetry) {

@@ -5,7 +5,7 @@ import { getPath } from '../utils/getPath.ts';
 
 const MAX_INT_STR = '2147483647';
 
-type FragFile = [filename: string, duration: string];
+type FragFile = [filename: string, duration: number];
 
 const spawnFfmpeg = (args: string[]): Promise<number> =>
   new Promise((resolve, reject) => {

@@ -1,14 +1,16 @@
-import { parsePlaylist } from '../lib/m3u8.ts';
+import * as hlsParser from '../lib/hlsParser.ts';
 import type { DownloadFormat } from '../types.ts';
 
 export const parseDownloadFormats = (playlistContent: string) => {
   const formats: DownloadFormat[] = [];
-  for (const { name, width, height, url } of parsePlaylist(playlistContent)) {
+  const playlist = hlsParser.parse(playlistContent) as hlsParser.MasterPlaylist;
+  for (const { uri, resolution, video } of playlist.variants) {
+    const { name } = video[0];
     formats.push({
       format_id: name.replaceAll(' ', '_'),
-      width,
-      height,
-      url,
+      width: resolution?.width || null,
+      height: resolution?.height || null,
+      url: uri,
     });
   }
   return formats;
