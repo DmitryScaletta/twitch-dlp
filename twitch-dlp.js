@@ -151,11 +151,6 @@ const RET_CODE = {
 	UNKNOWN_ERROR: 1,
 	HTTP_RETURNED_ERROR: 22
 };
-const LIVE_VIDEO_STATUS = {
-	ONLINE: "ONLINE",
-	OFFLINE: "OFFLINE",
-	FINALIZED: "FINALIZED"
-};
 
 //#endregion
 //#region src/lib/chalk.ts
@@ -173,6 +168,76 @@ const chalk = Object.entries(styles.color).reduce((acc, [color, [open, close]]) 
 	acc[color] = (s) => `\x1b[${open}m${s}\x1b[${close}m`;
 	return acc;
 }, {});
+
+//#endregion
+//#region src/lib/hlsParser.ts
+const PLAYLIST_LINE_KV_REGEX = /(?<key>[A-Z-]+)=(?:"(?<stringValue>[^"]+)"|(?<value>[^,]+))/g;
+const SKIP_TAGS = ["EXTM3U", "EXT-X-TWITCH-INFO"];
+const MASTER_PLAYLIST_TAGS = ["EXT-X-STREAM-INF", "EXT-X-MEDIA"];
+const parseAttrs = (line) => {
+	const attrs = {};
+	for (const kv of line.matchAll(PLAYLIST_LINE_KV_REGEX)) {
+		const { key, stringValue, value } = kv.groups;
+		attrs[key] = value || stringValue || "";
+	}
+	return attrs;
+};
+const parseMasterPlaylist = (lines) => {
+	const variants = [];
+	for (let i = 0; i < lines.length; i += 3) {
+		const media = parseAttrs(lines[i]);
+		const streamInf = parseAttrs(lines[i + 1]);
+		let resolution = void 0;
+		if (streamInf.RESOLUTION) {
+			const [width, height] = streamInf.RESOLUTION.split("x").map((n) => Number.parseInt(n));
+			resolution = {
+				width,
+				height
+			};
+		}
+		variants.push({
+			uri: lines[i + 2],
+			bandwidth: Number.parseInt(streamInf.BANDWIDTH),
+			codecs: streamInf.CODECS,
+			resolution,
+			frameRate: streamInf["FRAME-RATE"] ? Number.parseFloat(streamInf["FRAME-RATE"]) : void 0,
+			video: [{
+				type: "VIDEO",
+				groupId: media["GROUP-ID"],
+				name: media.NAME,
+				isDefault: media.DEFAULT === "YES",
+				autoselect: media.AUTOSELECT === "YES"
+			}]
+		});
+	}
+	return {
+		type: "playlist",
+		isMasterPlaylist: true,
+		variants
+	};
+};
+const parseMediaPlaylist = (lines) => {
+	const EXTINF = "#EXTINF:";
+	const segLines = lines.filter((line) => line.startsWith(EXTINF) || !line.startsWith("#"));
+	const segments = [];
+	for (let i = 0; i < segLines.length; i += 2) segments.push({
+		type: "segment",
+		uri: segLines[i + 1],
+		duration: Number.parseFloat(segLines[i].replace(EXTINF, "").replace(",", ""))
+	});
+	const endlist = lines.includes("#EXT-X-ENDLIST");
+	return {
+		type: "playlist",
+		isMasterPlaylist: false,
+		endlist,
+		segments
+	};
+};
+const parse = (playlist) => {
+	const lines = playlist.split("\n").map((line) => line.trim()).filter(Boolean).filter((line) => !SKIP_TAGS.some((s) => line.startsWith(`#${s}`)));
+	const isMasterPlaylist = MASTER_PLAYLIST_TAGS.some((s) => lines.some((line) => line.startsWith(`#${s}:`)));
+	return isMasterPlaylist ? parseMasterPlaylist(lines) : parseMediaPlaylist(lines);
+};
 
 //#endregion
 //#region src/lib/isInstalled.ts
@@ -688,63 +753,20 @@ const downloadFrag = async (downloader, url, destPath, limitRateArg, gzip) => {
 const getExistingFrags = (frags, outputPath, dir) => frags.filter((frag) => dir.includes(path.parse(getPath.frag(outputPath, frag.idx + 1)).base));
 
 //#endregion
-//#region src/lib/m3u8.ts
-const PLAYLIST_LINE_KV_REGEX = /(?<key>[A-Z-]+)=(?:"(?<stringValue>[^"]+)"|(?<value>[^,]+))/g;
-const parseAttrs = (line) => {
-	const attrs = {};
-	for (const kv of line.matchAll(PLAYLIST_LINE_KV_REGEX)) {
-		const { key, stringValue, value } = kv.groups;
-		attrs[key] = value || stringValue || "";
-	}
-	return attrs;
-};
-const parsePlaylist = (playlist) => {
-	const segments = [];
-	const HEADER_TAGS = ["#EXTM3U", "#EXT-X-TWITCH-INFO"];
-	const lines = playlist.split("\n").map((line) => line.trim()).filter(Boolean).filter((line) => !HEADER_TAGS.some((s) => line.startsWith(s)));
-	for (let i = 0; i < lines.length; i += 3) {
-		const media = parseAttrs(lines[i]);
-		const streamInf = parseAttrs(lines[i + 1]);
-		const [width, height] = streamInf.RESOLUTION ? streamInf.RESOLUTION.split("x").map((n) => Number.parseInt(n)) : [null, null];
-		segments.push({
-			groupId: media["GROUP-ID"],
-			name: media.NAME,
-			width,
-			height,
-			bandwidth: Number.parseInt(streamInf.BANDWIDTH),
-			codecs: streamInf.CODECS,
-			frameRate: streamInf["FRAME-RATE"] ? Number.parseFloat(streamInf["FRAME-RATE"]) : null,
-			url: lines[i + 2]
-		});
-	}
-	return segments;
-};
-const parseVod = (playlist) => {
-	const EXTINF = "#EXTINF:";
-	const lines = playlist.split("\n").map((s) => s.trim()).filter(Boolean).filter((line) => line.startsWith(EXTINF) || !line.startsWith("#"));
-	const segments = [];
-	for (let i = 0; i < lines.length; i += 2) segments.push({
-		duration: lines[i].replace(EXTINF, "").replace(",", ""),
-		url: lines[i + 1]
-	});
-	return segments;
-};
-
-//#endregion
 //#region src/utils/getFragsForDownloading.ts
-const getFragsForDownloading = (playlistUrl, playlistContent, args) => {
+const getFragsForDownloading = (playlistUrl, playlist, args) => {
 	const baseUrl = playlistUrl.split("/").slice(0, -1).join("/");
 	const frags = [];
 	let offset = 0;
 	let idx = 0;
-	for (const { duration, url } of parseVod(playlistContent)) {
+	for (const { duration, uri } of playlist.segments) {
 		frags.push({
 			idx,
 			offset,
 			duration,
-			url: `${baseUrl}/${url}`
+			url: `${baseUrl}/${uri}`
 		});
-		offset += Number.parseFloat(duration);
+		offset += duration;
 		idx += 1;
 	}
 	if (!args["download-sections"]) return frags;
@@ -752,49 +774,6 @@ const getFragsForDownloading = (playlistUrl, playlistContent, args) => {
 	const firstFragIdx = frags.findLastIndex((frag) => frag.offset <= startTime);
 	const lastFragIdx = endTime === Infinity ? frags.length - 1 : frags.findIndex((frag) => frag.offset >= endTime);
 	return frags.slice(firstFragIdx, lastFragIdx + 1);
-};
-
-//#endregion
-//#region src/utils/getLiveVideoStatus.ts
-const WAIT_AFTER_STREAM_ENDS_SECONDS = 8 * 60;
-let lastLiveTimestamp = Date.now();
-const getIsVideoLive = (thumbUrl) => /\/404_processing_[^.?#]+\.png/.test(thumbUrl);
-const getSecondsAfterStreamEnded = (videoMeta) => {
-	const started = new Date(videoMeta.publishedAt);
-	const ended = new Date(started.getTime() + videoMeta.lengthSeconds * 1e3);
-	return Math.floor((Date.now() - ended.getTime()) / 1e3);
-};
-const checkStatusAfterStreamEnded = (secondsAfterEnd, frags) => {
-	if (frags.length > 10) {
-		const [lastFrag, ...preLast9Frags] = frags.slice(-10).reverse();
-		const duration = preLast9Frags[0].duration;
-		if (preLast9Frags.every((f) => f.duration === duration) && duration !== lastFrag.duration) return LIVE_VIDEO_STATUS.FINALIZED;
-	}
-	return secondsAfterEnd - WAIT_AFTER_STREAM_ENDS_SECONDS > 0 ? LIVE_VIDEO_STATUS.FINALIZED : LIVE_VIDEO_STATUS.OFFLINE;
-};
-const getLiveVideoStatus = async ({ videoId, streamId, channelLogin }, frags) => {
-	let videoMeta = null;
-	if (videoId) {
-		videoMeta = await getVideoMetadata(videoId);
-		if (videoMeta) {
-			if (getIsVideoLive(videoMeta.previewThumbnailURL)) {
-				lastLiveTimestamp = Date.now();
-				return LIVE_VIDEO_STATUS.ONLINE;
-			}
-			const secondsAfterEnd = getSecondsAfterStreamEnded(videoMeta);
-			return checkStatusAfterStreamEnded(secondsAfterEnd, frags);
-		}
-	}
-	if (!videoId || !videoMeta) {
-		const streamMeta = await getStreamMetadata(channelLogin);
-		if (streamMeta?.stream?.id === streamId) {
-			lastLiveTimestamp = Date.now();
-			return LIVE_VIDEO_STATUS.ONLINE;
-		}
-		const secondsAfterEnd = (Date.now() - lastLiveTimestamp) / 1e3;
-		return checkStatusAfterStreamEnded(secondsAfterEnd, frags);
-	}
-	throw new Error("Cannot determine stream status");
 };
 
 //#endregion
@@ -981,7 +960,7 @@ const showProgress = (downloadedFrags, fragsCount) => {
 const DEFAULT_OUTPUT_TEMPLATE = "%(title)s [%(id)s].%(ext)s";
 const WAIT_BETWEEN_CYCLES_SEC = 60;
 const RETRY_MESSAGE = `Retry every ${WAIT_BETWEEN_CYCLES_SEC} second(s)`;
-const downloadVideo = async (formats, videoInfo, args, liveVideoMeta) => {
+const downloadVideo = async (formats, videoInfo, args) => {
 	if (args["list-formats"]) {
 		console.table(formats.map(({ url,...rest }) => rest));
 		process.exit();
@@ -990,7 +969,6 @@ const downloadVideo = async (formats, videoInfo, args, liveVideoMeta) => {
 	const dlFormat = args.format === "best" ? formats[0] : formats.find((f) => f.format_id.toLowerCase() === args.format.toLowerCase());
 	if (!dlFormat) throw new Error("Wrong format");
 	const outputPath = getPath.output(args.output || DEFAULT_OUTPUT_TEMPLATE, videoInfo);
-	let liveVideoStatus;
 	let frags;
 	let fragsCount = 0;
 	let playlistUrl = dlFormat.url;
@@ -1006,37 +984,34 @@ const downloadVideo = async (formats, videoInfo, args, liveVideoMeta) => {
 		playlistUrl,
 		videoInfo
 	}]);
-	const getLiveVideoStatusFn = liveVideoMeta ? () => getLiveVideoStatus(liveVideoMeta, frags) : () => LIVE_VIDEO_STATUS.FINALIZED;
 	while (true) {
-		let playlist;
-		[playlist, liveVideoStatus] = await Promise.all([fetchText(playlistUrl, "playlist"), getLiveVideoStatusFn()]);
-		writeLog([DL_EVENT.LIVE_VIDEO_STATUS, liveVideoStatus]);
-		if (!playlist) {
+		let playlistContent = await fetchText(playlistUrl, "playlist");
+		if (!playlistContent) {
 			writeLog([DL_EVENT.FETCH_PLAYLIST_FAILURE]);
 			const newPlaylistUrl = dlFormat.url.replace(/-muted-\w+(?=\.m3u8$)/, "");
 			if (newPlaylistUrl !== playlistUrl) {
-				playlist = await fetchText(playlistUrl, "playlist (attempt #2)");
-				if (playlist) {
+				playlistContent = await fetchText(playlistUrl, "playlist (attempt #2)");
+				if (playlistContent) {
 					playlistUrl = newPlaylistUrl;
 					writeLog([DL_EVENT.FETCH_PLAYLIST_OLD_MUTED_SUCCESS, playlistUrl]);
 				} else writeLog([DL_EVENT.FETCH_PLAYLIST_OLD_MUTED_FAILURE]);
 			}
 		}
-		if (!playlist && liveVideoStatus === LIVE_VIDEO_STATUS.FINALIZED) throw new Error("Cannot download the playlist");
-		if (!playlist) {
+		if (!playlistContent && !args["live-from-start"]) throw new Error("Cannot download the playlist");
+		if (!playlistContent) {
 			console.warn(`[live-from-start] Waiting for the playlist. ${RETRY_MESSAGE}`);
 			await setTimeout$1(WAIT_BETWEEN_CYCLES_SEC * 1e3);
 			continue;
 		}
+		const playlist = parse(playlistContent);
 		writeLog([DL_EVENT.FETCH_PLAYLIST_SUCCESS]);
 		frags = getFragsForDownloading(playlistUrl, playlist, args);
 		writeLog(logFragsForDownloading(frags));
-		await fsp.writeFile(getPath.playlist(outputPath), playlist);
+		await fsp.writeFile(getPath.playlist(outputPath), playlistContent);
 		const hasNewFrags = frags.length > fragsCount;
 		fragsCount = frags.length;
-		if (!hasNewFrags && liveVideoStatus !== LIVE_VIDEO_STATUS.FINALIZED) {
-			let message = "[live-from-start] ";
-			message += liveVideoStatus === LIVE_VIDEO_STATUS.ONLINE ? `${chalk.green("VOD ONLINE")}: waiting for new fragments` : `${chalk.red("VOD OFFLINE")}: waiting for the finalization`;
+		if (!hasNewFrags && !playlist.endlist) {
+			const message = `[live-from-start] ${chalk.green("VOD ONLINE")}: waiting for new fragments`;
 			console.log(`${message}. ${RETRY_MESSAGE}`);
 			await setTimeout$1(WAIT_BETWEEN_CYCLES_SEC * 1e3);
 			continue;
@@ -1085,7 +1060,7 @@ const downloadVideo = async (formats, videoInfo, args, liveVideoMeta) => {
 			showProgress(downloadedFrags, fragsCount);
 		}
 		process.stdout.write("\n");
-		if (liveVideoStatus === LIVE_VIDEO_STATUS.FINALIZED) break;
+		if (playlist.endlist) break;
 	}
 	const dir = await readOutputDir(outputPath);
 	const existingFrags = getExistingFrags(frags, outputPath, dir);
@@ -1172,12 +1147,16 @@ const downloadWithStreamlink = async (link, streamMeta, channelLogin, args) => {
 //#region src/utils/parseDownloadFormats.ts
 const parseDownloadFormats = (playlistContent) => {
 	const formats = [];
-	for (const { name, width, height, url } of parsePlaylist(playlistContent)) formats.push({
-		format_id: name.replaceAll(" ", "_"),
-		width,
-		height,
-		url
-	});
+	const playlist = parse(playlistContent);
+	for (const { uri, resolution, video } of playlist.variants) {
+		const { name } = video[0];
+		formats.push({
+			format_id: name.replaceAll(" ", "_"),
+			width: resolution?.width || null,
+			height: resolution?.height || null,
+			url: uri
+		});
+	}
 	return formats;
 };
 
@@ -1251,7 +1230,6 @@ const getLiveVideoInfo = async (streamMeta, channelLogin) => {
 	let videoInfo = null;
 	let videoId = null;
 	if (!streamMeta.stream) throw new Error();
-	const streamId = streamMeta.stream.id;
 	const broadcast = await getBroadcast(streamMeta.id);
 	if (broadcast?.stream?.archiveVideo) {
 		videoId = broadcast.stream.archiveVideo.id;
@@ -1269,12 +1247,7 @@ const getLiveVideoInfo = async (streamMeta, channelLogin) => {
 	if (formats.length === 0 || !videoInfo) return null;
 	return {
 		formats,
-		videoInfo,
-		liveVideoMeta: {
-			videoId,
-			streamId,
-			channelLogin
-		}
+		videoInfo
 	};
 };
 
@@ -1296,8 +1269,8 @@ const downloadByChannelLogin = async (channelLogin, args) => {
 		if (isLive && isLiveFromStart) {
 			const liveVideoInfo = await getLiveVideoInfo(streamMeta, channelLogin);
 			if (liveVideoInfo) {
-				const { formats, videoInfo, liveVideoMeta } = liveVideoInfo;
-				await downloadVideo(formats, videoInfo, args, liveVideoMeta);
+				const { formats, videoInfo } = liveVideoInfo;
+				await downloadVideo(formats, videoInfo, args);
 			} else {
 				let message = `[live-from-start] Cannot find the playlist`;
 				if (isRetry) {
