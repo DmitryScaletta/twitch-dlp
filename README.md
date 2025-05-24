@@ -9,6 +9,7 @@ Download any twitch VODs from start during live broadcast
 - Download finished hidden VODs (see the [instructions](https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md))
 - Download specific part of the video (`--download-sections`)
 - Automatically unmute muted sections if possible
+- Continue downloading partially downloaded video (in case of network/power outage)
 - Watch channel status. If it becomes live, start downloading (`--retry-streams DELAY`)
 - Supports VOD links and channel links
 - Similar to `yt-dlp` (`youtube-dl`) syntax
