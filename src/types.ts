@@ -38,6 +38,7 @@ export type DownloadFormat = {
   format_id: string;
   width?: number | null;
   height?: number | null;
+  frameRate?: number | null;
   url: string;
 };
 
