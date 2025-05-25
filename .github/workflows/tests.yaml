@@ -1,0 +1,30 @@
+name: Tests
+
+on:
+  push:
+    paths-ignore:
+      - 'README.md'
+      - 'DOWNLOAD_PRIVATE_VIDEOS.md'
+      - '.gitignore'
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  tests:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm i --frozen-lockfile
+      - name: Run tests
+        run: pnpm test
+      - name: Run type tests
+        run: pnpm test:types
