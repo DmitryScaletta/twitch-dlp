@@ -20,6 +20,9 @@ devDependencies:
   twitch-regex:
     specifier: ^0.1.3
     version: 0.1.3
+  typescript:
+    specifier: ^5.8.3
+    version: 5.8.3
 
 packages:
 
@@ -211,6 +214,12 @@ packages:
 
   /twitch-regex@0.1.3:
     resolution: {integrity: sha512-7NJn4fRBlwhDlBdzWAAVdTvDruNuEfqKHGufcHpMpZlMFuuXNl61Nt2o8V550WVHs8XRkXlEJsUp3eATuE9big==}
+    dev: true
+
+  /typescript@5.8.3:
+    resolution: {integrity: sha512-p1diW6TqL9L07nNxvRMM7hMMw4c5XOo/1ibL4aAIGmSAt9slTE1Xgw5KWuof2uTOvCg9BY7ZRi+GaF+7sfgPeQ==}
+    engines: {node: '>=14.17'}
+    hasBin: true
     dev: true
 
   /undici-types@6.21.0:
