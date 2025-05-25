@@ -17,6 +17,9 @@ devDependencies:
   twitch-gql-queries:
     specifier: ^0.1.11
     version: 0.1.11
+  twitch-regex:
+    specifier: ^0.1.1
+    version: 0.1.1
 
 packages:
 
@@ -204,6 +207,10 @@ packages:
 
   /twitch-gql-queries@0.1.11:
     resolution: {integrity: sha512-kNzBvS/E+Vul4oPjm1N3FMo5GL5gbOVof8enbuHTLuT5aZ8ljh2qOhFWdrT7Xz1hLRkfBHqKbWsain9iCJro9A==}
+    dev: true
+
+  /twitch-regex@0.1.1:
+    resolution: {integrity: sha512-II21wdOUSiQkOTqI6RgTjBrLzsntjarm/4mMFwnuZHWpERpqb8QRCf4Ruz+ySzD9VBgpgEHV8bdit3hmVonRvA==}
     dev: true
 
   /undici-types@6.21.0:
