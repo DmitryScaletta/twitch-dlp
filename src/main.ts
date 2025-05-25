@@ -3,6 +3,7 @@ import { parseArgs } from 'node:util';
 import { downloadByChannelLogin } from './commands/downloadByChannelLogin.ts';
 import { downloadByVideoId } from './commands/downloadByVideoId.ts';
 import { downloadByVodPath } from './commands/downloadByVodPath.ts';
+import { downloadClip } from './commands/downloadClip.ts';
 import { mergeFragments } from './commands/mergeFragments.ts';
 import { showHelp } from './commands/showHelp.ts';
 import { showVersion } from './commands/showVersion.ts';
@@ -94,6 +95,7 @@ const main = async () => {
   const link = parseLink(positionals[0]);
   if (link.type === 'vodPath') return downloadByVodPath(link, args);
   if (link.type === 'video') return downloadByVideoId(link.videoId, args);
+  if (link.type === 'clip') return downloadClip(link.slug, args);
   return downloadByChannelLogin(link.channelLogin, args);
 };
 

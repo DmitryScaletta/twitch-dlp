@@ -1,3 +1,4 @@
+export const DEFAULT_OUTPUT_TEMPLATE = '%(title)s [%(id)s].%(ext)s';
 export const PRIVATE_VIDEO_INSTRUCTIONS =
   'This video might be private. Follow this article to download it: https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md';
 export const NO_TRY_UNMUTE_MESSAGE =

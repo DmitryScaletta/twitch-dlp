@@ -1,6 +1,9 @@
 import fsp from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { NO_TRY_UNMUTE_MESSAGE } from '../constants.ts';
+import {
+  DEFAULT_OUTPUT_TEMPLATE,
+  NO_TRY_UNMUTE_MESSAGE,
+} from '../constants.ts';
 import { chalk } from '../lib/chalk.ts';
 import * as hlsParser from '../lib/hlsParser.ts';
 import { isInstalled } from '../lib/isInstalled.ts';
@@ -31,7 +34,6 @@ import { processUnmutedFrags } from './processUnmutedFrags.ts';
 import { readOutputDir } from './readOutputDir.ts';
 import { showProgress } from './showProgress.ts';
 
-const DEFAULT_OUTPUT_TEMPLATE = '%(title)s [%(id)s].%(ext)s';
 const WAIT_BETWEEN_CYCLES_SEC = 60;
 
 const RETRY_MESSAGE = `Retry every ${WAIT_BETWEEN_CYCLES_SEC} second(s)`;
@@ -168,6 +170,7 @@ export const downloadVideo = async (
         fragPath,
         args['limit-rate'],
         fragGzip,
+        true,
       );
       downloadedFrags.set(i, fragMeta || { size: 0, time: 0 });
       writeLog([
@@ -184,6 +187,7 @@ export const downloadVideo = async (
           getPath.fragUnmuted(fragPath),
           args['limit-rate'],
           unmutedFrag.gzip,
+          true,
         );
         writeLog([
           fragMeta

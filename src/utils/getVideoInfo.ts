@@ -54,3 +54,19 @@ export const getVideoInfoByVodPath = ({
   view_count: null,
   ext: 'mp4',
 });
+
+export const getVideoInfoByClipMeta = (
+  clipMeta: api.ClipMetadata,
+): VideoInfo => ({
+  id: clipMeta.slug,
+  title: clipMeta.title,
+  description: null,
+  duration: clipMeta.durationSeconds,
+  uploader:
+    clipMeta.broadcaster?.displayName || clipMeta.broadcaster?.login || null,
+  uploader_id: clipMeta.broadcaster?.id || null,
+  upload_date: clipMeta.createdAt,
+  release_date: clipMeta.createdAt,
+  view_count: clipMeta.viewCount,
+  ext: 'mp4',
+});

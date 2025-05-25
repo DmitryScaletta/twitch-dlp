@@ -12,6 +12,7 @@ export const downloadFrag = async (
   destPath: string,
   limitRateArg?: string,
   gzip?: boolean,
+  checkIsTs = false,
 ) => {
   const destPathTmp = `${destPath}.part`;
   if (await statsOrNull(destPathTmp)) await fsp.unlink(destPathTmp);
@@ -33,7 +34,7 @@ export const downloadFrag = async (
   await fsp.rename(destPathTmp, destPath);
   const [{ size }, isTs] = await Promise.all([
     fsp.stat(destPath),
-    isTsFile(destPath),
+    checkIsTs ? isTsFile(destPath) : true,
   ]);
   if (!isTs) {
     await fsp.unlink(destPath);
