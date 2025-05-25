@@ -1,11 +1,13 @@
 import {
   getQueryFfzBroadcastId,
   getQueryPlaybackAccessToken,
+  getQueryShareClipRenderStatus,
   getQueryStreamMetadata,
   getQueryVideoMetadata,
   gqlRequest,
   type FfzBroadcastIdUser,
   type PlaybackAccessTokenVideo,
+  type ShareClipRenderStatusClip,
   type StreamMetadataUser,
   type VideoMetadataVideo,
 } from 'twitch-gql-queries';
@@ -64,6 +66,11 @@ export const getVideoMetadata = (
     'video',
     'video metadata',
   );
+
+export type ClipMetadata = ShareClipRenderStatusClip;
+
+export const getClipMetadata = (slug: string): Promise<ClipMetadata | null> =>
+  apiRequest(getQueryShareClipRenderStatus({ slug }), 'clip', 'clip metadata');
 
 export const getBroadcast = (
   channelId: string,
