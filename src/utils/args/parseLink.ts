@@ -1,9 +1,15 @@
+import {
+  CHANNEL_REGEX_EXACT,
+  CLIP_REGEX_EXACT,
+  VIDEO_REGEX_EXACT,
+  type ChannelMatchGroups,
+  type ClipMatchGroups,
+  type VideoMatchGroups,
+} from 'twitch-regex';
+
 // https://regex101.com/r/tvGCMP/2
 const VOD_PATH_REGEX =
   /^video:(?<vodPath>(?<channelLogin>\w+)_(?<videoId>\d+)_(?<startTimestamp>\d+))$/;
-const VOD_REGEX = /^https:\/\/(?:www\.)?twitch\.tv\/videos\/(?<videoId>\d+)/;
-const CHANNEL_REGEX =
-  /^https:\/\/(?:www\.)?twitch\.tv\/(?<channelLogin>[^/#?]+)/;
 
 export type ParsedLinkVodPath = {
   type: 'vodPath';
@@ -16,21 +22,38 @@ export type ParsedLinkVideo = {
   type: 'video';
   videoId: string;
 };
+export type ParsedLinkClip = {
+  type: 'clip';
+  slug: string;
+};
 export type ParsedLinkChannel = {
   type: 'channel';
   channelLogin: string;
 };
+
 export type ParsedLink =
   | ParsedLinkVodPath
   | ParsedLinkVideo
+  | ParsedLinkClip
   | ParsedLinkChannel;
 
 export const parseLink = (link: string): ParsedLink => {
   let m = link.match(VOD_PATH_REGEX);
   if (m) return { type: 'vodPath', ...m.groups } as ParsedLinkVodPath;
-  m = link.match(VOD_REGEX);
-  if (m) return { type: 'video', ...m.groups } as ParsedLinkVideo;
-  m = link.match(CHANNEL_REGEX);
-  if (m) return { type: 'channel', ...m.groups } as ParsedLinkChannel;
+  m = link.match(VIDEO_REGEX_EXACT);
+  if (m) {
+    const { id } = m.groups as VideoMatchGroups;
+    return { type: 'video', videoId: id } satisfies ParsedLinkVideo;
+  }
+  m = link.match(CLIP_REGEX_EXACT);
+  if (m) {
+    const { slug } = m.groups as ClipMatchGroups;
+    return { type: 'clip', slug } satisfies ParsedLinkClip;
+  }
+  m = link.match(CHANNEL_REGEX_EXACT);
+  if (m) {
+    const { channel: channelLogin } = m.groups as ChannelMatchGroups;
+    return { type: 'channel', channelLogin } satisfies ParsedLinkChannel;
+  }
   throw new Error('Wrong link');
 };
