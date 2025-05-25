@@ -1,6 +1,7 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { NO_TRY_UNMUTE_MESSAGE, UNMUTE } from '../constants.ts';
+import * as hlsParser from '../lib/hlsParser.ts';
 import { mergeFrags } from '../merge/index.ts';
 import {
   createLogger,
@@ -100,7 +101,7 @@ const tryUnmuteFrags = async (
 
 export const mergeFragments = async (outputPath: string, args: AppArgs) => {
   outputPath = path.resolve(outputPath);
-  const [playlist, dir] = await Promise.all([
+  const [playlistContent, dir] = await Promise.all([
     fsp.readFile(getPath.playlist(outputPath), 'utf8'),
     readOutputDir(outputPath),
   ]);
@@ -109,6 +110,7 @@ export const mergeFragments = async (outputPath: string, args: AppArgs) => {
   const writeLog = createLogger(logPath);
   const dlInfo = getInitPayload(log || []);
   const playlistUrl = dlInfo?.playlistUrl || '';
+  const playlist = hlsParser.parse(playlistContent) as hlsParser.MediaPlaylist;
   const allFrags = getFragsForDownloading(playlistUrl, playlist, args);
   const frags = getExistingFrags(allFrags, outputPath, dir);
 

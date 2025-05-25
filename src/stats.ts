@@ -1,12 +1,6 @@
 import fsp from 'node:fs/promises';
 import { groupBy } from './lib/groupBy.ts';
-import type {
-  AppArgs,
-  DownloadFormat,
-  Frag,
-  LiveVideoStatus,
-  VideoInfo,
-} from './types.ts';
+import type { AppArgs, DownloadFormat, Frag, VideoInfo } from './types.ts';
 import type { UnmutedFrag } from './utils/getUnmutedFrag.ts';
 
 export const DL_EVENT = {
@@ -15,7 +9,6 @@ export const DL_EVENT = {
   FETCH_PLAYLIST_FAILURE: 'FETCH_PLAYLIST_FAILURE',
   FETCH_PLAYLIST_OLD_MUTED_SUCCESS: 'FETCH_PLAYLIST_OLD_MUTED_SUCCESS',
   FETCH_PLAYLIST_OLD_MUTED_FAILURE: 'FETCH_PLAYLIST_OLD_MUTED_FAILURE',
-  LIVE_VIDEO_STATUS: 'LIVE_VIDEO_STATUS',
   FRAGS_FOR_DOWNLOADING: 'FRAGS_FOR_DOWNLOADING',
   FRAGS_EXISTING: 'FRAGS_EXISTING',
   FRAG_ALREADY_EXISTS: 'FRAG_ALREADY_EXISTS',
@@ -50,7 +43,6 @@ export type DlEvent =
   | [name: EvNames['FETCH_PLAYLIST_FAILURE']]
   | [name: EvNames['FETCH_PLAYLIST_OLD_MUTED_SUCCESS'], newPlaylistUrl: string]
   | [name: EvNames['FETCH_PLAYLIST_OLD_MUTED_FAILURE']]
-  | [name: EvNames['LIVE_VIDEO_STATUS'], liveVideoStatus: LiveVideoStatus]
   | [name: EvNames['FRAGS_FOR_DOWNLOADING'], startIdx: number, endIdx: number]
   | [name: EvNames['FRAGS_EXISTING'], fragCount: number]
   | [name: EvNames['FRAG_RENAME_UNMUTED'], fragIdx: number]
