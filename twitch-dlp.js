@@ -406,7 +406,6 @@ const DL_EVENT = {
 	FETCH_PLAYLIST_FAILURE: "FETCH_PLAYLIST_FAILURE",
 	FETCH_PLAYLIST_OLD_MUTED_SUCCESS: "FETCH_PLAYLIST_OLD_MUTED_SUCCESS",
 	FETCH_PLAYLIST_OLD_MUTED_FAILURE: "FETCH_PLAYLIST_OLD_MUTED_FAILURE",
-	LIVE_VIDEO_STATUS: "LIVE_VIDEO_STATUS",
 	FRAGS_FOR_DOWNLOADING: "FRAGS_FOR_DOWNLOADING",
 	FRAGS_EXISTING: "FRAGS_EXISTING",
 	FRAG_ALREADY_EXISTS: "FRAG_ALREADY_EXISTS",
@@ -1417,12 +1416,13 @@ const tryUnmuteFrags = async (outputPath, log, frags, formats, args, writeLog) =
 };
 const mergeFragments = async (outputPath, args) => {
 	outputPath = path.resolve(outputPath);
-	const [playlist, dir] = await Promise.all([fsp.readFile(getPath.playlist(outputPath), "utf8"), readOutputDir(outputPath)]);
+	const [playlistContent, dir] = await Promise.all([fsp.readFile(getPath.playlist(outputPath), "utf8"), readOutputDir(outputPath)]);
 	const logPath = getPath.log(outputPath);
 	const log = await getLog(logPath);
 	const writeLog = createLogger(logPath);
 	const dlInfo = getInitPayload(log || []);
 	const playlistUrl = dlInfo?.playlistUrl || "";
+	const playlist = parse(playlistContent);
 	const allFrags = getFragsForDownloading(playlistUrl, playlist, args);
 	const frags = getExistingFrags(allFrags, outputPath, dir);
 	if (log && dlInfo && args.unmute && args.unmute !== UNMUTE.OFF) {
