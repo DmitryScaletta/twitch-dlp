@@ -43,6 +43,14 @@ var getQueryPlaybackAccessToken = (variables) => ({
 		sha256Hash: "ed230aa1e33e07eebb8928504583da78a5173989fadfb1ac94be06a04f3cdbe9"
 	} }
 });
+var getQueryShareClipRenderStatus = (variables) => ({
+	operationName: "ShareClipRenderStatus",
+	variables,
+	extensions: { persistedQuery: {
+		version: 1,
+		sha256Hash: "f130048a462a0ac86bb54d653c968c514e9ab9ca94db52368c1179e97b0f16eb"
+	} }
+});
 var getQueryStreamMetadata = (variables) => ({
 	operationName: "StreamMetadata",
 	variables,
@@ -99,6 +107,7 @@ const getVideoMetadata = (videoId) => apiRequest(getQueryVideoMetadata({
 	channelLogin: "",
 	videoID: videoId
 }), "video", "video metadata");
+const getClipMetadata = (slug) => apiRequest(getQueryShareClipRenderStatus({ slug }), "clip", "clip metadata");
 const getBroadcast = (channelId) => apiRequest(getQueryFfzBroadcastId({ id: channelId }), "user", "broadcast id");
 const getManifest = (videoId, accessToken) => {
 	const params = new URLSearchParams({
@@ -116,6 +125,7 @@ const getManifest = (videoId, accessToken) => {
 
 //#endregion
 //#region src/constants.ts
+const DEFAULT_OUTPUT_TEMPLATE = "%(title)s [%(id)s].%(ext)s";
 const PRIVATE_VIDEO_INSTRUCTIONS = "This video might be private. Follow this article to download it: https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md";
 const NO_TRY_UNMUTE_MESSAGE = "[unmute] The video is old, not trying to unmute";
 const VOD_DOMAINS = [
@@ -726,7 +736,7 @@ const unlinkIfAny = async (path$1) => {
 
 //#endregion
 //#region src/utils/downloadFrag.ts
-const downloadFrag = async (downloader, url, destPath, limitRateArg, gzip) => {
+const downloadFrag = async (downloader, url, destPath, limitRateArg, gzip, checkIsTs = false) => {
 	const destPathTmp = `${destPath}.part`;
 	if (await statsOrNull(destPathTmp)) await fsp.unlink(destPathTmp);
 	const startTime = Date.now();
@@ -737,7 +747,7 @@ const downloadFrag = async (downloader, url, destPath, limitRateArg, gzip) => {
 		return null;
 	}
 	await fsp.rename(destPathTmp, destPath);
-	const [{ size }, isTs] = await Promise.all([fsp.stat(destPath), isTsFile(destPath)]);
+	const [{ size }, isTs] = await Promise.all([fsp.stat(destPath), checkIsTs ? isTsFile(destPath) : true]);
 	if (!isTs) {
 		await fsp.unlink(destPath);
 		return null;
@@ -957,7 +967,6 @@ const showProgress = (downloadedFrags, fragsCount) => {
 
 //#endregion
 //#region src/utils/downloadVideo.ts
-const DEFAULT_OUTPUT_TEMPLATE = "%(title)s [%(id)s].%(ext)s";
 const WAIT_BETWEEN_CYCLES_SEC = 60;
 const RETRY_MESSAGE = `Retry every ${WAIT_BETWEEN_CYCLES_SEC} second(s)`;
 const downloadVideo = async (formats, videoInfo, args) => {
@@ -1047,14 +1056,14 @@ const downloadVideo = async (formats, videoInfo, args) => {
 				frag.url = unmutedFrag.url;
 				fragGzip = unmutedFrag.gzip;
 			}
-			let fragMeta = await downloadFrag(args.downloader, frag.url, fragPath, args["limit-rate"], fragGzip);
+			let fragMeta = await downloadFrag(args.downloader, frag.url, fragPath, args["limit-rate"], fragGzip, true);
 			downloadedFrags.set(i, fragMeta || {
 				size: 0,
 				time: 0
 			});
 			writeLog([fragMeta ? DL_EVENT.FRAG_DOWNLOAD_SUCCESS : DL_EVENT.FRAG_DOWNLOAD_FAILURE, frag.idx]);
 			if (unmutedFrag && !unmutedFrag.sameFormat) {
-				fragMeta = await downloadFrag(args.downloader, unmutedFrag.url, getPath.fragUnmuted(fragPath), args["limit-rate"], unmutedFrag.gzip);
+				fragMeta = await downloadFrag(args.downloader, unmutedFrag.url, getPath.fragUnmuted(fragPath), args["limit-rate"], unmutedFrag.gzip, true);
 				writeLog([fragMeta ? DL_EVENT.FRAG_DOWNLOAD_UNMUTED_SUCCESS : DL_EVENT.FRAG_DOWNLOAD_UNMUTED_FAILURE, frag.idx]);
 			}
 			showProgress(downloadedFrags, fragsCount);
@@ -1111,6 +1120,18 @@ const getVideoInfoByVodPath = ({ channelLogin, videoId, startTimestamp }) => ({
 	view_count: null,
 	ext: "mp4"
 });
+const getVideoInfoByClipMeta = (clipMeta) => ({
+	id: clipMeta.slug,
+	title: clipMeta.title,
+	description: null,
+	duration: clipMeta.durationSeconds,
+	uploader: clipMeta.broadcaster?.displayName || clipMeta.broadcaster?.login || null,
+	uploader_id: clipMeta.broadcaster?.id || null,
+	upload_date: clipMeta.createdAt,
+	release_date: clipMeta.createdAt,
+	view_count: clipMeta.viewCount,
+	ext: "mp4"
+});
 
 //#endregion
 //#region src/utils/downloadWithStreamlink.ts
@@ -1148,12 +1169,13 @@ const downloadWithStreamlink = async (link, streamMeta, channelLogin, args) => {
 const parseDownloadFormats = (playlistContent) => {
 	const formats = [];
 	const playlist = parse(playlistContent);
-	for (const { uri, resolution, video } of playlist.variants) {
+	for (const { uri, resolution, video, frameRate } of playlist.variants) {
 		const { name } = video[0];
 		formats.push({
 			format_id: name.replaceAll(" ", "_"),
 			width: resolution?.width || null,
 			height: resolution?.height || null,
+			frameRate: frameRate || null,
 			url: uri
 		});
 	}
@@ -1199,8 +1221,11 @@ const getAvailableFormats = async (vodDomain, fullVodPath, broadcastType, videoI
 	for (const [i, res] of responses.entries()) {
 		if (!res.ok) continue;
 		const format = FORMATS[i];
+		const [heightStr, frameRateStr] = format.split("p");
 		formats.push({
 			format_id: FORMATS_MAP[format] || format,
+			height: heightStr ? Number.parseInt(heightStr) : null,
+			frameRate: frameRateStr ? Number.parseInt(frameRateStr) : null,
 			url: formatUrls[i]
 		});
 	}
@@ -1305,6 +1330,52 @@ const downloadByVodPath = async (parsedLink, args) => {
 	const formats = await getVideoFormatsByFullVodPath(getFullVodPath(parsedLink.vodPath));
 	const videoInfo = getVideoInfoByVodPath(parsedLink);
 	return downloadVideo(formats, videoInfo, args);
+};
+
+//#endregion
+//#region src/commands/downloadClip.ts
+const getClipFormats = (clipMeta) => {
+	const formats = [];
+	const { signature: sig, value: token } = clipMeta.playbackAccessToken;
+	const addFormats = (videoQualities, formatIdPrefix = "") => {
+		for (const { quality, frameRate, sourceURL } of videoQualities) {
+			if (!sourceURL) continue;
+			const url = `${sourceURL}?sig=${sig}&token=${token}`;
+			formats.push({
+				format_id: `${formatIdPrefix}${quality}`,
+				height: Number.parseInt(quality) || null,
+				frameRate: frameRate ? Math.round(frameRate) : null,
+				url
+			});
+		}
+	};
+	const [assetDefault, assetPortrait] = clipMeta.assets;
+	addFormats(assetDefault?.videoQualities || []);
+	addFormats(assetPortrait?.videoQualities || [], "portrait-");
+	return formats;
+};
+const downloadClip = async (slug, args) => {
+	const clipMeta = await getClipMetadata(slug);
+	if (!clipMeta) throw new Error("Clip not found");
+	const formats = getClipFormats(clipMeta);
+	if (args["list-formats"]) {
+		console.table(formats.map(({ url,...rest }) => rest));
+		return;
+	}
+	const dlFormat = args.format === "best" ? formats[0] : formats.find((f) => f.format_id.toLowerCase() === args.format.toLowerCase());
+	if (!dlFormat) throw new Error("Wrong format");
+	const destPath = getPath.output(args.output || DEFAULT_OUTPUT_TEMPLATE, getVideoInfoByClipMeta(clipMeta));
+	console.log(`[download] Destination: ${destPath}`);
+	if (await statsOrNull(destPath)) {
+		console.warn(`[download] File already exists, skipping`);
+		return;
+	}
+	const res = await fetch(dlFormat.url, { method: "HEAD" });
+	const size = Number.parseInt(res.headers.get("content-length") || "0");
+	console.log(`[download] Downloading clip (${(size / 1024 / 1024).toFixed(2)} MB)`);
+	const result = await downloadFrag(args.downloader, dlFormat.url, destPath, args["limit-rate"]);
+	if (!result) throw new Error("[download] Download failed");
+	console.log("[download] Done");
 };
 
 //#endregion
@@ -1454,26 +1525,49 @@ const normalizeArgs = async (args) => {
 };
 
 //#endregion
+//#region node_modules/.pnpm/twitch-regex@0.1.1/node_modules/twitch-regex/dist/index.js
+var CLIP_REGEX_STRING = "https?:\\/\\/(?:clips\\.twitch\\.tv\\/(?:embed\\?.*?\\bclip=|\\/*)|(?:(?:www|go|m)\\.)?twitch\\.tv\\/(?:(?<channel>[^/]+)\\/)?clip\\/)(?<slug>[\\w-]+)\\S*";
+var CLIP_REGEX_EXACT = new RegExp(`^${CLIP_REGEX_STRING}$`);
+var VIDEO_REGEX_STRING = "https?:\\/\\/(?:(?:(?:www|go|m)\\.)?twitch\\.tv\\/(?:videos|(?<channel>[^/]+)\\/v(?:ideo)?)\\/|player\\.twitch\\.tv\\/\\?.*?\\bvideo=v?|www\\.twitch\\.tv\\/(?<channel>[^/]+)\\/schedule\\?vodID=)(?<id>\\d+)\\S*";
+var VIDEO_REGEX_EXACT = new RegExp(`^${VIDEO_REGEX_STRING}$`);
+var CHANNEL_REGEX_STRING = "https?:\\/\\/(?:(?:(?:www|go|m)\\.)?twitch\\.tv\\/|player\\.twitch\\.tv\\/\\?.*?\\bchannel=)(?<channel>\\w+)[^\\s/]*";
+var CHANNEL_REGEX_EXACT = new RegExp(`^${CHANNEL_REGEX_STRING}$`);
+var COLLECTION_REGEX_STRING = "https?:\\/\\/(?:(?:(?:www|go|m)\\.)?twitch\\.tv\\/collections\\/|player\\.twitch\\.tv\\/\\?.*?\\bcollection=)(?<id>[\\w-]+)\\S*";
+var COLLECTION_REGEX_EXACT = new RegExp(`^${COLLECTION_REGEX_STRING}$`);
+
+//#endregion
 //#region src/utils/args/parseLink.ts
 const VOD_PATH_REGEX = /^video:(?<vodPath>(?<channelLogin>\w+)_(?<videoId>\d+)_(?<startTimestamp>\d+))$/;
-const VOD_REGEX = /^https:\/\/(?:www\.)?twitch\.tv\/videos\/(?<videoId>\d+)/;
-const CHANNEL_REGEX = /^https:\/\/(?:www\.)?twitch\.tv\/(?<channelLogin>[^/#?]+)/;
 const parseLink = (link) => {
 	let m = link.match(VOD_PATH_REGEX);
 	if (m) return {
 		type: "vodPath",
 		...m.groups
 	};
-	m = link.match(VOD_REGEX);
-	if (m) return {
-		type: "video",
-		...m.groups
-	};
-	m = link.match(CHANNEL_REGEX);
-	if (m) return {
-		type: "channel",
-		...m.groups
-	};
+	m = link.match(VIDEO_REGEX_EXACT);
+	if (m) {
+		const { id } = m.groups;
+		return {
+			type: "video",
+			videoId: id
+		};
+	}
+	m = link.match(CLIP_REGEX_EXACT);
+	if (m) {
+		const { slug } = m.groups;
+		return {
+			type: "clip",
+			slug
+		};
+	}
+	m = link.match(CHANNEL_REGEX_EXACT);
+	if (m) {
+		const { channel: channelLogin } = m.groups;
+		return {
+			type: "channel",
+			channelLogin
+		};
+	}
 	throw new Error("Wrong link");
 };
 
@@ -1547,6 +1641,7 @@ const main = async () => {
 	const link = parseLink(positionals[0]);
 	if (link.type === "vodPath") return downloadByVodPath(link, args);
 	if (link.type === "video") return downloadByVideoId(link.videoId, args);
+	if (link.type === "clip") return downloadClip(link.slug, args);
 	return downloadByChannelLogin(link.channelLogin, args);
 };
 main().catch((e) => console.error(chalk.red("ERROR:"), e.message));
