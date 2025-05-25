@@ -18,8 +18,8 @@ const getClipFormats = (clipMeta: ClipMetadata) => {
       const url = `${sourceURL}?sig=${sig}&token=${token}`;
       formats.push({
         format_id: `${formatIdPrefix}${quality}`,
+        height: Number.parseInt(quality) || null,
         frameRate: frameRate ? Math.round(frameRate) : null,
-        width: Number.parseInt(quality) || null,
         url,
       });
     }

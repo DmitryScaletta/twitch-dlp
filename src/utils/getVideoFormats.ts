@@ -65,10 +65,10 @@ const getAvailableFormats = async (
   for (const [i, res] of responses.entries()) {
     if (!res.ok) continue;
     const format = FORMATS[i];
-    const [widthStr, frameRateStr] = format.split('p');
+    const [heightStr, frameRateStr] = format.split('p');
     formats.push({
       format_id: FORMATS_MAP[format] || format,
-      width: widthStr ? Number.parseInt(widthStr) : null,
+      height: heightStr ? Number.parseInt(heightStr) : null,
       frameRate: frameRateStr ? Number.parseInt(frameRateStr) : null,
       url: formatUrls[i],
     });
