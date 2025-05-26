@@ -25,6 +25,7 @@ import type {
 } from '../types.ts';
 import { downloadFrag } from './downloadFrag.ts';
 import { fetchText } from './fetchText.ts';
+import { getDlFormat } from './getDlFormat.ts';
 import { getExistingFrags } from './getExistingFrags.ts';
 import { getFragsForDownloading } from './getFragsForDownloading.ts';
 import { getPath } from './getPath.ts';
@@ -32,6 +33,7 @@ import { getTryUnmute } from './getTryUnmute.ts';
 import { getUnmutedFrag, type UnmutedFrag } from './getUnmutedFrag.ts';
 import { processUnmutedFrags } from './processUnmutedFrags.ts';
 import { readOutputDir } from './readOutputDir.ts';
+import { showFormats } from './showFormats.ts';
 import { showProgress } from './showProgress.ts';
 
 const WAIT_BETWEEN_CYCLES_SEC = 60;
@@ -44,7 +46,7 @@ export const downloadVideo = async (
   args: AppArgs,
 ) => {
   if (args['list-formats']) {
-    console.table(formats.map(({ url, ...rest }) => rest));
+    showFormats(formats);
     process.exit();
   }
 
@@ -54,14 +56,7 @@ export const downloadVideo = async (
     );
   }
 
-  const dlFormat =
-    args.format === 'best'
-      ? formats[0]
-      : formats.find(
-          (f) => f.format_id.toLowerCase() === args.format.toLowerCase(),
-        );
-  if (!dlFormat) throw new Error('Wrong format');
-
+  const dlFormat = getDlFormat(formats, args.format);
   const outputPath = getPath.output(
     args.output || DEFAULT_OUTPUT_TEMPLATE,
     videoInfo,

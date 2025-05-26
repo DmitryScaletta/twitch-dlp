@@ -39,6 +39,8 @@ export type DownloadFormat = {
   width?: number | null;
   height?: number | null;
   frameRate?: number | null;
+  totalBitrate?: string | null;
+  source: true | null;
   url: string;
 };
 

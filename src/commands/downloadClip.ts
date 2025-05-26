@@ -3,8 +3,10 @@ import { DEFAULT_OUTPUT_TEMPLATE } from '../constants.ts';
 import { statsOrNull } from '../lib/statsOrNull.ts';
 import type { AppArgs, DownloadFormat } from '../types.ts';
 import { downloadFrag } from '../utils/downloadFrag.ts';
+import { getDlFormat } from '../utils/getDlFormat.ts';
 import { getPath } from '../utils/getPath.ts';
 import { getVideoInfoByClipMeta } from '../utils/getVideoInfo.ts';
+import { showFormats } from '../utils/showFormats.ts';
 
 type VideoQuality = ClipMetadata['assets'][number]['videoQualities'][number];
 
@@ -13,13 +15,15 @@ const getClipFormats = (clipMeta: ClipMetadata) => {
   const { signature: sig, value: token } = clipMeta.playbackAccessToken;
 
   const addFormats = (videoQualities: VideoQuality[], formatIdPrefix = '') => {
-    for (const { quality, frameRate, sourceURL } of videoQualities) {
+    for (let i = 0; i < videoQualities.length; i += 1) {
+      const { quality, frameRate, sourceURL } = videoQualities[i];
       if (!sourceURL) continue;
       const url = `${sourceURL}?sig=${sig}&token=${token}`;
       formats.push({
         format_id: `${formatIdPrefix}${quality}`,
         height: Number.parseInt(quality) || null,
         frameRate: frameRate ? Math.round(frameRate) : null,
+        source: null,
         url,
       });
     }
@@ -28,6 +32,7 @@ const getClipFormats = (clipMeta: ClipMetadata) => {
   const [assetDefault, assetPortrait] = clipMeta.assets;
   addFormats(assetDefault?.videoQualities || []);
   addFormats(assetPortrait?.videoQualities || [], 'portrait-');
+  formats[0].source = true;
 
   return formats;
 };
@@ -38,19 +43,9 @@ export const downloadClip = async (slug: string, args: AppArgs) => {
 
   const formats = getClipFormats(clipMeta);
 
-  if (args['list-formats']) {
-    console.table(formats.map(({ url, ...rest }) => rest));
-    return;
-  }
+  if (args['list-formats']) return showFormats(formats);
 
-  const dlFormat =
-    args.format === 'best'
-      ? formats[0]
-      : formats.find(
-          (f) => f.format_id.toLowerCase() === args.format.toLowerCase(),
-        );
-  if (!dlFormat) throw new Error('Wrong format');
-
+  const dlFormat = getDlFormat(formats, args.format);
   const destPath = getPath.output(
     args.output || DEFAULT_OUTPUT_TEMPLATE,
     getVideoInfoByClipMeta(clipMeta),

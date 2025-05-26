@@ -24,7 +24,6 @@ export const getVideoFormats = async (videoId: string) => {
   const manifest = await api.getManifest(videoId, accessToken);
   if (!manifest) return [];
   const formats = parseDownloadFormats(manifest);
-  formats.sort((a, b) => (b.width || 0) - (a.width || 0));
   return formats;
 };
 
@@ -65,11 +64,19 @@ const getAvailableFormats = async (
   for (const [i, res] of responses.entries()) {
     if (!res.ok) continue;
     const format = FORMATS[i];
-    const [heightStr, frameRateStr] = format.split('p');
+    let height: number | null = null;
+    let frameRate: number | null = null;
+    const m = format.match(/^(?<height>\d+)p(?<frameRate>\d+)$/);
+    if (m) {
+      const groups = m.groups as { height: string; frameRate: string };
+      height = Number.parseInt(groups.height);
+      frameRate = Number.parseInt(groups.frameRate);
+    }
     formats.push({
       format_id: FORMATS_MAP[format] || format,
-      height: heightStr ? Number.parseInt(heightStr) : null,
-      frameRate: frameRateStr ? Number.parseInt(frameRateStr) : null,
+      height,
+      frameRate,
+      source: format === 'chunked' ? true : null,
       url: formatUrls[i],
     });
   }
