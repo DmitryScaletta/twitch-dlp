@@ -758,6 +758,14 @@ const downloadFrag = async (downloader, url, destPath, limitRateArg, gzip, check
 };
 
 //#endregion
+//#region src/utils/getDlFormat.ts
+const getDlFormat = (formats, formatArg) => {
+	const dlFormat = formatArg === "best" ? formats[0] : formats.find((f) => f.format_id.toLowerCase() === formatArg.toLowerCase());
+	if (!dlFormat) throw new Error("Wrong format");
+	return dlFormat;
+};
+
+//#endregion
 //#region src/utils/getExistingFrags.ts
 const getExistingFrags = (frags, outputPath, dir) => frags.filter((frag) => dir.includes(path.parse(getPath.frag(outputPath, frag.idx + 1)).base));
 
@@ -904,6 +912,23 @@ const processUnmutedFrags = async (frags, outputPath, dir, writeLog) => {
 const readOutputDir = (outputPath) => fsp.readdir(path.parse(outputPath).dir || ".");
 
 //#endregion
+//#region src/utils/showFormats.ts
+const showFormats = (formats) => {
+	console.table([...formats].reverse().map(({ format_id, width, height, frameRate, totalBitrate, source }) => {
+		const fmt = {};
+		fmt.format_id = format_id;
+		fmt.resolution = "unknown";
+		if (format_id === "Audio_Only") fmt.resolution = "audio only";
+		else if (width && height) fmt.resolution = `${width}x${height}`;
+		else if (height) fmt.resolution = `${height}p`;
+		fmt.fps = frameRate;
+		if (totalBitrate) fmt.totalBitrate = totalBitrate;
+		fmt.source = source;
+		return fmt;
+	}));
+};
+
+//#endregion
 //#region src/utils/showProgress.ts
 const UNITS = [
 	"B",
@@ -970,12 +995,11 @@ const WAIT_BETWEEN_CYCLES_SEC = 60;
 const RETRY_MESSAGE = `Retry every ${WAIT_BETWEEN_CYCLES_SEC} second(s)`;
 const downloadVideo = async (formats, videoInfo, args) => {
 	if (args["list-formats"]) {
-		console.table(formats.map(({ url,...rest }) => rest));
+		showFormats(formats);
 		process.exit();
 	}
 	if (!await isInstalled("ffmpeg")) throw new Error("ffmpeg is not installed. Install it from https://ffmpeg.org/");
-	const dlFormat = args.format === "best" ? formats[0] : formats.find((f) => f.format_id.toLowerCase() === args.format.toLowerCase());
-	if (!dlFormat) throw new Error("Wrong format");
+	const dlFormat = getDlFormat(formats, args.format);
 	const outputPath = getPath.output(args.output || DEFAULT_OUTPUT_TEMPLATE, videoInfo);
 	let frags;
 	let fragsCount = 0;
@@ -1166,18 +1190,34 @@ const downloadWithStreamlink = async (link, streamMeta, channelLogin, args) => {
 //#endregion
 //#region src/utils/parseDownloadFormats.ts
 const parseDownloadFormats = (playlistContent) => {
-	const formats = [];
+	let formats = [];
 	const playlist = parse(playlistContent);
-	for (const { uri, resolution, video, frameRate } of playlist.variants) {
+	for (let i = 0; i < playlist.variants.length; i += 1) {
+		const { uri, resolution, video, frameRate, bandwidth } = playlist.variants[i];
 		const { name } = video[0];
 		formats.push({
 			format_id: name.replaceAll(" ", "_"),
 			width: resolution?.width || null,
 			height: resolution?.height || null,
-			frameRate: frameRate || null,
+			frameRate: frameRate ? Math.round(frameRate) : null,
+			totalBitrate: bandwidth ? `${(bandwidth / 1024).toFixed()}k` : null,
+			source: i === 0 ? true : null,
 			url: uri
 		});
 	}
+	formats.sort((a, b) => (b.height || 0) - (a.height || 0));
+	const counts = {};
+	for (const { format_id } of formats) counts[format_id] = (counts[format_id] || 0) + 1;
+	const remaining = { ...counts };
+	formats = formats.map((format) => {
+		const { format_id } = format;
+		if (counts[format_id] > 1) {
+			const suffix = remaining[format_id] - 1;
+			remaining[format_id] -= 1;
+			format.format_id = `${format_id}-${suffix}`;
+		}
+		return format;
+	});
 	return formats;
 };
 
@@ -1202,7 +1242,6 @@ const getVideoFormats = async (videoId) => {
 	const manifest = await getManifest(videoId, accessToken);
 	if (!manifest) return [];
 	const formats = parseDownloadFormats(manifest);
-	formats.sort((a, b) => (b.width || 0) - (a.width || 0));
 	return formats;
 };
 const getFullVodPath = (vodPath) => {
@@ -1220,11 +1259,19 @@ const getAvailableFormats = async (vodDomain, fullVodPath, broadcastType, videoI
 	for (const [i, res] of responses.entries()) {
 		if (!res.ok) continue;
 		const format = FORMATS[i];
-		const [heightStr, frameRateStr] = format.split("p");
+		let height = null;
+		let frameRate = null;
+		const m = format.match(/^(?<height>\d+)p(?<frameRate>\d+)$/);
+		if (m) {
+			const groups = m.groups;
+			height = Number.parseInt(groups.height);
+			frameRate = Number.parseInt(groups.frameRate);
+		}
 		formats.push({
 			format_id: FORMATS_MAP[format] || format,
-			height: heightStr ? Number.parseInt(heightStr) : null,
-			frameRate: frameRateStr ? Number.parseInt(frameRateStr) : null,
+			height,
+			frameRate,
+			source: format === "chunked" ? true : null,
 			url: formatUrls[i]
 		});
 	}
@@ -1337,13 +1384,15 @@ const getClipFormats = (clipMeta) => {
 	const formats = [];
 	const { signature: sig, value: token } = clipMeta.playbackAccessToken;
 	const addFormats = (videoQualities, formatIdPrefix = "") => {
-		for (const { quality, frameRate, sourceURL } of videoQualities) {
+		for (let i = 0; i < videoQualities.length; i += 1) {
+			const { quality, frameRate, sourceURL } = videoQualities[i];
 			if (!sourceURL) continue;
 			const url = `${sourceURL}?sig=${sig}&token=${token}`;
 			formats.push({
 				format_id: `${formatIdPrefix}${quality}`,
 				height: Number.parseInt(quality) || null,
 				frameRate: frameRate ? Math.round(frameRate) : null,
+				source: null,
 				url
 			});
 		}
@@ -1351,18 +1400,15 @@ const getClipFormats = (clipMeta) => {
 	const [assetDefault, assetPortrait] = clipMeta.assets;
 	addFormats(assetDefault?.videoQualities || []);
 	addFormats(assetPortrait?.videoQualities || [], "portrait-");
+	formats[0].source = true;
 	return formats;
 };
 const downloadClip = async (slug, args) => {
 	const clipMeta = await getClipMetadata(slug);
 	if (!clipMeta) throw new Error("Clip not found");
 	const formats = getClipFormats(clipMeta);
-	if (args["list-formats"]) {
-		console.table(formats.map(({ url,...rest }) => rest));
-		return;
-	}
-	const dlFormat = args.format === "best" ? formats[0] : formats.find((f) => f.format_id.toLowerCase() === args.format.toLowerCase());
-	if (!dlFormat) throw new Error("Wrong format");
+	if (args["list-formats"]) return showFormats(formats);
+	const dlFormat = getDlFormat(formats, args.format);
 	const destPath = getPath.output(args.output || DEFAULT_OUTPUT_TEMPLATE, getVideoInfoByClipMeta(clipMeta));
 	console.log(`[download] Destination: ${destPath}`);
 	if (await statsOrNull(destPath)) {
