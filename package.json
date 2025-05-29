@@ -20,9 +20,9 @@
   },
   "devDependencies": {
     "@trivago/prettier-plugin-sort-imports": "^5.2.2",
-    "@types/node": "^22.13.17",
+    "@types/node": "^22.15.24",
     "prettier": "^3.5.3",
-    "twitch-gql-queries": "^0.1.11",
+    "twitch-gql-queries": "^0.1.12",
     "twitch-regex": "^0.1.3",
     "typescript": "^5.8.3"
   },
