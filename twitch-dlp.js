@@ -9,7 +9,7 @@ import fs from "node:fs";
 import stream from "node:stream";
 import crypto from "node:crypto";
 
-//#region node_modules/.pnpm/twitch-gql-queries@0.1.11/node_modules/twitch-gql-queries/dist/index.js
+//#region node_modules/.pnpm/twitch-gql-queries@0.1.12/node_modules/twitch-gql-queries/dist/index.js
 var CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
 var MAX_QUERIES_PER_REQUEST = 35;
 var gqlRequest = async (queries, requestInit) => {
@@ -56,7 +56,7 @@ var getQueryStreamMetadata = (variables) => ({
 	variables,
 	extensions: { persistedQuery: {
 		version: 1,
-		sha256Hash: "252a46e3f5b1ddc431b396e688331d8d020daec27079893ac7d4e6db759a7402"
+		sha256Hash: "b57f9b910f8cd1a4659d894fe7550ccc81ec9052c01e438b290fd66a040b9b93"
 	} }
 });
 var getQueryVideoMetadata = (variables) => ({
@@ -1004,7 +1004,7 @@ const downloadVideo = async (formats, videoInfo, args) => {
 	let frags;
 	let fragsCount = 0;
 	let playlistUrl = dlFormat.url;
-	const downloadedFrags = new Map();
+	const downloadedFrags = /* @__PURE__ */ new Map();
 	const logPath = getPath.log(outputPath);
 	const writeLog = createLogger(logPath);
 	const tryUnmute = getTryUnmute(videoInfo);
@@ -1160,7 +1160,7 @@ const getVideoInfoByClipMeta = (clipMeta) => ({
 //#region src/utils/downloadWithStreamlink.ts
 const DEFAULT_STREAMLINK_ARGS = ["--twitch-force-client-integrity", "--twitch-access-token-param=playerType=frontpage"];
 const getDefaultOutputTemplate = () => {
-	const now = new Date().toISOString().slice(0, 16).replace("T", " ").replace(":", "_");
+	const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 16).replace("T", " ").replace(":", "_");
 	return `%(uploader)s (live) ${now} [%(id)s].%(ext)s`;
 };
 const downloadWithStreamlink = async (link, streamMeta, channelLogin, args) => {
