@@ -51,7 +51,7 @@ export const getStreamMetadata = (
   channelLogin: string,
 ): Promise<StreamMetadata | null> =>
   apiRequest(
-    getQueryStreamMetadata({ channelLogin }),
+    getQueryStreamMetadata({ channelLogin, includeIsDJ: false }),
     'user',
     'stream metadata',
   );
