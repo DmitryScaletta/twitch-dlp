@@ -102,7 +102,10 @@ const getVideoAccessToken = (id) => apiRequest(getQueryPlaybackAccessToken({
 	playerType: "site",
 	platform: "web"
 }), "videoPlaybackAccessToken", "video access token");
-const getStreamMetadata = (channelLogin) => apiRequest(getQueryStreamMetadata({ channelLogin }), "user", "stream metadata");
+const getStreamMetadata = (channelLogin) => apiRequest(getQueryStreamMetadata({
+	channelLogin,
+	includeIsDJ: false
+}), "user", "stream metadata");
 const getVideoMetadata = (videoId) => apiRequest(getQueryVideoMetadata({
 	channelLogin: "",
 	videoID: videoId
