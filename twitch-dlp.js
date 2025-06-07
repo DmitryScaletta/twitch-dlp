@@ -3,13 +3,13 @@ import { parseArgs } from "node:util";
 import { setTimeout as setTimeout$1 } from "node:timers/promises";
 import fsp from "node:fs/promises";
 import childProcess from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import fs from "node:fs";
 import stream from "node:stream";
 import crypto from "node:crypto";
 
-//#region node_modules/.pnpm/twitch-gql-queries@0.1.12/node_modules/twitch-gql-queries/dist/index.js
+//#region node_modules/.pnpm/twitch-gql-queries@0.1.13/node_modules/twitch-gql-queries/dist/index.js
 var CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
 var MAX_QUERIES_PER_REQUEST = 35;
 var gqlRequest = async (queries, requestInit) => {
@@ -231,12 +231,20 @@ const parseMasterPlaylist = (lines) => {
 };
 const parseMediaPlaylist = (lines) => {
 	const EXTINF = "#EXTINF:";
+	const EXT_X_MAP = "#EXT-X-MAP:";
+	let map = null;
+	let mapLine = lines.find((line) => line.startsWith(EXT_X_MAP));
+	if (mapLine) {
+		const mapData = parseAttrs(mapLine);
+		if (mapData?.URI) map = { uri: mapData.URI };
+	}
 	const segLines = lines.filter((line) => line.startsWith(EXTINF) || !line.startsWith("#"));
 	const segments = [];
 	for (let i = 0; i < segLines.length; i += 2) segments.push({
 		type: "segment",
 		uri: segLines[i + 1],
-		duration: Number.parseFloat(segLines[i].replace(EXTINF, "").replace(",", ""))
+		duration: Number.parseFloat(segLines[i].replace(EXTINF, "").replace(",", "")),
+		map
 	});
 	const endlist = lines.includes("#EXT-X-ENDLIST");
 	return {
@@ -271,10 +279,20 @@ const statsOrNull = async (path$1) => {
 };
 
 //#endregion
-//#region src/merge/append.ts
-const mergeFrags$2 = async (frags, outputPath, keepFragments) => {
-	throw new Error("Not implemented yet");
-};
+//#region src/utils/getIsFMp4.ts
+const getIsFMp4 = (frags) => !!frags[0]?.isMap;
+
+//#endregion
+//#region src/lib/spawn.ts
+const spawn = (command, args = [], silent = false) => new Promise((resolve, reject) => {
+	const child = childProcess.spawn(command, args);
+	if (!silent) {
+		child.stdout.on("data", (data) => process.stdout.write(data));
+		child.stderr.on("data", (data) => process.stderr.write(data));
+	}
+	child.on("error", (err) => reject(err));
+	child.on("close", (code) => resolve(code));
+});
 
 //#endregion
 //#region src/utils/getPath.ts
@@ -307,6 +325,53 @@ const getPath = {
 	log: (filePath) => `${filePath}-log.tsv`,
 	frag: (filePath, i) => `${filePath}.part-Frag${i}`,
 	fragUnmuted: (fragPath) => `${fragPath}-unmuted`
+};
+
+//#endregion
+//#region src/merge/append.ts
+const concatFrags = async (files, outputPath) => {
+	const writeStream = fs.createWriteStream(outputPath, { flags: "w" });
+	try {
+		for (const file of files) await new Promise((resolve, reject) => {
+			const readStream = fs.createReadStream(file);
+			readStream.pipe(writeStream, { end: false });
+			readStream.on("end", resolve);
+			readStream.on("error", reject);
+		});
+	} catch (error) {
+		throw error;
+	} finally {
+		writeStream.end();
+	}
+};
+const mergeFrags$2 = async (frags, outputPath, keepFragments) => {
+	const fragFiles = frags.map((frag) => getPath.frag(outputPath, frag.idx + 1));
+	await concatFrags(fragFiles, outputPath);
+	const parsed = path.parse(outputPath);
+	const outputPathTmp = path.join(parsed.dir, `${parsed.name}.temp.mp4`);
+	await spawn("ffmpeg", [
+		"-y",
+		"-loglevel",
+		"repeat+info",
+		"-i",
+		`file:${outputPath}`,
+		"-map",
+		"0",
+		"-dn",
+		"-ignore_unknown",
+		"-c",
+		"copy",
+		"-f",
+		"mp4",
+		"-bsf:a",
+		"aac_adtstoasc",
+		"-movflags",
+		"+faststart",
+		`file:${outputPathTmp}`
+	]);
+	await fsp.unlink(outputPath);
+	await fsp.rename(outputPathTmp, outputPath);
+	if (!keepFragments) await Promise.all([...fragFiles.map((filename) => fsp.unlink(filename)), fsp.unlink(getPath.playlist(outputPath))]);
 };
 
 //#endregion
@@ -387,8 +452,10 @@ const mergeFrags = async (method, frags, outputPath, keepFragments) => {
 		console.error(`${chalk.red("ERROR:")} No fragments were downloaded`);
 		return 1;
 	}
+	const isFMp4 = getIsFMp4(frags);
+	if (isFMp4) console.warn(`${chalk.yellow("WARN:")} ${FFCONCAT} merge method is not supported for fMP4 streams. Using ${APPEND} instead`);
+	if (method === APPEND || isFMp4) return mergeFrags$2(frags, outputPath, keepFragments);
 	if (method === FFCONCAT) return mergeFrags$1(frags, outputPath, keepFragments);
-	if (method === APPEND) return mergeFrags$2(frags, outputPath, keepFragments);
 	throw new Error();
 };
 
@@ -450,11 +517,15 @@ const logUnmuteResult = (unmuteResult, fragIdx) => {
 		];
 	} else return [DL_EVENT.FRAG_UNMUTE_FAILURE, fragIdx];
 };
-const logFragsForDownloading = (frags) => [
-	DL_EVENT.FRAGS_FOR_DOWNLOADING,
-	frags[0]?.idx || 0,
-	frags[frags.length - 1]?.idx || 0
-];
+const logFragsForDownloading = (frags) => {
+	const isFMp4 = getIsFMp4(frags);
+	const firstFragIdx = isFMp4 ? 1 : 0;
+	return [
+		DL_EVENT.FRAGS_FOR_DOWNLOADING,
+		frags[firstFragIdx]?.idx || 0,
+		frags[frags.length - 1]?.idx || 0
+	];
+};
 const getFragsInfo = (log) => {
 	const fragsInfo = {};
 	const fragsGroupedByIdx = groupBy(log.filter(([name]) => name.startsWith("FRAG_")), (e) => e[1]);
@@ -712,6 +783,34 @@ const IS_URLS_AVAILABLE_MAP = {
 const isUrlsAvailable = async (downloader, urls) => IS_URLS_AVAILABLE_MAP[downloader](urls);
 
 //#endregion
+//#region src/lib/isFMp4MediaFile.ts
+const isFMp4MediaFile = async (filePath) => {
+	const fd = await fsp.open(filePath, "r");
+	try {
+		const buf = Buffer.alloc(4096);
+		await fd.read(buf, 0, buf.length, 0);
+		const hasMoof = buf.includes(Buffer.from("moof"));
+		const hasMdat = buf.includes(Buffer.from("mdat"));
+		return hasMoof && hasMdat;
+	} finally {
+		await fd.close();
+	}
+};
+
+//#endregion
+//#region src/lib/isMp4File.ts
+const isMp4File = async (filePath) => {
+	const fd = await fsp.open(filePath, "r");
+	try {
+		const buf = Buffer.alloc(12);
+		await fd.read(buf, 0, buf.length, 0);
+		return buf[4] === 102 && buf[5] === 116 && buf[6] === 121 && buf[7] === 112;
+	} finally {
+		await fd.close();
+	}
+};
+
+//#endregion
 //#region src/lib/isTsFile.ts
 const PACKET_SIZE = 188;
 const TS_SYNC_BYTE = 71;
@@ -738,7 +837,13 @@ const unlinkIfAny = async (path$1) => {
 
 //#endregion
 //#region src/utils/downloadFrag.ts
-const downloadFrag = async (downloader, url, destPath, limitRateArg, gzip, checkIsTs = false) => {
+const CHECK_FILE_TYPE = {
+	any: () => true,
+	ts: isTsFile,
+	mp4: isMp4File,
+	fmp4: isFMp4MediaFile
+};
+const downloadFrag = async (downloader, url, destPath, limitRateArg, gzip, type = "any") => {
 	const destPathTmp = `${destPath}.part`;
 	if (await statsOrNull(destPathTmp)) await fsp.unlink(destPathTmp);
 	const startTime = Date.now();
@@ -749,7 +854,7 @@ const downloadFrag = async (downloader, url, destPath, limitRateArg, gzip, check
 		return null;
 	}
 	await fsp.rename(destPathTmp, destPath);
-	const [{ size }, isTs] = await Promise.all([fsp.stat(destPath), checkIsTs ? isTsFile(destPath) : true]);
+	const [{ size }, isTs] = await Promise.all([fsp.stat(destPath), CHECK_FILE_TYPE[type](destPath)]);
 	if (!isTs) {
 		await fsp.unlink(destPath);
 		return null;
@@ -779,21 +884,39 @@ const getFragsForDownloading = (playlistUrl, playlist, args) => {
 	const frags = [];
 	let offset = 0;
 	let idx = 0;
+	const mapFragUri = playlist.segments[0]?.map?.uri;
+	let mapFrag = null;
+	if (mapFragUri) {
+		const url = `${baseUrl}/${mapFragUri}`;
+		mapFrag = {
+			idx,
+			offset,
+			duration: 0,
+			isMap: true,
+			url
+		};
+		idx += 1;
+	}
 	for (const { duration, uri } of playlist.segments) {
+		const url = `${baseUrl}/${uri}`;
 		frags.push({
 			idx,
 			offset,
 			duration,
-			url: `${baseUrl}/${uri}`
+			url
 		});
 		offset += duration;
 		idx += 1;
 	}
-	if (!args["download-sections"]) return frags;
-	const [startTime, endTime] = args["download-sections"];
-	const firstFragIdx = frags.findLastIndex((frag) => frag.offset <= startTime);
-	const lastFragIdx = endTime === Infinity ? frags.length - 1 : frags.findIndex((frag) => frag.offset >= endTime);
-	return frags.slice(firstFragIdx, lastFragIdx + 1);
+	let dlFrags = frags;
+	if (args["download-sections"]) {
+		const [startTime, endTime] = args["download-sections"];
+		const firstFragIdx = frags.findLastIndex((frag) => frag.offset <= startTime);
+		const lastFragIdx = endTime === Infinity ? frags.length - 1 : frags.findIndex((frag) => frag.offset >= endTime);
+		dlFrags = frags.slice(firstFragIdx, lastFragIdx + 1);
+	}
+	if (mapFrag) dlFrags.unshift(mapFrag);
+	return dlFrags;
 };
 
 //#endregion
@@ -855,18 +978,6 @@ const getUnmutedFrag = async (downloader, unmuteArg, fragUrl, formats) => {
 	}
 	throw new Error();
 };
-
-//#endregion
-//#region src/lib/spawn.ts
-const spawn = (command, args = [], silent = false) => new Promise((resolve, reject) => {
-	const child = childProcess.spawn(command, args);
-	if (!silent) {
-		child.stdout.on("data", (data) => process.stdout.write(data));
-		child.stderr.on("data", (data) => process.stderr.write(data));
-	}
-	child.on("error", (err) => reject(err));
-	child.on("close", (code) => resolve(code));
-});
 
 //#endregion
 //#region src/utils/processUnmutedFrags.ts
@@ -1042,7 +1153,9 @@ const downloadVideo = async (formats, videoInfo, args) => {
 		writeLog([DL_EVENT.FETCH_PLAYLIST_SUCCESS]);
 		frags = getFragsForDownloading(playlistUrl, playlist, args);
 		writeLog(logFragsForDownloading(frags));
+		const isFMp4 = getIsFMp4(frags);
 		await fsp.writeFile(getPath.playlist(outputPath), playlistContent);
+		if (args["download-sections"] && downloadedFrags.size === frags.length) break;
 		const hasNewFrags = frags.length > fragsCount;
 		fragsCount = frags.length;
 		if (!hasNewFrags && !playlist.endlist) {
@@ -1065,12 +1178,12 @@ const downloadVideo = async (formats, videoInfo, args) => {
 				}
 				continue;
 			}
-			if (frag.url.endsWith("-unmuted.ts")) {
+			if (frag.url.includes("-unmuted")) {
 				writeLog([DL_EVENT.FRAG_RENAME_UNMUTED, frag.idx]);
 				frag.url = frag.url.replace("-unmuted", "-muted");
 			}
 			let unmutedFrag = null;
-			if (frag.url.endsWith("-muted.ts")) {
+			if (frag.url.includes("-muted")) {
 				writeLog([DL_EVENT.FRAG_MUTED, frag.idx]);
 				if (tryUnmute) {
 					unmutedFrag = await getUnmutedFrag(args.downloader, args.unmute, frag.url, formats);
@@ -1082,14 +1195,14 @@ const downloadVideo = async (formats, videoInfo, args) => {
 				frag.url = unmutedFrag.url;
 				fragGzip = unmutedFrag.gzip;
 			}
-			let fragMeta = await downloadFrag(args.downloader, frag.url, fragPath, args["limit-rate"], fragGzip, true);
+			let fragMeta = await downloadFrag(args.downloader, frag.url, fragPath, args["limit-rate"], fragGzip, isFMp4 ? frag.isMap ? "mp4" : "fmp4" : "ts");
 			downloadedFrags.set(i, fragMeta || {
 				size: 0,
 				time: 0
 			});
 			writeLog([fragMeta ? DL_EVENT.FRAG_DOWNLOAD_SUCCESS : DL_EVENT.FRAG_DOWNLOAD_FAILURE, frag.idx]);
 			if (unmutedFrag && !unmutedFrag.sameFormat) {
-				fragMeta = await downloadFrag(args.downloader, unmutedFrag.url, getPath.fragUnmuted(fragPath), args["limit-rate"], unmutedFrag.gzip, true);
+				fragMeta = await downloadFrag(args.downloader, unmutedFrag.url, getPath.fragUnmuted(fragPath), args["limit-rate"], unmutedFrag.gzip, isFMp4 ? "fmp4" : "ts");
 				writeLog([fragMeta ? DL_EVENT.FRAG_DOWNLOAD_UNMUTED_SUCCESS : DL_EVENT.FRAG_DOWNLOAD_UNMUTED_FAILURE, frag.idx]);
 			}
 			showProgress(downloadedFrags, fragsCount);
@@ -1390,13 +1503,12 @@ const getClipFormats = (clipMeta) => {
 		for (let i = 0; i < videoQualities.length; i += 1) {
 			const { quality, frameRate, sourceURL } = videoQualities[i];
 			if (!sourceURL) continue;
-			const url = `${sourceURL}?sig=${sig}&token=${token}`;
 			formats.push({
 				format_id: `${formatIdPrefix}${quality}`,
 				height: Number.parseInt(quality) || null,
 				frameRate: frameRate ? Math.round(frameRate) : null,
 				source: null,
-				url
+				url: `${sourceURL}?sig=${sig}&token=${token}`
 			});
 		}
 	};
@@ -1421,7 +1533,7 @@ const downloadClip = async (slug, args) => {
 	const res = await fetch(dlFormat.url, { method: "HEAD" });
 	const size = Number.parseInt(res.headers.get("content-length") || "0");
 	console.log(`[download] Downloading clip (${(size / 1024 / 1024).toFixed(2)} MB)`);
-	const result = await downloadFrag(args.downloader, dlFormat.url, destPath, args["limit-rate"]);
+	const result = await downloadFrag(args.downloader, dlFormat.url, destPath, args["limit-rate"], void 0, "mp4");
 	if (!result) throw new Error("[download] Download failed");
 	console.log("[download] Done");
 };
@@ -1430,6 +1542,7 @@ const downloadClip = async (slug, args) => {
 //#region src/commands/mergeFragments.ts
 const tryUnmuteFrags = async (outputPath, log, frags, formats, args, writeLog) => {
 	const fragsInfo = getFragsInfo(log);
+	const isFMp4 = getIsFMp4(frags);
 	for (const frag of frags) {
 		const fragN = frag.idx + 1;
 		const info = fragsInfo[frag.idx];
@@ -1445,7 +1558,7 @@ const tryUnmuteFrags = async (outputPath, log, frags, formats, args, writeLog) =
 		if (unmutedFrag.sameFormat) {
 			const fragPathTmp = `${fragPath}.tmp`;
 			await fsp.rename(fragPath, fragPathTmp);
-			const fragMeta = await downloadFrag(args.downloader, unmutedFrag.url, fragPath, args["limit-rate"], unmutedFrag.gzip);
+			const fragMeta = await downloadFrag(args.downloader, unmutedFrag.url, fragPath, args["limit-rate"], unmutedFrag.gzip, isFMp4 ? "fmp4" : "ts");
 			if (fragMeta) {
 				await fsp.unlink(fragPathTmp);
 				console.log(`[unmute] Frag${fragN}: successfully unmuted`);
@@ -1456,7 +1569,7 @@ const tryUnmuteFrags = async (outputPath, log, frags, formats, args, writeLog) =
 			writeLog([fragMeta ? DL_EVENT.FRAG_DOWNLOAD_SUCCESS : DL_EVENT.FRAG_DOWNLOAD_FAILURE, frag.idx]);
 		} else {
 			const unmutedFragPath = getPath.fragUnmuted(fragPath);
-			const fragMeta = await downloadFrag(args.downloader, unmutedFrag.url, unmutedFragPath, args["limit-rate"], unmutedFrag.gzip);
+			const fragMeta = await downloadFrag(args.downloader, unmutedFrag.url, unmutedFragPath, args["limit-rate"], unmutedFrag.gzip, isFMp4 ? "fmp4" : "ts");
 			if (fragMeta) console.log(`[unmute] Frag${fragN}: successfully unmuted`);
 			else console.log(`[unmute] Frag${fragN}: cannot download unmuted fragment`);
 			writeLog([fragMeta ? DL_EVENT.FRAG_DOWNLOAD_UNMUTED_SUCCESS : DL_EVENT.FRAG_DOWNLOAD_UNMUTED_FAILURE, frag.idx]);
