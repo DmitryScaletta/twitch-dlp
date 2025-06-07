@@ -114,6 +114,10 @@ export const downloadVideo = async (
 
     await fsp.writeFile(getPath.playlist(outputPath), playlistContent);
 
+    if (args['download-sections'] && downloadedFrags.size === frags.length) {
+      break;
+    }
+
     const hasNewFrags = frags.length > fragsCount;
     fragsCount = frags.length;
     if (!hasNewFrags && !playlist.endlist) {
