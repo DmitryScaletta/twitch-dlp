@@ -126,10 +126,10 @@ describe('hlsParser', async () => {
       isMasterPlaylist: false,
       endlist: false,
       segments: [
-        { type: 'segment', duration: 10, uri: '0.ts' },
-        { type: 'segment', duration: 10, uri: '1.ts' },
-        { type: 'segment', duration: 10, uri: '1945-muted.ts' },
-        { type: 'segment', duration: 10, uri: '1946-muted.ts' },
+        { type: 'segment', duration: 10, uri: '0.ts', map: null },
+        { type: 'segment', duration: 10, uri: '1.ts', map: null },
+        { type: 'segment', duration: 10, uri: '1945-muted.ts', map: null },
+        { type: 'segment', duration: 10, uri: '1946-muted.ts', map: null },
       ],
     });
   });
@@ -146,10 +146,23 @@ describe('hlsParser', async () => {
       isMasterPlaylist: false,
       endlist: true,
       segments: [
-        { type: 'segment', duration: 8.001, uri: 'transmux-0000000222-1alP.ts?start_offset=0&end_offset=257935' },
-        { type: 'segment', duration: 8.003, uri: 'transmux-0000000223-H2c2.ts?start_offset=0&end_offset=222779' },
-        { type: 'segment', duration: 7.936, uri: 'transmux-0000000224-jLDq.ts?start_offset=0&end_offset=247031' },
-        { type: 'segment', duration: 8.001, uri: 'transmux-0000000000-FbCv.ts?start_offset=0&end_offset=301551' },
+        { type: 'segment', duration: 8.001, uri: 'transmux-0000000222-1alP.ts?start_offset=0&end_offset=257935', map: null },
+        { type: 'segment', duration: 8.003, uri: 'transmux-0000000223-H2c2.ts?start_offset=0&end_offset=222779', map: null },
+        { type: 'segment', duration: 7.936, uri: 'transmux-0000000224-jLDq.ts?start_offset=0&end_offset=247031', map: null },
+        { type: 'segment', duration: 8.001, uri: 'transmux-0000000000-FbCv.ts?start_offset=0&end_offset=301551', map: null },
+      ],
+    });
+  });
+
+  it('should parse media playlist with #EXT-X-MAP', () => {
+    // prettier-ignore
+    assert.deepStrictEqual(hlsParser.parse(mocks.mediaPlaylistWithMap), {
+      type: 'playlist',
+      isMasterPlaylist: false,
+      endlist: false,
+      segments: [
+        { type: 'segment', duration: 10, uri: '0-muted.mp4', map: { uri: "init-0.mp4" } },
+        { type: 'segment', duration: 10, uri: '1-muted.mp4', map: { uri: "init-0.mp4" } },
       ],
     });
   });

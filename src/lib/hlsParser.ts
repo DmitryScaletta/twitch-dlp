@@ -23,6 +23,7 @@ type Segment = {
   type: 'segment';
   uri: string;
   duration: number;
+  map: null | { uri: string };
 };
 export type MediaPlaylist = {
   type: 'playlist';
@@ -93,6 +94,15 @@ const parseMasterPlaylist = (lines: string[]): MasterPlaylist => {
 
 const parseMediaPlaylist = (lines: string[]): MediaPlaylist => {
   const EXTINF = '#EXTINF:';
+  const EXT_X_MAP = '#EXT-X-MAP:';
+
+  let map = null;
+  let mapLine = lines.find((line) => line.startsWith(EXT_X_MAP));
+  if (mapLine) {
+    const mapData = parseAttrs(mapLine);
+    if (mapData?.URI) map = { uri: mapData.URI };
+  }
+
   const segLines = lines.filter(
     (line) => line.startsWith(EXTINF) || !line.startsWith('#'),
   );
@@ -104,6 +114,7 @@ const parseMediaPlaylist = (lines: string[]): MediaPlaylist => {
       duration: Number.parseFloat(
         segLines[i].replace(EXTINF, '').replace(',', ''),
       ),
+      map,
     });
   }
   const endlist = lines.includes('#EXT-X-ENDLIST');
