@@ -18,6 +18,7 @@ import type { AppArgs, DownloadFormat, Frag } from '../types.ts';
 import { downloadFrag } from '../utils/downloadFrag.ts';
 import { getExistingFrags } from '../utils/getExistingFrags.ts';
 import { getFragsForDownloading } from '../utils/getFragsForDownloading.ts';
+import { getIsFMp4 } from '../utils/getIsFMp4.ts';
 import { getPath } from '../utils/getPath.ts';
 import { getTryUnmute } from '../utils/getTryUnmute.ts';
 import { getUnmutedFrag } from '../utils/getUnmutedFrag.ts';
@@ -33,6 +34,7 @@ const tryUnmuteFrags = async (
   writeLog: ReturnType<typeof createLogger>,
 ) => {
   const fragsInfo = getFragsInfo(log);
+  const isFMp4 = getIsFMp4(frags);
 
   for (const frag of frags) {
     const fragN = frag.idx + 1;
@@ -61,6 +63,7 @@ const tryUnmuteFrags = async (
         fragPath,
         args['limit-rate'],
         unmutedFrag.gzip,
+        isFMp4 ? 'fmp4' : 'ts',
       );
       if (fragMeta) {
         await fsp.unlink(fragPathTmp);
@@ -83,6 +86,7 @@ const tryUnmuteFrags = async (
         unmutedFragPath,
         args['limit-rate'],
         unmutedFrag.gzip,
+        isFMp4 ? 'fmp4' : 'ts',
       );
       if (fragMeta) {
         console.log(`[unmute] Frag${fragN}: successfully unmuted`);

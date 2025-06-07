@@ -18,13 +18,12 @@ const getClipFormats = (clipMeta: ClipMetadata) => {
     for (let i = 0; i < videoQualities.length; i += 1) {
       const { quality, frameRate, sourceURL } = videoQualities[i];
       if (!sourceURL) continue;
-      const url = `${sourceURL}?sig=${sig}&token=${token}`;
       formats.push({
         format_id: `${formatIdPrefix}${quality}`,
         height: Number.parseInt(quality) || null,
         frameRate: frameRate ? Math.round(frameRate) : null,
         source: null,
-        url,
+        url: `${sourceURL}?sig=${sig}&token=${token}`,
       });
     }
   };
@@ -68,6 +67,8 @@ export const downloadClip = async (slug: string, args: AppArgs) => {
     dlFormat.url,
     destPath,
     args['limit-rate'],
+    undefined,
+    'mp4',
   );
 
   if (!result) throw new Error('[download] Download failed');

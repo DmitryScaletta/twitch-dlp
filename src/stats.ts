@@ -1,6 +1,7 @@
 import fsp from 'node:fs/promises';
 import { groupBy } from './lib/groupBy.ts';
 import type { AppArgs, DownloadFormat, Frag, VideoInfo } from './types.ts';
+import { getIsFMp4 } from './utils/getIsFMp4.ts';
 import type { UnmutedFrag } from './utils/getUnmutedFrag.ts';
 
 export const DL_EVENT = {
@@ -89,11 +90,15 @@ export const logUnmuteResult = (
   }
 };
 
-export const logFragsForDownloading = (frags: Frag[]): DlEvent => [
-  DL_EVENT.FRAGS_FOR_DOWNLOADING,
-  frags[0]?.idx || 0,
-  frags[frags.length - 1]?.idx || 0,
-];
+export const logFragsForDownloading = (frags: Frag[]): DlEvent => {
+  const isFMp4 = getIsFMp4(frags);
+  const firstFragIdx = isFMp4 ? 1 : 0;
+  return [
+    DL_EVENT.FRAGS_FOR_DOWNLOADING,
+    frags[firstFragIdx]?.idx || 0,
+    frags[frags.length - 1]?.idx || 0,
+  ];
+};
 
 type FragInfo = {
   muted: boolean | null;
