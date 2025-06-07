@@ -10,17 +10,35 @@ export const getFragsForDownloading = (
   const frags: Frag[] = [];
   let offset = 0;
   let idx = 0;
+
+  const mapFragUri = playlist.segments[0]?.map?.uri;
+  let mapFrag: null | Frag = null;
+  if (mapFragUri) {
+    const url = `${baseUrl}/${mapFragUri}`;
+    mapFrag = { idx, offset, duration: 0, isMap: true, url };
+    idx += 1;
+  }
+
   for (const { duration, uri } of playlist.segments) {
-    frags.push({ idx, offset, duration, url: `${baseUrl}/${uri}` });
+    const url = `${baseUrl}/${uri}`;
+    frags.push({ idx, offset, duration, url });
     offset += duration;
     idx += 1;
   }
-  if (!args['download-sections']) return frags;
-  const [startTime, endTime] = args['download-sections'];
-  const firstFragIdx = frags.findLastIndex((frag) => frag.offset <= startTime);
-  const lastFragIdx =
-    endTime === Infinity
-      ? frags.length - 1
-      : frags.findIndex((frag) => frag.offset >= endTime);
-  return frags.slice(firstFragIdx, lastFragIdx + 1);
+
+  let dlFrags = frags;
+  if (args['download-sections']) {
+    const [startTime, endTime] = args['download-sections'];
+    const firstFragIdx = frags.findLastIndex(
+      (frag) => frag.offset <= startTime,
+    );
+    const lastFragIdx =
+      endTime === Infinity
+        ? frags.length - 1
+        : frags.findIndex((frag) => frag.offset >= endTime);
+    dlFrags = frags.slice(firstFragIdx, lastFragIdx + 1);
+  }
+
+  if (mapFrag) dlFrags.unshift(mapFrag);
+  return dlFrags;
 };

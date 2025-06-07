@@ -22,6 +22,8 @@ export type Frag = {
   offset: number;
   /** Frag duration (sec) */
   duration: number;
+  /** Is it a frag from #EXT-X-MAP tag */
+  isMap?: true;
   /** Full frag url */
   url: string;
 };
