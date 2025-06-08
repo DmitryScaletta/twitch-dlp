@@ -1,5 +1,5 @@
 import * as hlsParser from '../lib/hlsParser.ts';
-import type { AppArgs, Frag } from '../types.ts';
+import type { AppArgs, Frag, Frags } from '../types.ts';
 
 export const getFragsForDownloading = (
   playlistUrl: string,
@@ -7,7 +7,7 @@ export const getFragsForDownloading = (
   args: AppArgs,
 ) => {
   const baseUrl = playlistUrl.split('/').slice(0, -1).join('/');
-  const frags: Frag[] = [];
+  let frags: Frag[] = [];
   let offset = 0;
   let idx = 0;
 
@@ -26,7 +26,6 @@ export const getFragsForDownloading = (
     idx += 1;
   }
 
-  let dlFrags = frags;
   if (args['download-sections']) {
     const [startTime, endTime] = args['download-sections'];
     const firstFragIdx = frags.findLastIndex(
@@ -36,9 +35,12 @@ export const getFragsForDownloading = (
       endTime === Infinity
         ? frags.length - 1
         : frags.findIndex((frag) => frag.offset >= endTime);
-    dlFrags = frags.slice(firstFragIdx, lastFragIdx + 1);
+    frags = frags.slice(firstFragIdx, lastFragIdx + 1);
   }
 
-  if (mapFrag) dlFrags.unshift(mapFrag);
+  if (mapFrag) frags = [mapFrag, ...frags];
+
+  const dlFrags = frags as Frags;
+  dlFrags.isFMp4 = !!mapFrag;
   return dlFrags;
 };

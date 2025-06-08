@@ -1,6 +1,6 @@
 import childProcess from 'node:child_process';
 import fsp from 'node:fs/promises';
-import type { Frag } from '../types.ts';
+import type { Frags } from '../types.ts';
 import { getPath } from '../utils/getPath.ts';
 
 const MAX_INT_STR = '2147483647';
@@ -72,7 +72,7 @@ const generateFfconcat = (files: FragFile[]) => {
 };
 
 export const mergeFrags = async (
-  frags: Frag[],
+  frags: Frags,
   outputPath: string,
   keepFragments: boolean,
 ) => {

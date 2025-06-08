@@ -27,6 +27,7 @@ export type Frag = {
   /** Full frag url */
   url: string;
 };
+export type Frags = Frag[] & { isFMp4: boolean };
 export type FragMetadata = {
   /** Frag size (bytes) */
   size: number;

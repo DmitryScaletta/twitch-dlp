@@ -8,7 +8,7 @@ import { statsOrNull } from '../lib/statsOrNull.ts';
 import { unlinkIfAny } from '../lib/unlinkIfAny.ts';
 import type { Downloader } from '../types.ts';
 
-type FragType = 'any' | 'ts' | 'mp4' | 'fmp4';
+type FragType = 'any' | 'ts' | 'mp4' | 'fmp4-map' | 'fmp4-media';
 
 const CHECK_FILE_TYPE: Record<
   FragType,
@@ -17,7 +17,8 @@ const CHECK_FILE_TYPE: Record<
   any: () => true,
   ts: isTsFile,
   mp4: isMp4File,
-  fmp4: isFMp4MediaFile,
+  'fmp4-map': isMp4File,
+  'fmp4-media': isFMp4MediaFile,
 };
 
 export const downloadFrag = async (

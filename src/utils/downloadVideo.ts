@@ -19,8 +19,8 @@ import {
 import type {
   AppArgs,
   DownloadFormat,
-  Frag,
   FragMetadata,
+  Frags,
   VideoInfo,
 } from '../types.ts';
 import { downloadFrag } from './downloadFrag.ts';
@@ -28,7 +28,6 @@ import { fetchText } from './fetchText.ts';
 import { getDlFormat } from './getDlFormat.ts';
 import { getExistingFrags } from './getExistingFrags.ts';
 import { getFragsForDownloading } from './getFragsForDownloading.ts';
-import { getIsFMp4 } from './getIsFMp4.ts';
 import { getPath } from './getPath.ts';
 import { getTryUnmute } from './getTryUnmute.ts';
 import { getUnmutedFrag, type UnmutedFrag } from './getUnmutedFrag.ts';
@@ -62,7 +61,7 @@ export const downloadVideo = async (
     args.output || DEFAULT_OUTPUT_TEMPLATE,
     videoInfo,
   );
-  let frags: Frag[];
+  let frags: Frags;
   let fragsCount = 0;
   let playlistUrl = dlFormat.url;
   const downloadedFrags = new Map<number, FragMetadata>();
@@ -112,7 +111,6 @@ export const downloadVideo = async (
 
     frags = getFragsForDownloading(playlistUrl, playlist, args);
     writeLog(logFragsForDownloading(frags));
-    const isFMp4 = getIsFMp4(frags);
 
     await fsp.writeFile(getPath.playlist(outputPath), playlistContent);
 
@@ -171,7 +169,7 @@ export const downloadVideo = async (
         fragPath,
         args['limit-rate'],
         fragGzip,
-        isFMp4 ? (frag.isMap ? 'mp4' : 'fmp4') : 'ts',
+        frags.isFMp4 ? (frag.isMap ? 'fmp4-map' : 'fmp4-media') : 'ts',
       );
       downloadedFrags.set(i, fragMeta || { size: 0, time: 0 });
       writeLog([
@@ -188,7 +186,7 @@ export const downloadVideo = async (
           getPath.fragUnmuted(fragPath),
           args['limit-rate'],
           unmutedFrag.gzip,
-          isFMp4 ? 'fmp4' : 'ts',
+          frags.isFMp4 ? 'fmp4-media' : 'ts',
         );
         writeLog([
           fragMeta

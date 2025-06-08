@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from '../lib/spawn.ts';
-import type { Frag } from '../types.ts';
+import type { Frags } from '../types.ts';
 import { getPath } from '../utils/getPath.ts';
 
 const concatFrags = async (files: string[], outputPath: string) => {
@@ -24,7 +24,7 @@ const concatFrags = async (files: string[], outputPath: string) => {
 };
 
 export const mergeFrags = async (
-  frags: Frag[],
+  frags: Frags,
   outputPath: string,
   keepFragments: boolean,
 ) => {

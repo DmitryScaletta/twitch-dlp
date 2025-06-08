@@ -3,11 +3,11 @@ import path from 'node:path';
 import { spawn } from '../lib/spawn.ts';
 import { unlinkIfAny } from '../lib/unlinkIfAny.ts';
 import { DL_EVENT, type createLogger } from '../stats.ts';
-import type { Frag } from '../types.ts';
+import type { Frags } from '../types.ts';
 import { getPath } from './getPath.ts';
 
 export const processUnmutedFrags = async (
-  frags: Frag[],
+  frags: Frags,
   outputPath: string,
   dir: string[],
   writeLog?: ReturnType<typeof createLogger>,
