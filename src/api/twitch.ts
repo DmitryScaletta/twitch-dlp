@@ -85,9 +85,11 @@ export const getManifest = (
     allow_source: 'true',
     allow_audio_only: 'true',
     allow_spectre: 'true',
+    include_unavailable: 'true',
     player: 'twitchweb',
     playlist_include_framerate: 'true',
     sig: accessToken.signature,
+    supported_codecs: 'av1,h265,h264',
     token: accessToken.value,
   });
   const url = `https://usher.ttvnw.net/vod/${videoId}.m3u8?${params}`;

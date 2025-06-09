@@ -16,7 +16,9 @@ export const showFormats = (formats: DownloadFormat[]) => {
           fmt.resolution = `${height}p`;
         }
         fmt.fps = frameRate;
-        if (totalBitrate) fmt.total_bitrate = totalBitrate;
+        if (totalBitrate) {
+          fmt.total_bitrate = `${(totalBitrate / 1024).toFixed()}k`;
+        }
         fmt.source = source;
         return fmt;
       }),
