@@ -17,18 +17,19 @@ export const mergeFrags = async (
     return 1;
   }
 
-  if (frags.isFMp4) {
+  if (method === FFCONCAT && frags.isFMp4) {
     console.warn(
       `${chalk.yellow('WARN:')} ${FFCONCAT} merge method is not supported for fMP4 streams. Using ${APPEND} instead`,
     );
-  }
-
-  if (method === APPEND || frags.isFMp4) {
-    return append.mergeFrags(frags, outputPath, keepFragments);
+    method = APPEND;
   }
 
   if (method === FFCONCAT) {
     return ffconcat.mergeFrags(frags, outputPath, keepFragments);
+  }
+
+  if (method === APPEND) {
+    return append.mergeFrags(frags, outputPath, keepFragments);
   }
 
   throw new Error();
