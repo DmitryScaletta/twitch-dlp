@@ -117,9 +117,11 @@ const getManifest = (videoId, accessToken) => {
 		allow_source: "true",
 		allow_audio_only: "true",
 		allow_spectre: "true",
+		include_unavailable: "true",
 		player: "twitchweb",
 		playlist_include_framerate: "true",
 		sig: accessToken.signature,
+		supported_codecs: "av1,h265,h264",
 		token: accessToken.value
 	});
 	const url = `https://usher.ttvnw.net/vod/${videoId}.m3u8?${params}`;
@@ -185,7 +187,6 @@ const chalk = Object.entries(styles.color).reduce((acc, [color, [open, close]]) 
 //#endregion
 //#region src/lib/hlsParser.ts
 const PLAYLIST_LINE_KV_REGEX = /(?<key>[A-Z-]+)=(?:"(?<stringValue>[^"]+)"|(?<value>[^,]+))/g;
-const SKIP_TAGS = ["EXTM3U", "EXT-X-TWITCH-INFO"];
 const MASTER_PLAYLIST_TAGS = ["EXT-X-STREAM-INF", "EXT-X-MEDIA"];
 const parseAttrs = (line) => {
 	const attrs = {};
@@ -197,9 +198,10 @@ const parseAttrs = (line) => {
 };
 const parseMasterPlaylist = (lines) => {
 	const variants = [];
-	for (let i = 0; i < lines.length; i += 3) {
-		const media = parseAttrs(lines[i]);
-		const streamInf = parseAttrs(lines[i + 1]);
+	const mediaLines = lines.filter((line) => MASTER_PLAYLIST_TAGS.some((s) => line.startsWith(`#${s}:`)) || !line.startsWith("#"));
+	for (let i = 0; i < mediaLines.length; i += 3) {
+		const media = parseAttrs(mediaLines[i]);
+		const streamInf = parseAttrs(mediaLines[i + 1]);
 		let resolution = void 0;
 		if (streamInf.RESOLUTION) {
 			const [width, height] = streamInf.RESOLUTION.split("x").map((n) => Number.parseInt(n));
@@ -209,7 +211,7 @@ const parseMasterPlaylist = (lines) => {
 			};
 		}
 		variants.push({
-			uri: lines[i + 2],
+			uri: mediaLines[i + 2],
 			bandwidth: Number.parseInt(streamInf.BANDWIDTH),
 			codecs: streamInf.CODECS,
 			resolution,
@@ -223,10 +225,19 @@ const parseMasterPlaylist = (lines) => {
 			}]
 		});
 	}
+	const sessionDataList = [];
+	for (const line of lines) if (line.startsWith("#EXT-X-SESSION-DATA:")) {
+		const sessionData = parseAttrs(line);
+		sessionDataList.push({
+			id: sessionData["DATA-ID"],
+			value: sessionData.VALUE
+		});
+	}
 	return {
 		type: "playlist",
 		isMasterPlaylist: true,
-		variants
+		variants,
+		sessionDataList
 	};
 };
 const parseMediaPlaylist = (lines) => {
@@ -255,7 +266,7 @@ const parseMediaPlaylist = (lines) => {
 	};
 };
 const parse = (playlist) => {
-	const lines = playlist.split("\n").map((line) => line.trim()).filter(Boolean).filter((line) => !SKIP_TAGS.some((s) => line.startsWith(`#${s}`)));
+	const lines = playlist.split("\n").map((line) => line.trim()).filter(Boolean);
 	const isMasterPlaylist = MASTER_PLAYLIST_TAGS.some((s) => lines.some((line) => line.startsWith(`#${s}:`)));
 	return isMasterPlaylist ? parseMasterPlaylist(lines) : parseMediaPlaylist(lines);
 };
@@ -277,10 +288,6 @@ const statsOrNull = async (path$1) => {
 		return null;
 	}
 };
-
-//#endregion
-//#region src/utils/getIsFMp4.ts
-const getIsFMp4 = (frags) => !!frags[0]?.isMap;
 
 //#endregion
 //#region src/lib/spawn.ts
@@ -452,9 +459,8 @@ const mergeFrags = async (method, frags, outputPath, keepFragments) => {
 		console.error(`${chalk.red("ERROR:")} No fragments were downloaded`);
 		return 1;
 	}
-	const isFMp4 = getIsFMp4(frags);
-	if (isFMp4) console.warn(`${chalk.yellow("WARN:")} ${FFCONCAT} merge method is not supported for fMP4 streams. Using ${APPEND} instead`);
-	if (method === APPEND || isFMp4) return mergeFrags$2(frags, outputPath, keepFragments);
+	if (frags.isFMp4) console.warn(`${chalk.yellow("WARN:")} ${FFCONCAT} merge method is not supported for fMP4 streams. Using ${APPEND} instead`);
+	if (method === APPEND || frags.isFMp4) return mergeFrags$2(frags, outputPath, keepFragments);
 	if (method === FFCONCAT) return mergeFrags$1(frags, outputPath, keepFragments);
 	throw new Error();
 };
@@ -518,8 +524,7 @@ const logUnmuteResult = (unmuteResult, fragIdx) => {
 	} else return [DL_EVENT.FRAG_UNMUTE_FAILURE, fragIdx];
 };
 const logFragsForDownloading = (frags) => {
-	const isFMp4 = getIsFMp4(frags);
-	const firstFragIdx = isFMp4 ? 1 : 0;
+	const firstFragIdx = frags.isFMp4 ? 1 : 0;
 	return [
 		DL_EVENT.FRAGS_FOR_DOWNLOADING,
 		frags[firstFragIdx]?.idx || 0,
@@ -623,13 +628,16 @@ const isUrlsAvailable$3 = async (urls) => {
 	return urls.map((_, i) => [urlsNoGzip[i], urlsGzip[i]]);
 };
 const downloadFile$3 = async (url, destPath, rateLimit = "0", gzip = false) => new Promise((resolve) => {
+	const dest = path.parse(destPath);
 	const args = [
 		"--console-log-level",
 		"error",
 		"--max-overall-download-limit",
 		rateLimit,
+		"--dir",
+		dest.dir,
 		"-o",
-		destPath,
+		dest.base,
 		url
 	];
 	if (gzip) args.push("--http-accept-gzip");
@@ -841,7 +849,8 @@ const CHECK_FILE_TYPE = {
 	any: () => true,
 	ts: isTsFile,
 	mp4: isMp4File,
-	fmp4: isFMp4MediaFile
+	"fmp4-map": isMp4File,
+	"fmp4-media": isFMp4MediaFile
 };
 const downloadFrag = async (downloader, url, destPath, limitRateArg, gzip, type = "any") => {
 	const destPathTmp = `${destPath}.part`;
@@ -875,13 +884,17 @@ const getDlFormat = (formats, formatArg) => {
 
 //#endregion
 //#region src/utils/getExistingFrags.ts
-const getExistingFrags = (frags, outputPath, dir) => frags.filter((frag) => dir.includes(path.parse(getPath.frag(outputPath, frag.idx + 1)).base));
+const getExistingFrags = (frags, outputPath, dir) => {
+	const existingFrags = frags.filter((frag) => dir.includes(path.parse(getPath.frag(outputPath, frag.idx + 1)).base));
+	existingFrags.isFMp4 = frags.isFMp4;
+	return existingFrags;
+};
 
 //#endregion
 //#region src/utils/getFragsForDownloading.ts
 const getFragsForDownloading = (playlistUrl, playlist, args) => {
 	const baseUrl = playlistUrl.split("/").slice(0, -1).join("/");
-	const frags = [];
+	let frags = [];
 	let offset = 0;
 	let idx = 0;
 	const mapFragUri = playlist.segments[0]?.map?.uri;
@@ -908,14 +921,15 @@ const getFragsForDownloading = (playlistUrl, playlist, args) => {
 		offset += duration;
 		idx += 1;
 	}
-	let dlFrags = frags;
 	if (args["download-sections"]) {
 		const [startTime, endTime] = args["download-sections"];
 		const firstFragIdx = frags.findLastIndex((frag) => frag.offset <= startTime);
 		const lastFragIdx = endTime === Infinity ? frags.length - 1 : frags.findIndex((frag) => frag.offset >= endTime);
-		dlFrags = frags.slice(firstFragIdx, lastFragIdx + 1);
+		frags = frags.slice(firstFragIdx, lastFragIdx + 1);
 	}
-	if (mapFrag) dlFrags.unshift(mapFrag);
+	if (mapFrag) frags = [mapFrag, ...frags];
+	const dlFrags = frags;
+	dlFrags.isFMp4 = !!mapFrag;
 	return dlFrags;
 };
 
@@ -1036,7 +1050,7 @@ const showFormats = (formats) => {
 		else if (width && height) fmt.resolution = `${width}x${height}`;
 		else if (height) fmt.resolution = `${height}p`;
 		fmt.fps = frameRate;
-		if (totalBitrate) fmt.totalBitrate = totalBitrate;
+		if (totalBitrate) fmt.total_bitrate = `${(totalBitrate / 1024).toFixed()}k`;
 		fmt.source = source;
 		return fmt;
 	}));
@@ -1153,7 +1167,6 @@ const downloadVideo = async (formats, videoInfo, args) => {
 		writeLog([DL_EVENT.FETCH_PLAYLIST_SUCCESS]);
 		frags = getFragsForDownloading(playlistUrl, playlist, args);
 		writeLog(logFragsForDownloading(frags));
-		const isFMp4 = getIsFMp4(frags);
 		await fsp.writeFile(getPath.playlist(outputPath), playlistContent);
 		if (args["download-sections"] && downloadedFrags.size === frags.length) break;
 		const hasNewFrags = frags.length > fragsCount;
@@ -1195,14 +1208,14 @@ const downloadVideo = async (formats, videoInfo, args) => {
 				frag.url = unmutedFrag.url;
 				fragGzip = unmutedFrag.gzip;
 			}
-			let fragMeta = await downloadFrag(args.downloader, frag.url, fragPath, args["limit-rate"], fragGzip, isFMp4 ? frag.isMap ? "mp4" : "fmp4" : "ts");
+			let fragMeta = await downloadFrag(args.downloader, frag.url, fragPath, args["limit-rate"], fragGzip, frags.isFMp4 ? frag.isMap ? "fmp4-map" : "fmp4-media" : "ts");
 			downloadedFrags.set(i, fragMeta || {
 				size: 0,
 				time: 0
 			});
 			writeLog([fragMeta ? DL_EVENT.FRAG_DOWNLOAD_SUCCESS : DL_EVENT.FRAG_DOWNLOAD_FAILURE, frag.idx]);
 			if (unmutedFrag && !unmutedFrag.sameFormat) {
-				fragMeta = await downloadFrag(args.downloader, unmutedFrag.url, getPath.fragUnmuted(fragPath), args["limit-rate"], unmutedFrag.gzip, isFMp4 ? "fmp4" : "ts");
+				fragMeta = await downloadFrag(args.downloader, unmutedFrag.url, getPath.fragUnmuted(fragPath), args["limit-rate"], unmutedFrag.gzip, frags.isFMp4 ? "fmp4-media" : "ts");
 				writeLog([fragMeta ? DL_EVENT.FRAG_DOWNLOAD_UNMUTED_SUCCESS : DL_EVENT.FRAG_DOWNLOAD_UNMUTED_FAILURE, frag.idx]);
 			}
 			showProgress(downloadedFrags, fragsCount);
@@ -1308,20 +1321,47 @@ const downloadWithStreamlink = async (link, streamMeta, channelLogin, args) => {
 const parseDownloadFormats = (playlistContent) => {
 	let formats = [];
 	const playlist = parse(playlistContent);
-	for (let i = 0; i < playlist.variants.length; i += 1) {
-		const { uri, resolution, video, frameRate, bandwidth } = playlist.variants[i];
+	for (const { uri, resolution, video, frameRate, bandwidth } of playlist.variants) {
 		const { name } = video[0];
 		formats.push({
 			format_id: name.replaceAll(" ", "_"),
 			width: resolution?.width || null,
 			height: resolution?.height || null,
 			frameRate: frameRate ? Math.round(frameRate) : null,
-			totalBitrate: bandwidth ? `${(bandwidth / 1024).toFixed()}k` : null,
-			source: i === 0 ? true : null,
+			totalBitrate: bandwidth || null,
+			source: uri.includes("/chunked/") || null,
 			url: uri
 		});
 	}
+	const unavailableMediaRaw = playlist.sessionDataList?.[0]?.value;
+	if (unavailableMediaRaw) {
+		const unavailableMedia = JSON.parse(Buffer.from(unavailableMediaRaw, "base64").toString("utf8"));
+		for (const media of unavailableMedia) {
+			const [width, height] = media.RESOLUTION ? media.RESOLUTION.split("x").map((v) => Number.parseInt(v)) : [null, null];
+			let urlArr = formats[0].url.split("/");
+			urlArr = urlArr.with(-2, media["GROUP-ID"]);
+			const url = urlArr.join("/");
+			formats.push({
+				format_id: media.NAME.replaceAll(" ", "_"),
+				width,
+				height,
+				frameRate: media["FRAME-RATE"] ? Math.round(media["FRAME-RATE"]) : null,
+				totalBitrate: media.BANDWIDTH || null,
+				source: media["GROUP-ID"] === "chunked" || null,
+				url
+			});
+		}
+	}
 	formats.sort((a, b) => (b.height || 0) - (a.height || 0));
+	if (!formats.some((f) => f.source)) {
+		let max = -Infinity;
+		let maxI = -1;
+		for (let i = 0; i < formats.length; i += 1) if (formats[i].totalBitrate || 0 > max) {
+			max = formats[i].totalBitrate || 0;
+			maxI = i;
+		}
+		formats[maxI].source = true;
+	}
 	const counts = {};
 	for (const { format_id } of formats) counts[format_id] = (counts[format_id] || 0) + 1;
 	const remaining = { ...counts };
@@ -1341,6 +1381,8 @@ const parseDownloadFormats = (playlistContent) => {
 //#region src/utils/getVideoFormats.ts
 const FORMATS = [
 	"chunked",
+	"1080p60",
+	"1080p30",
 	"720p60",
 	"720p30",
 	"480p30",
@@ -1542,7 +1584,6 @@ const downloadClip = async (slug, args) => {
 //#region src/commands/mergeFragments.ts
 const tryUnmuteFrags = async (outputPath, log, frags, formats, args, writeLog) => {
 	const fragsInfo = getFragsInfo(log);
-	const isFMp4 = getIsFMp4(frags);
 	for (const frag of frags) {
 		const fragN = frag.idx + 1;
 		const info = fragsInfo[frag.idx];
@@ -1558,7 +1599,7 @@ const tryUnmuteFrags = async (outputPath, log, frags, formats, args, writeLog) =
 		if (unmutedFrag.sameFormat) {
 			const fragPathTmp = `${fragPath}.tmp`;
 			await fsp.rename(fragPath, fragPathTmp);
-			const fragMeta = await downloadFrag(args.downloader, unmutedFrag.url, fragPath, args["limit-rate"], unmutedFrag.gzip, isFMp4 ? "fmp4" : "ts");
+			const fragMeta = await downloadFrag(args.downloader, unmutedFrag.url, fragPath, args["limit-rate"], unmutedFrag.gzip, frags.isFMp4 ? "fmp4-media" : "ts");
 			if (fragMeta) {
 				await fsp.unlink(fragPathTmp);
 				console.log(`[unmute] Frag${fragN}: successfully unmuted`);
@@ -1569,7 +1610,7 @@ const tryUnmuteFrags = async (outputPath, log, frags, formats, args, writeLog) =
 			writeLog([fragMeta ? DL_EVENT.FRAG_DOWNLOAD_SUCCESS : DL_EVENT.FRAG_DOWNLOAD_FAILURE, frag.idx]);
 		} else {
 			const unmutedFragPath = getPath.fragUnmuted(fragPath);
-			const fragMeta = await downloadFrag(args.downloader, unmutedFrag.url, unmutedFragPath, args["limit-rate"], unmutedFrag.gzip, isFMp4 ? "fmp4" : "ts");
+			const fragMeta = await downloadFrag(args.downloader, unmutedFrag.url, unmutedFragPath, args["limit-rate"], unmutedFrag.gzip, frags.isFMp4 ? "fmp4-media" : "ts");
 			if (fragMeta) console.log(`[unmute] Frag${fragN}: successfully unmuted`);
 			else console.log(`[unmute] Frag${fragN}: cannot download unmuted fragment`);
 			writeLog([fragMeta ? DL_EVENT.FRAG_DOWNLOAD_UNMUTED_SUCCESS : DL_EVENT.FRAG_DOWNLOAD_UNMUTED_FAILURE, frag.idx]);
