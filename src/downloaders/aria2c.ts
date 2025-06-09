@@ -50,11 +50,13 @@ export const downloadFile = async (
   gzip = false,
 ): Promise<number> =>
   new Promise((resolve) => {
+    const dest = path.parse(destPath);
     // prettier-ignore
     const args: string[] = [
       '--console-log-level', 'error',
       '--max-overall-download-limit', rateLimit,
-      '-o', destPath,
+      '--dir', dest.dir,
+      '-o', dest.base,
       url,
     ]
     if (gzip) args.push('--http-accept-gzip');
