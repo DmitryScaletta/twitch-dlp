@@ -117,7 +117,22 @@ describe('hlsParser', async () => {
           ],
         },
       ],
+      sessionDataList: [],
     });
+  });
+
+  it('should parse master playlist with session data', () => {
+    const result = hlsParser.parse(mocks.masterPlaylistSessionData);
+    assert.deepStrictEqual(
+      (result as hlsParser.MasterPlaylist).sessionDataList,
+      [
+        {
+          id: 'com.amazon.ivs.unavailable-media',
+          value:
+            'W3siTkFNRSI6IjE0NDBwNjAiLCJCQU5EV0lEVEgiOjc3MzA2ODgsIkNPREVDUyI6ImhldjEuMS4yLkwxNTAuOTAuMC4wLjAuMC4wLG1wNGEuNDAuMiIsIlJFU09MVVRJT04iOiIyNTYweDE0NDAiLCJGSUxURVJfUkVBU09OUyI6W10sIkFVVEhPUklaQVRJT05fUkVBU09OUyI6WyJBVVRIWl9HRU8iXSwiR1JPVVAtSUQiOiJjaHVua2VkIiwiRlJBTUUtUkFURSI6NTkuOTcwOTQ1MzU5OTMwNjJ9XQ==',
+        },
+      ],
+    );
   });
 
   it('should parse media playlist', () => {
@@ -141,7 +156,7 @@ describe('hlsParser', async () => {
 
   it('should parse media playlist with #EXT-X-DISCONTINUITY', () => {
     // prettier-ignore
-    assert.deepStrictEqual(hlsParser.parse(mocks.mediaPlaylistWithDiscontinuity), {
+    assert.deepStrictEqual(hlsParser.parse(mocks.mediaPlaylistDiscontinuity), {
       type: 'playlist',
       isMasterPlaylist: false,
       endlist: true,
@@ -156,7 +171,7 @@ describe('hlsParser', async () => {
 
   it('should parse media playlist with #EXT-X-MAP', () => {
     // prettier-ignore
-    assert.deepStrictEqual(hlsParser.parse(mocks.mediaPlaylistWithMap), {
+    assert.deepStrictEqual(hlsParser.parse(mocks.mediaPlaylistMap), {
       type: 'playlist',
       isMasterPlaylist: false,
       endlist: false,
