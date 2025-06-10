@@ -6,6 +6,8 @@ import { parseDownloadFormats } from './parseDownloadFormats.ts';
 
 const FORMATS = [
   'chunked',
+  '1440p60',
+  '1440p30',
   '1080p60',
   '1080p30',
   '720p60',
