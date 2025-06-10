@@ -459,9 +459,12 @@ const mergeFrags = async (method, frags, outputPath, keepFragments) => {
 		console.error(`${chalk.red("ERROR:")} No fragments were downloaded`);
 		return 1;
 	}
-	if (frags.isFMp4) console.warn(`${chalk.yellow("WARN:")} ${FFCONCAT} merge method is not supported for fMP4 streams. Using ${APPEND} instead`);
-	if (method === APPEND || frags.isFMp4) return mergeFrags$2(frags, outputPath, keepFragments);
+	if (method === FFCONCAT && frags.isFMp4) {
+		console.warn(`${chalk.yellow("WARN:")} ${FFCONCAT} merge method is not supported for fMP4 streams. Using ${APPEND} instead`);
+		method = APPEND;
+	}
 	if (method === FFCONCAT) return mergeFrags$1(frags, outputPath, keepFragments);
+	if (method === APPEND) return mergeFrags$2(frags, outputPath, keepFragments);
 	throw new Error();
 };
 
@@ -1321,7 +1324,8 @@ const downloadWithStreamlink = async (link, streamMeta, channelLogin, args) => {
 const parseDownloadFormats = (playlistContent) => {
 	let formats = [];
 	const playlist = parse(playlistContent);
-	for (const { uri, resolution, video, frameRate, bandwidth } of playlist.variants) {
+	for (let i = 0; i < playlist.variants.length; i += 1) {
+		const { uri, resolution, video, frameRate, bandwidth } = playlist.variants[i];
 		const { name } = video[0];
 		formats.push({
 			format_id: name.replaceAll(" ", "_"),
@@ -1329,25 +1333,33 @@ const parseDownloadFormats = (playlistContent) => {
 			height: resolution?.height || null,
 			frameRate: frameRate ? Math.round(frameRate) : null,
 			totalBitrate: bandwidth || null,
-			source: uri.includes("/chunked/") || null,
+			source: i === 0 ? true : null,
 			url: uri
 		});
 	}
-	const unavailableMediaRaw = playlist.sessionDataList?.[0]?.value;
-	if (unavailableMediaRaw) {
-		const unavailableMedia = JSON.parse(Buffer.from(unavailableMediaRaw, "base64").toString("utf8"));
+	const umSessionData = playlist.sessionDataList.find((sessionData) => sessionData.id === "com.amazon.ivs.unavailable-media");
+	if (umSessionData?.value) {
+		let unavailableMedia = [];
+		try {
+			const json = Buffer.from(umSessionData.value, "base64").toString("utf8");
+			unavailableMedia = JSON.parse(json);
+		} catch (e) {
+			console.warn(`${chalk.yellow("WARN:")} Failed to parse unavailable media: ${e.message}`);
+		}
 		for (const media of unavailableMedia) {
 			const [width, height] = media.RESOLUTION ? media.RESOLUTION.split("x").map((v) => Number.parseInt(v)) : [null, null];
 			let urlArr = formats[0].url.split("/");
 			urlArr = urlArr.with(-2, media["GROUP-ID"]);
 			const url = urlArr.join("/");
+			const source = media["GROUP-ID"] === "chunked" || null;
+			if (source) formats.forEach((f) => f.source = null);
 			formats.push({
 				format_id: media.NAME.replaceAll(" ", "_"),
 				width,
 				height,
 				frameRate: media["FRAME-RATE"] ? Math.round(media["FRAME-RATE"]) : null,
 				totalBitrate: media.BANDWIDTH || null,
-				source: media["GROUP-ID"] === "chunked" || null,
+				source,
 				url
 			});
 		}
