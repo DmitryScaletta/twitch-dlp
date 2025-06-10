@@ -1729,7 +1729,6 @@ const normalizeArgs = async (args) => {
 		if (delay < 10) throw new Error("Min --retry-streams delay is 10");
 		newArgs["retry-streams"] = delay;
 	}
-	if (newArgs["merge-method"] === "append") throw new Error("Merge method \"append\" is not implemented yet");
 	if (!MERGE_METHODS.includes(args["merge-method"])) throw new Error(`Unknown merge method: ${args["merge-method"]}. Available: ${MERGE_METHODS.join(", ")}`);
 	const unmuteValues = Object.values(UNMUTE);
 	if (args["unmute"] && !unmuteValues.includes(args["unmute"])) throw new Error(`Unknown unmute policy: ${args["unmute"]}. Available: ${unmuteValues.join(", ")}`);
