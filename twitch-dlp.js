@@ -1346,34 +1346,28 @@ const parseDownloadFormats = (playlistContent) => {
 		} catch (e) {
 			console.warn(`${chalk.yellow("WARN:")} Failed to parse unavailable media: ${e.message}`);
 		}
+		if (unavailableMedia.length > 0) formats.forEach((f) => f.source = null);
 		for (const media of unavailableMedia) {
 			const [width, height] = media.RESOLUTION ? media.RESOLUTION.split("x").map((v) => Number.parseInt(v)) : [null, null];
 			let urlArr = formats[0].url.split("/");
 			urlArr = urlArr.with(-2, media["GROUP-ID"]);
 			const url = urlArr.join("/");
-			const source = media["GROUP-ID"] === "chunked" || null;
-			if (source) formats.forEach((f) => f.source = null);
 			formats.push({
 				format_id: media.NAME.replaceAll(" ", "_"),
 				width,
 				height,
 				frameRate: media["FRAME-RATE"] ? Math.round(media["FRAME-RATE"]) : null,
 				totalBitrate: media.BANDWIDTH || null,
-				source,
+				source: media["GROUP-ID"] === "chunked" || null,
 				url
 			});
 		}
+		if (formats.every((f) => !f.source)) {
+			const last = formats.findLast((f) => f.format_id !== "Audio_Only");
+			if (last) last.source = true;
+		}
 	}
 	formats.sort((a, b) => (b.height || 0) - (a.height || 0));
-	if (!formats.some((f) => f.source)) {
-		let max = -Infinity;
-		let maxI = -1;
-		for (let i = 0; i < formats.length; i += 1) if (formats[i].totalBitrate || 0 > max) {
-			max = formats[i].totalBitrate || 0;
-			maxI = i;
-		}
-		formats[maxI].source = true;
-	}
 	const counts = {};
 	for (const { format_id } of formats) counts[format_id] = (counts[format_id] || 0) + 1;
 	const remaining = { ...counts };
@@ -1393,6 +1387,8 @@ const parseDownloadFormats = (playlistContent) => {
 //#region src/utils/getVideoFormats.ts
 const FORMATS = [
 	"chunked",
+	"1440p60",
+	"1440p30",
 	"1080p60",
 	"1080p30",
 	"720p60",
@@ -1512,6 +1508,7 @@ const downloadByChannelLogin = async (channelLogin, args) => {
 			if (liveVideoInfo) {
 				const { formats, videoInfo } = liveVideoInfo;
 				await downloadVideo(formats, videoInfo, args);
+				if (args["download-sections"]) return;
 			} else {
 				let message = `[live-from-start] Cannot find the playlist`;
 				if (isRetry) {
@@ -1777,10 +1774,10 @@ const parseLink = (link) => {
 	}
 	m = link.match(CHANNEL_REGEX_EXACT);
 	if (m) {
-		const { channel: channelLogin } = m.groups;
+		const { channel } = m.groups;
 		return {
 			type: "channel",
-			channelLogin
+			channelLogin: channel.toLowerCase()
 		};
 	}
 	throw new Error("Wrong link");
