@@ -48,6 +48,8 @@ export const parseDownloadFormats = (playlistContent: string) => {
       );
     }
 
+    if (unavailableMedia.length > 0) formats.forEach((f) => (f.source = null));
+
     for (const media of unavailableMedia) {
       const [width, height] = media.RESOLUTION
         ? media.RESOLUTION.split('x').map((v) => Number.parseInt(v))
@@ -57,34 +59,24 @@ export const parseDownloadFormats = (playlistContent: string) => {
       urlArr = urlArr.with(-2, media['GROUP-ID']);
       const url = urlArr.join('/');
 
-      const source = media['GROUP-ID'] === 'chunked' || null;
-      if (source) formats.forEach((f) => (f.source = null));
-
       formats.push({
         format_id: media.NAME.replaceAll(' ', '_'),
         width,
         height,
         frameRate: media['FRAME-RATE'] ? Math.round(media['FRAME-RATE']) : null,
         totalBitrate: media.BANDWIDTH || null,
-        source,
+        source: media['GROUP-ID'] === 'chunked' || null,
         url,
       });
+    }
+
+    if (formats.every((f) => !f.source)) {
+      const last = formats.findLast((f) => f.format_id !== 'Audio_Only');
+      if (last) last.source = true;
     }
   }
 
   formats.sort((a, b) => (b.height || 0) - (a.height || 0));
-
-  if (!formats.some((f) => f.source)) {
-    let max = -Infinity;
-    let maxI = -1;
-    for (let i = 0; i < formats.length; i += 1) {
-      if (formats[i].totalBitrate || 0 > max) {
-        max = formats[i].totalBitrate || 0;
-        maxI = i;
-      }
-    }
-    formats[maxI].source = true;
-  }
 
   // rename duplicate formats
   const counts: Record<string, number> = {};
