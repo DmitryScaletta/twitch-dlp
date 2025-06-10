@@ -1,3 +1,4 @@
+import { chalk } from '../lib/chalk.ts';
 import * as hlsParser from '../lib/hlsParser.ts';
 import type { DownloadFormat } from '../types.ts';
 
@@ -15,13 +16,9 @@ type UnavailableMedia = {
 export const parseDownloadFormats = (playlistContent: string) => {
   let formats: DownloadFormat[] = [];
   const playlist = hlsParser.parse(playlistContent) as hlsParser.MasterPlaylist;
-  for (const {
-    uri,
-    resolution,
-    video,
-    frameRate,
-    bandwidth,
-  } of playlist.variants) {
+  for (let i = 0; i < playlist.variants.length; i += 1) {
+    const { uri, resolution, video, frameRate, bandwidth } =
+      playlist.variants[i];
     const { name } = video[0];
     formats.push({
       format_id: name.replaceAll(' ', '_'),
@@ -29,7 +26,7 @@ export const parseDownloadFormats = (playlistContent: string) => {
       height: resolution?.height || null,
       frameRate: frameRate ? Math.round(frameRate) : null,
       totalBitrate: bandwidth || null,
-      source: uri.includes('/chunked/') || null,
+      source: i === 0 ? true : null,
       url: uri,
     });
   }
@@ -37,11 +34,20 @@ export const parseDownloadFormats = (playlistContent: string) => {
   // formats 1080p+ doesn't exist in a main playlist:
   // - for not logged in users
   // - in some countries
-  const unavailableMediaRaw = playlist.sessionDataList?.[0]?.value;
-  if (unavailableMediaRaw) {
-    const unavailableMedia = JSON.parse(
-      Buffer.from(unavailableMediaRaw, 'base64').toString('utf8'),
-    ) as UnavailableMedia[];
+  const umSessionData = playlist.sessionDataList.find(
+    (sessionData) => sessionData.id === 'com.amazon.ivs.unavailable-media',
+  );
+  if (umSessionData?.value) {
+    let unavailableMedia: UnavailableMedia[] = [];
+    try {
+      const json = Buffer.from(umSessionData.value, 'base64').toString('utf8');
+      unavailableMedia = JSON.parse(json);
+    } catch (e: any) {
+      console.warn(
+        `${chalk.yellow('WARN:')} Failed to parse unavailable media: ${e.message}`,
+      );
+    }
+
     for (const media of unavailableMedia) {
       const [width, height] = media.RESOLUTION
         ? media.RESOLUTION.split('x').map((v) => Number.parseInt(v))
@@ -51,13 +57,16 @@ export const parseDownloadFormats = (playlistContent: string) => {
       urlArr = urlArr.with(-2, media['GROUP-ID']);
       const url = urlArr.join('/');
 
+      const source = media['GROUP-ID'] === 'chunked' || null;
+      if (source) formats.forEach((f) => (f.source = null));
+
       formats.push({
         format_id: media.NAME.replaceAll(' ', '_'),
         width,
         height,
         frameRate: media['FRAME-RATE'] ? Math.round(media['FRAME-RATE']) : null,
         totalBitrate: media.BANDWIDTH || null,
-        source: media['GROUP-ID'] === 'chunked' || null,
+        source,
         url,
       });
     }
