@@ -52,8 +52,11 @@ export const parseLink = (link: string): ParsedLink => {
   }
   m = link.match(CHANNEL_REGEX_EXACT);
   if (m) {
-    const { channel: channelLogin } = m.groups as ChannelMatchGroups;
-    return { type: 'channel', channelLogin } satisfies ParsedLinkChannel;
+    const { channel } = m.groups as ChannelMatchGroups;
+    return {
+      type: 'channel',
+      channelLogin: channel.toLowerCase(),
+    } satisfies ParsedLinkChannel;
   }
   throw new Error('Wrong link');
 };
