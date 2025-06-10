@@ -19,10 +19,7 @@ export const normalizeArgs = async (args: RawArgs['values']) => {
     newArgs['retry-streams'] = delay;
   }
 
-  if (newArgs['merge-method'] === 'append') {
-    throw new Error('Merge method "append" is not implemented yet');
-  }
-  if (!MERGE_METHODS.includes(args['merge-method'] as any)) {
+  if (!(MERGE_METHODS as readonly string[]).includes(args['merge-method'])) {
     throw new Error(
       `Unknown merge method: ${args['merge-method']}. Available: ${MERGE_METHODS.join(', ')}`,
     );
