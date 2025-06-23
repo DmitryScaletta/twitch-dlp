@@ -147,7 +147,8 @@ const VOD_DOMAINS = [
 	"https://d1ymi26ma8va5x.cloudfront.net",
 	"https://d1mhjrowxxagfy.cloudfront.net",
 	"https://ddacn6pr5v0tl.cloudfront.net",
-	"https://d3aqoihi2n8ty8.cloudfront.net"
+	"https://d3aqoihi2n8ty8.cloudfront.net",
+	"https://d3fi1amfgojobc.cloudfront.net"
 ];
 const DOWNLOADERS = [
 	"aria2c",
@@ -1270,8 +1271,8 @@ const getVideoInfoByVodPath = ({ channelLogin, videoId, startTimestamp }) => ({
 	duration: null,
 	uploader: channelLogin,
 	uploader_id: null,
-	upload_date: new Date(startTimestamp * 1e3).toISOString(),
-	release_date: new Date(startTimestamp * 1e3).toISOString(),
+	upload_date: (/* @__PURE__ */ new Date(startTimestamp * 1e3)).toISOString(),
+	release_date: (/* @__PURE__ */ new Date(startTimestamp * 1e3)).toISOString(),
 	view_count: null,
 	ext: "mp4"
 });
@@ -1738,13 +1739,13 @@ const normalizeArgs = async (args) => {
 //#endregion
 //#region node_modules/.pnpm/twitch-regex@0.1.3/node_modules/twitch-regex/dist/index.js
 var CLIP_REGEX_STRING = "https?:\\/\\/(?:clips\\.twitch\\.tv\\/(?:embed\\?.*?\\bclip=|\\/*)|(?:(?:www|go|m)\\.)?twitch\\.tv\\/(?:(?<channel>[^/]+)\\/)?clip\\/)(?<slug>[\\w-]+)\\S*";
-var CLIP_REGEX_EXACT = new RegExp(`^${CLIP_REGEX_STRING}$`);
+var CLIP_REGEX_EXACT = /* @__PURE__ */ new RegExp(`^${CLIP_REGEX_STRING}$`);
 var VIDEO_REGEX_STRING = "https?:\\/\\/(?:(?:(?:www|go|m)\\.)?twitch\\.tv\\/(?:videos|(?<channel>[^/]+)\\/v(?:ideo)?)\\/|player\\.twitch\\.tv\\/\\?.*?\\bvideo=v?|www\\.twitch\\.tv\\/(?:[^/]+)\\/schedule\\?vodID=)(?<id>\\d+)\\S*";
-var VIDEO_REGEX_EXACT = new RegExp(`^${VIDEO_REGEX_STRING}$`);
+var VIDEO_REGEX_EXACT = /* @__PURE__ */ new RegExp(`^${VIDEO_REGEX_STRING}$`);
 var CHANNEL_REGEX_STRING = "https?:\\/\\/(?:(?:(?:www|go|m)\\.)?twitch\\.tv\\/|player\\.twitch\\.tv\\/\\?.*?\\bchannel=)(?<channel>\\w+)[^\\s/]*";
-var CHANNEL_REGEX_EXACT = new RegExp(`^${CHANNEL_REGEX_STRING}$`);
+var CHANNEL_REGEX_EXACT = /* @__PURE__ */ new RegExp(`^${CHANNEL_REGEX_STRING}$`);
 var COLLECTION_REGEX_STRING = "https?:\\/\\/(?:(?:(?:www|go|m)\\.)?twitch\\.tv\\/collections\\/|player\\.twitch\\.tv\\/\\?.*?\\bcollection=)(?<id>[\\w-]+)\\S*";
-var COLLECTION_REGEX_EXACT = new RegExp(`^${COLLECTION_REGEX_STRING}$`);
+var COLLECTION_REGEX_EXACT = /* @__PURE__ */ new RegExp(`^${COLLECTION_REGEX_STRING}$`);
 
 //#endregion
 //#region src/utils/args/parseLink.ts
