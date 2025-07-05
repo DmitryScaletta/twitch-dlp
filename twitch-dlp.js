@@ -1509,7 +1509,7 @@ const downloadByChannelLogin = async (channelLogin, args) => {
 			if (liveVideoInfo) {
 				const { formats, videoInfo } = liveVideoInfo;
 				await downloadVideo(formats, videoInfo, args);
-				if (args["download-sections"]) return;
+				if (!isRetry || args["download-sections"]) return;
 			} else {
 				let message = `[live-from-start] Cannot find the playlist`;
 				if (isRetry) {
