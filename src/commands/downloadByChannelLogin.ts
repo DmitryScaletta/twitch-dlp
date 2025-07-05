@@ -9,7 +9,7 @@ export const downloadByChannelLogin = async (
   channelLogin: string,
   args: AppArgs,
 ) => {
-  const delay = args['retry-streams'];
+  const delay = args['retry-streams'] || 0;
   const isLiveFromStart = args['live-from-start'];
   const isRetry = delay > 0;
 

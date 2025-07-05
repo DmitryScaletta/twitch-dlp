@@ -11,7 +11,7 @@ export type AppArgs = Omit<
 > & {
   downloader: Downloader;
   'download-sections': readonly [startTime: number, endTime: number] | null;
-  'retry-streams': number;
+  'retry-streams': number | undefined;
   'merge-method': MergeMethod;
 };
 
