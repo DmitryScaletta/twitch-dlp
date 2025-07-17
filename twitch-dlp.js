@@ -939,7 +939,7 @@ const getFragsForDownloading = (playlistUrl, playlist, args) => {
 
 //#endregion
 //#region src/utils/getTryUnmute.ts
-const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1e3;
+const ONE_WEEK_MS = 10080 * 60 * 1e3;
 const getTryUnmute = (videoInfo) => {
 	const videoDate = videoInfo.upload_date || videoInfo.release_date;
 	if (!videoDate) return null;
@@ -1338,12 +1338,12 @@ const parseDownloadFormats = (playlistContent) => {
 			url: uri
 		});
 	}
-	const umSessionData = playlist.sessionDataList.find((sessionData) => sessionData.id === "com.amazon.ivs.unavailable-media");
-	if (umSessionData?.value) {
+	for (const sessionData of playlist.sessionDataList) {
+		if (sessionData.id !== "com.amazon.ivs.unavailable-media") continue;
+		if (!sessionData.value) continue;
 		let unavailableMedia = [];
 		try {
-			const json = Buffer.from(umSessionData.value, "base64").toString("utf8");
-			unavailableMedia = JSON.parse(json);
+			unavailableMedia = JSON.parse(atob(sessionData.value));
 		} catch (e) {
 			console.warn(`${chalk.yellow("WARN:")} Failed to parse unavailable media: ${e.message}`);
 		}
@@ -1492,7 +1492,7 @@ const getLiveVideoInfo = async (streamMeta, channelLogin) => {
 //#endregion
 //#region src/commands/downloadByChannelLogin.ts
 const downloadByChannelLogin = async (channelLogin, args) => {
-	const delay = args["retry-streams"];
+	const delay = args["retry-streams"] || 0;
 	const isLiveFromStart = args["live-from-start"];
 	const isRetry = delay > 0;
 	while (true) {
@@ -1810,6 +1810,7 @@ const getArgs = () => parseArgs({
 			type: "string",
 			default: "fetch"
 		},
+		proxy: { type: "string" },
 		"keep-fragments": {
 			type: "boolean",
 			default: false
@@ -1848,6 +1849,11 @@ const main = async () => {
 	const positionals = parsedArgs.positionals;
 	if (args.version) return showVersion();
 	if (args.help || positionals.length === 0) return showHelp();
+	if (args.proxy) {
+		process.env.NODE_USE_ENV_PROXY = "1";
+		process.env.HTTP_PROXY = args.proxy;
+		process.env.HTTPS_PROXY = args.proxy;
+	}
 	if (positionals.length !== 1) throw new Error("Expected exactly one positional argument");
 	if (args["merge-fragments"]) return mergeFragments(positionals[0], args);
 	const link = parseLink(positionals[0]);
