@@ -39,6 +39,9 @@ export const getArgs = () =>
         type: 'string',
         default: 'fetch',
       },
+      proxy: {
+        type: 'string',
+      },
       'keep-fragments': {
         type: 'boolean',
         default: false,
@@ -85,6 +88,13 @@ const main = async () => {
 
   if (args.version) return showVersion();
   if (args.help || positionals.length === 0) return showHelp();
+
+  // https://github.com/nodejs/node/pull/57165
+  if (args.proxy) {
+    process.env.NODE_USE_ENV_PROXY = '1';
+    process.env.HTTP_PROXY = args.proxy;
+    process.env.HTTPS_PROXY = args.proxy;
+  }
 
   if (positionals.length !== 1) {
     throw new Error('Expected exactly one positional argument');
