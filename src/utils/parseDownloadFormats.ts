@@ -34,14 +34,13 @@ export const parseDownloadFormats = (playlistContent: string) => {
   // formats 1080p+ doesn't exist in a main playlist:
   // - for not logged in users
   // - in some countries
-  const umSessionData = playlist.sessionDataList.find(
-    (sessionData) => sessionData.id === 'com.amazon.ivs.unavailable-media',
-  );
-  if (umSessionData?.value) {
+  for (const sessionData of playlist.sessionDataList) {
+    if (sessionData.id !== 'com.amazon.ivs.unavailable-media') continue;
+    if (!sessionData.value) continue;
+
     let unavailableMedia: UnavailableMedia[] = [];
     try {
-      const json = Buffer.from(umSessionData.value, 'base64').toString('utf8');
-      unavailableMedia = JSON.parse(json);
+      unavailableMedia = JSON.parse(atob(sessionData.value));
     } catch (e: any) {
       console.warn(
         `${chalk.yellow('WARN:')} Failed to parse unavailable media: ${e.message}`,
