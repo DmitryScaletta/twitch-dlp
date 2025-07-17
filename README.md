@@ -111,7 +111,8 @@ npx twitch-dlp "./Chillin [v2222470239].mp4" --merge-fragments --unmute quality
                             Examples: "*0-12:34", "*3:14:15-inf".
                             A "*" prefix is for yt-dlp compatibility.
                             Negative timestamps and multiple sections are not 
-                            supported
+                            supported. Cutting is done by the closest fragments 
+                            (not by keyframes), so the accuracy is not very high
 --unmute POLICY             Try to unmute muted fragments. Keep in mind that
                             160p and 360p have slightly worse audio quality.
                             Available values:
@@ -124,7 +125,12 @@ npx twitch-dlp "./Chillin [v2222470239].mp4" --merge-fragments --unmute quality
                               check downloading format, unmute if available
                             * off - don't try to unmute fragments
 --downloader NAME           Name of the external downloader to use.
-                            Currently supports: aria2c, curl, fetch (default).
+                            Currently supports: aria2c, curl, fetch (default)
+--proxy URL                 Use the specified HTTP/HTTPS/SOCKS proxy. To
+                            enable SOCKS proxy, specify a proper scheme,
+                            e.g. socks5://user:pass@127.0.0.1:1080/.
+                            Pass in an empty string (--proxy "") for
+                            direct connection. Currently only works with fetch
 --merge-method METHOD       How fragments should be merged. Merging happens
                             only after all fragments are downloaded.
                             Available values:
