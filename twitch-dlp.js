@@ -315,7 +315,11 @@ const ILLEGAL_PATH_CHARS_MAP = {
 	">": "＞",
 	"|": "｜"
 };
-const sanitizeFilename = (str) => str.replace(new RegExp(`[${Object.keys(ILLEGAL_PATH_CHARS_MAP).join("")}]`, "g"), (c) => ILLEGAL_PATH_CHARS_MAP[c]);
+const sanitizeFilename = (str) => {
+	const chars = Object.keys(ILLEGAL_PATH_CHARS_MAP);
+	const regex = `[${chars.map((c) => c === "\\" ? "\\\\" : c).join("")}]`;
+	return str.replace(new RegExp(regex, "g"), (c) => ILLEGAL_PATH_CHARS_MAP[c]);
+};
 const getOutputPath = (template, videoInfo) => {
 	let outputPath = template;
 	for (const [key, value] of Object.entries(videoInfo)) {
