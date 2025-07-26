@@ -1564,7 +1564,7 @@ const getClipFormats = (clipMeta) => {
 				height: Number.parseInt(quality) || null,
 				frameRate: frameRate ? Math.round(frameRate) : null,
 				source: null,
-				url: `${sourceURL}?sig=${sig}&token=${token}`
+				url: `${sourceURL}?sig=${sig}&token=${encodeURIComponent(token)}`
 			});
 		}
 	};
