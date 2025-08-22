@@ -95,10 +95,10 @@ export const getVideoFormatsByFullVodPath = async (
   const responses = await Promise.all(
     VOD_DOMAINS.map((domain) => {
       const url = getVodUrl(domain, fullVodPath, broadcastType, videoId);
-      return fetch(url, { method: 'HEAD' }).catch((_) => null);
+      return fetch(url, { method: 'HEAD' }).catch(() => null);
     }),
   );
-  const vodDomainIdx = responses.findIndex((res) => res && res.ok);
+  const vodDomainIdx = responses.findIndex((res) => res?.ok);
   if (vodDomainIdx === -1) return [];
   return getAvailableFormats(
     VOD_DOMAINS[vodDomainIdx],
