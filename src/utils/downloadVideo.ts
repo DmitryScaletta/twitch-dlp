@@ -45,6 +45,8 @@ export const downloadVideo = async (
   videoInfo: VideoInfo,
   args: AppArgs,
 ) => {
+  if (formats.length === 0) throw new Error('Cannot get video formats');
+
   if (args['list-formats']) {
     showFormats(formats);
     process.exit();

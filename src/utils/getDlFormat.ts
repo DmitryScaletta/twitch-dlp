@@ -7,6 +7,6 @@ export const getDlFormat = (formats: DownloadFormat[], formatArg: string) => {
       : formats.find(
           (f) => f.format_id.toLowerCase() === formatArg.toLowerCase(),
         );
-  if (!dlFormat) throw new Error('Wrong format');
+  if (!dlFormat) throw new Error(`Wrong format: ${formatArg}`);
   return dlFormat;
 };
