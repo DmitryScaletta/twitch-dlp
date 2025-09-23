@@ -9,7 +9,7 @@ import os from "node:os";
 import stream from "node:stream";
 import crypto from "node:crypto";
 
-//#region node_modules/.pnpm/twitch-gql-queries@0.1.13/node_modules/twitch-gql-queries/dist/index.js
+//#region node_modules/.pnpm/twitch-gql-queries@0.1.17/node_modules/twitch-gql-queries/dist/index.js
 var CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
 var MAX_QUERIES_PER_REQUEST = 35;
 var gqlRequest = async (queries, requestInit) => {
@@ -48,7 +48,7 @@ var getQueryShareClipRenderStatus = (variables) => ({
 	variables,
 	extensions: { persistedQuery: {
 		version: 1,
-		sha256Hash: "f130048a462a0ac86bb54d653c968c514e9ab9ca94db52368c1179e97b0f16eb"
+		sha256Hash: "e0a46b287d760c6890a39d1ccd736af5ec9479a267d02c710e9ac33326b651d2"
 	} }
 });
 var getQueryStreamMetadata = (variables) => ({
@@ -258,18 +258,16 @@ const parseMediaPlaylist = (lines) => {
 		duration: Number.parseFloat(segLines[i].replace(EXTINF, "").replace(",", "")),
 		map
 	});
-	const endlist = lines.includes("#EXT-X-ENDLIST");
 	return {
 		type: "playlist",
 		isMasterPlaylist: false,
-		endlist,
+		endlist: lines.includes("#EXT-X-ENDLIST"),
 		segments
 	};
 };
 const parse = (playlist) => {
 	const lines = playlist.split("\n").map((line) => line.trim()).filter(Boolean);
-	const isMasterPlaylist = MASTER_PLAYLIST_TAGS.some((s) => lines.some((line) => line.startsWith(`#${s}:`)));
-	return isMasterPlaylist ? parseMasterPlaylist(lines) : parseMediaPlaylist(lines);
+	return MASTER_PLAYLIST_TAGS.some((s) => lines.some((line) => line.startsWith(`#${s}:`))) ? parseMasterPlaylist(lines) : parseMediaPlaylist(lines);
 };
 
 //#endregion
@@ -316,8 +314,7 @@ const ILLEGAL_PATH_CHARS_MAP = {
 	"|": "｜"
 };
 const sanitizeFilename = (str) => {
-	const chars = Object.keys(ILLEGAL_PATH_CHARS_MAP);
-	const regex = `[${chars.map((c) => c === "\\" ? "\\\\" : c).join("")}]`;
+	const regex = `[${Object.keys(ILLEGAL_PATH_CHARS_MAP).map((c) => c === "\\" ? "\\\\" : c).join("")}]`;
 	return str.replace(new RegExp(regex, "g"), (c) => ILLEGAL_PATH_CHARS_MAP[c]);
 };
 const getOutputPath = (template, videoInfo) => {
@@ -513,8 +510,7 @@ const createLogger = (logPath) => (event) => {
 const nameEq = (name) => (event) => event[0] === name;
 const getLog = async (logPath) => {
 	try {
-		const logContent = await fsp.readFile(logPath, "utf8");
-		return logContent.split("\n").filter(Boolean).map((line) => line.split("	").map((v) => JSON.parse(v)));
+		return (await fsp.readFile(logPath, "utf8")).split("\n").filter(Boolean).map((line) => line.split("	").map((v) => JSON.parse(v)));
 	} catch {
 		return null;
 	}
@@ -755,8 +751,7 @@ const parseRateLimit = (rateLimit) => {
 };
 const isUrlsAvailableFetch = async (urls, gzip) => {
 	try {
-		const responses = await Promise.all(urls.map((url) => fetch(url, { headers: { "Accept-Encoding": gzip ? "deflate, gzip" : "" } })));
-		return responses.map((res) => res.ok);
+		return (await Promise.all(urls.map((url) => fetch(url, { headers: { "Accept-Encoding": gzip ? "deflate, gzip" : "" } })))).map((res) => res.ok);
 	} catch (e) {
 		return urls.map(() => false);
 	}
@@ -886,7 +881,7 @@ const downloadFrag = async (downloader, url, destPath, limitRateArg, gzip, type 
 //#region src/utils/getDlFormat.ts
 const getDlFormat = (formats, formatArg) => {
 	const dlFormat = formatArg === "best" ? formats[0] : formats.find((f) => f.format_id.toLowerCase() === formatArg.toLowerCase());
-	if (!dlFormat) throw new Error("Wrong format");
+	if (!dlFormat) throw new Error(`Wrong format: ${formatArg}`);
 	return dlFormat;
 };
 
@@ -1091,13 +1086,11 @@ const timeFmt = new Intl.DateTimeFormat(LOCALE, {
 });
 const formatSpeed = (n) => {
 	const i = n === 0 ? 0 : Math.floor(Math.log(n) / Math.log(1024));
-	const value = n / Math.pow(1024, i);
-	return `${value.toFixed(2)}${UNITS[i]}/s`;
+	return `${(n / Math.pow(1024, i)).toFixed(2)}${UNITS[i]}/s`;
 };
 const formatSize = (n) => {
 	const i = n === 0 ? 0 : Math.floor(Math.log(n) / Math.log(1024));
-	const value = n / Math.pow(1024, i);
-	return `${value.toFixed(2)}${UNITS[i]}`;
+	return `${(n / Math.pow(1024, i)).toFixed(2)}${UNITS[i]}`;
 };
 const showProgress = (downloadedFrags, fragsCount) => {
 	const dlFrags = Array.from(downloadedFrags.values());
@@ -1130,6 +1123,7 @@ const showProgress = (downloadedFrags, fragsCount) => {
 const WAIT_BETWEEN_CYCLES_SEC = 60;
 const RETRY_MESSAGE = `Retry every ${WAIT_BETWEEN_CYCLES_SEC} second(s)`;
 const downloadVideo = async (formats, videoInfo, args) => {
+	if (formats.length === 0) throw new Error("Cannot get video formats");
 	if (args["list-formats"]) {
 		showFormats(formats);
 		process.exit();
@@ -1297,8 +1291,7 @@ const getVideoInfoByClipMeta = (clipMeta) => ({
 //#region src/utils/downloadWithStreamlink.ts
 const DEFAULT_STREAMLINK_ARGS = ["--twitch-force-client-integrity", "--twitch-access-token-param=playerType=frontpage"];
 const getDefaultOutputTemplate = () => {
-	const now = (/* @__PURE__ */ new Date()).toISOString().slice(0, 16).replace("T", " ").replace(":", "_");
-	return `%(uploader)s (live) ${now} [%(id)s].%(ext)s`;
+	return `%(uploader)s (live) ${(/* @__PURE__ */ new Date()).toISOString().slice(0, 16).replace("T", " ").replace(":", "_")} [%(id)s].%(ext)s`;
 };
 const downloadWithStreamlink = async (link, streamMeta, channelLogin, args) => {
 	if (!await isInstalled("streamlink")) throw new Error("streamlink is not installed. Install it from https://streamlink.github.io/");
@@ -1412,12 +1405,10 @@ const getVideoFormats = async (videoId) => {
 	if (!accessToken) return [];
 	const manifest = await getManifest(videoId, accessToken);
 	if (!manifest) return [];
-	const formats = parseDownloadFormats(manifest);
-	return formats;
+	return parseDownloadFormats(manifest);
 };
 const getFullVodPath = (vodPath) => {
-	const hashedVodPath = crypto.createHash("sha1").update(vodPath).digest("hex").slice(0, 20);
-	return `${hashedVodPath}_${vodPath}`;
+	return `${crypto.createHash("sha1").update(vodPath).digest("hex").slice(0, 20)}_${vodPath}`;
 };
 const getVodUrl = (vodDomain, fullVodPath, broadcastType = "ARCHIVE", videoId = "", format = "chunked") => {
 	const playlistName = broadcastType === "HIGHLIGHT" ? `highlight-${videoId}` : "index-dvr";
@@ -1449,11 +1440,10 @@ const getAvailableFormats = async (vodDomain, fullVodPath, broadcastType, videoI
 	return formats;
 };
 const getVideoFormatsByFullVodPath = async (fullVodPath, broadcastType, videoId) => {
-	const responses = await Promise.all(VOD_DOMAINS.map((domain) => {
+	const vodDomainIdx = (await Promise.all(VOD_DOMAINS.map((domain) => {
 		const url = getVodUrl(domain, fullVodPath, broadcastType, videoId);
 		return fetch(url, { method: "HEAD" }).catch(() => null);
-	}));
-	const vodDomainIdx = responses.findIndex((res) => res?.ok);
+	}))).findIndex((res) => res?.ok);
 	if (vodDomainIdx === -1) return [];
 	return getAvailableFormats(VOD_DOMAINS[vodDomainIdx], fullVodPath, broadcastType, videoId);
 };
@@ -1589,8 +1579,7 @@ const downloadClip = async (slug, args) => {
 	const res = await fetch(dlFormat.url, { method: "HEAD" });
 	const size = Number.parseInt(res.headers.get("content-length") || "0");
 	console.log(`[download] Downloading clip (${(size / 1024 / 1024).toFixed(2)} MB)`);
-	const result = await downloadFrag(args.downloader, dlFormat.url, destPath, args["limit-rate"], void 0, "mp4");
-	if (!result) throw new Error("[download] Download failed");
+	if (!await downloadFrag(args.downloader, dlFormat.url, destPath, args["limit-rate"], void 0, "mp4")) throw new Error("[download] Download failed");
 	console.log("[download] Done");
 };
 
@@ -1657,13 +1646,11 @@ const mergeFragments = async (outputPath, args) => {
 //#region src/commands/showHelp.ts
 const showHelp = async () => {
 	const readmePath = path.resolve(import.meta.dirname, "README.md");
-	const readme = await fsp.readFile(readmePath, "utf8");
-	const entries = readme.split(/\s## (.*)/g).slice(1);
+	const entries = (await fsp.readFile(readmePath, "utf8")).split(/\s## (.*)/g).slice(1);
 	const sections = {};
 	for (let i = 0; i < entries.length; i += 2) {
 		const header = entries[i];
-		const content = entries[i + 1].trim();
-		sections[header] = content;
+		sections[header] = entries[i + 1].trim();
 	}
 	const help = [
 		"Options:",
