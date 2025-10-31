@@ -113,7 +113,7 @@ const getVideoMetadata = (videoId) => apiRequest(getQueryVideoMetadata({
 const getClipMetadata = (slug) => apiRequest(getQueryShareClipRenderStatus({ slug }), "clip", "clip metadata");
 const getBroadcast = (channelId) => apiRequest(getQueryFfzBroadcastId({ id: channelId }), "user", "broadcast id");
 const getManifest = (videoId, accessToken) => {
-	const params = new URLSearchParams({
+	return fetchText(`https://usher.ttvnw.net/vod/${videoId}.m3u8?${new URLSearchParams({
 		allow_source: "true",
 		allow_audio_only: "true",
 		allow_spectre: "true",
@@ -123,9 +123,7 @@ const getManifest = (videoId, accessToken) => {
 		sig: accessToken.signature,
 		supported_codecs: "av1,h265,h264",
 		token: accessToken.value
-	});
-	const url = `https://usher.ttvnw.net/vod/${videoId}.m3u8?${params}`;
-	return fetchText(url, "video manifest");
+	})}`, "video manifest");
 };
 
 //#endregion
@@ -1229,8 +1227,7 @@ const downloadVideo = async (formats, videoInfo, args) => {
 	const existingFrags = getExistingFrags(frags, outputPath, dir);
 	writeLog([DL_EVENT.FRAGS_EXISTING, existingFrags.length]);
 	await processUnmutedFrags(existingFrags, outputPath, dir, writeLog);
-	const retCode = await mergeFrags(args["merge-method"], existingFrags, outputPath, args["keep-fragments"]);
-	writeLog([retCode ? DL_EVENT.MERGE_FRAGS_FAILURE : DL_EVENT.MERGE_FRAGS_SUCCESS]);
+	writeLog([await mergeFrags(args["merge-method"], existingFrags, outputPath, args["keep-fragments"]) ? DL_EVENT.MERGE_FRAGS_FAILURE : DL_EVENT.MERGE_FRAGS_SUCCESS]);
 	await showStats(logPath);
 	if (!args["keep-fragments"]) await fsp.unlink(logPath);
 };
@@ -1411,8 +1408,7 @@ const getFullVodPath = (vodPath) => {
 	return `${crypto.createHash("sha1").update(vodPath).digest("hex").slice(0, 20)}_${vodPath}`;
 };
 const getVodUrl = (vodDomain, fullVodPath, broadcastType = "ARCHIVE", videoId = "", format = "chunked") => {
-	const playlistName = broadcastType === "HIGHLIGHT" ? `highlight-${videoId}` : "index-dvr";
-	return `${vodDomain}/${fullVodPath}/${format}/${playlistName}.m3u8`;
+	return `${vodDomain}/${fullVodPath}/${format}/${broadcastType === "HIGHLIGHT" ? `highlight-${videoId}` : "index-dvr"}.m3u8`;
 };
 const getAvailableFormats = async (vodDomain, fullVodPath, broadcastType, videoId) => {
 	const formats = [];
@@ -1472,8 +1468,7 @@ const getLiveVideoInfo = async (streamMeta, channelLogin) => {
 	if (!broadcast?.stream?.archiveVideo || formats.length === 0) {
 		console.warn("[live-from-start] Recovering the playlist");
 		const startTimestamp = new Date(streamMeta.stream.createdAt).getTime() / 1e3;
-		const vodPath = `${channelLogin}_${streamMeta.stream.id}_${startTimestamp}`;
-		formats = await getVideoFormatsByFullVodPath(getFullVodPath(vodPath));
+		formats = await getVideoFormatsByFullVodPath(getFullVodPath(`${channelLogin}_${streamMeta.stream.id}_${startTimestamp}`));
 		videoInfo = getVideoInfoByStreamMeta(streamMeta, channelLogin);
 	}
 	if (formats.length === 0 || !videoInfo) return null;
@@ -1520,6 +1515,73 @@ const downloadByChannelLogin = async (channelLogin, args) => {
 };
 
 //#endregion
+//#region src/api/sullygnome.ts
+const BASE_URL = "https://sullygnome.com/api";
+const getStandardSearch = async (query) => {
+	const url = `${BASE_URL}/standardsearch/${query}/true/true/false/true`;
+	return (await fetch(url)).json();
+};
+const getChannelStreams = async (channelId, page = 0) => {
+	const url = `${BASE_URL}/tables/channeltables/streams/365/${channelId}/%20/${page + 1}/1/desc/${page * 100}/100`;
+	return (await fetch(url)).json();
+};
+
+//#endregion
+//#region src/utils/getWhyCannotDownload.ts
+const getWhyCannotDownload = async () => {
+	try {
+		const mdPath = path.resolve(import.meta.dirname, "DOWNLOAD_PRIVATE_VIDEOS.md");
+		const md = await fsp.readFile(mdPath, "utf8");
+		const txt = [];
+		for (const m of md.matchAll(/> (.*:|- .*)/gm)) txt.push(m[1]);
+		return txt.join("\n");
+	} catch {
+		return "";
+	}
+};
+
+//#endregion
+//#region src/commands/downloadByVodPath.ts
+const downloadByVodPath = async (parsedLink, args) => {
+	const formats = await getVideoFormatsByFullVodPath(getFullVodPath(parsedLink.vodPath));
+	if (formats.length === 0) {
+		const reasons = await getWhyCannotDownload();
+		throw new Error(`Cannot get video formats\n\n${reasons}`);
+	}
+	return downloadVideo(formats, getVideoInfoByVodPath(parsedLink), args);
+};
+
+//#endregion
+//#region src/commands/downloadByStatsService.ts
+const getChannelStream = async (channelLogin, streamId) => {
+	const channel = (await getStandardSearch(channelLogin)).find((item) => item.itemtype === 1 && item.siteurl === channelLogin);
+	if (!channel) throw new Error(`Channel "${channelLogin}" not found`);
+	const channelId = channel.value;
+	let page = 0;
+	while (true) {
+		const channelStreams = await getChannelStreams(channelId, page);
+		page += 1;
+		const stream$1 = channelStreams.data.find((s) => s.streamId === streamId);
+		if (stream$1) return stream$1;
+		if (page * 100 >= channelStreams.recordsFiltered) {
+			const reasons = await getWhyCannotDownload();
+			throw new Error(`Stream "${streamId}" not found\n\n${reasons}`);
+		}
+	}
+};
+const downloadByStatsService = async ({ channelLogin, streamId }, args) => {
+	const stream$1 = await getChannelStream(channelLogin, streamId);
+	const startTimestamp = new Date(stream$1.startDateTime).getTime() / 1e3;
+	return downloadByVodPath({
+		type: "vodPath",
+		vodPath: `${channelLogin}_${streamId}_${startTimestamp}`,
+		channelLogin,
+		videoId: `${streamId}`,
+		startTimestamp
+	}, args);
+};
+
+//#endregion
 //#region src/commands/downloadByVideoId.ts
 const downloadByVideoId = async (videoId, args) => {
 	let [formats, videoMeta] = await Promise.all([getVideoFormats(videoId), getVideoMetadata(videoId)]);
@@ -1529,14 +1591,6 @@ const downloadByVideoId = async (videoId, args) => {
 	}
 	if (formats.length === 0 || !videoMeta) return console.log(PRIVATE_VIDEO_INSTRUCTIONS);
 	const videoInfo = getVideoInfoByVideoMeta(videoMeta);
-	return downloadVideo(formats, videoInfo, args);
-};
-
-//#endregion
-//#region src/commands/downloadByVodPath.ts
-const downloadByVodPath = async (parsedLink, args) => {
-	const formats = await getVideoFormatsByFullVodPath(getFullVodPath(parsedLink.vodPath));
-	const videoInfo = getVideoInfoByVodPath(parsedLink);
 	return downloadVideo(formats, videoInfo, args);
 };
 
@@ -1627,10 +1681,7 @@ const mergeFragments = async (outputPath, args) => {
 	const log = await getLog(logPath);
 	const writeLog = createLogger(logPath);
 	const dlInfo = getInitPayload(log || []);
-	const playlistUrl = dlInfo?.playlistUrl || "";
-	const playlist = parse(playlistContent);
-	const allFrags = getFragsForDownloading(playlistUrl, playlist, args);
-	const frags = getExistingFrags(allFrags, outputPath, dir);
+	const frags = getExistingFrags(getFragsForDownloading(dlInfo?.playlistUrl || "", parse(playlistContent), args), outputPath, dir);
 	if (log && dlInfo && args.unmute && args.unmute !== UNMUTE.OFF) {
 		const { videoInfo, formats } = dlInfo;
 		if (getTryUnmute(videoInfo)) await tryUnmuteFrags(outputPath, log, frags, formats, args, writeLog);
@@ -1741,6 +1792,9 @@ var COLLECTION_REGEX_EXACT = /* @__PURE__ */ new RegExp(`^${COLLECTION_REGEX_STR
 //#endregion
 //#region src/utils/args/parseLink.ts
 const VOD_PATH_REGEX = /^video:(?<vodPath>(?<channelLogin>\w+)_(?<videoId>\d+)_(?<startTimestamp>\d+))$/;
+const TWITCHTRACKER_REGEX = /^(?:https:\/\/)?(?<service>twitchtracker)\.com\/(?<channelName>[^/]+)\/streams\/(?<streamId>\d+)$/;
+const STREAMSCHARTS_REGEX = /^(?:https:\/\/)?(?<service>streamscharts)\.com\/channels\/(?<channelName>[^/]+)\/streams\/(?<streamId>\d+)$/;
+const SULLYGNOME_REGEX = /^(?:https:\/\/)?(?<service>sullygnome)\.com\/channel\/(?<channelName>[^/]+)\/(?:[^/]+\/)?stream\/(?<streamId>\d+)$/;
 const parseLink = (link) => {
 	let m = link.match(VOD_PATH_REGEX);
 	if (m) return {
@@ -1769,6 +1823,16 @@ const parseLink = (link) => {
 		return {
 			type: "channel",
 			channelLogin: channel.toLowerCase()
+		};
+	}
+	m = link.match(TWITCHTRACKER_REGEX) || link.match(STREAMSCHARTS_REGEX) || link.match(SULLYGNOME_REGEX);
+	if (m) {
+		const { service, channelName, streamId } = m.groups;
+		return {
+			type: "statsService",
+			service,
+			channelLogin: channelName,
+			streamId: Number.parseInt(streamId)
 		};
 	}
 	throw new Error("Wrong link");
@@ -1851,7 +1915,8 @@ const main = async () => {
 	if (link.type === "vodPath") return downloadByVodPath(link, args);
 	if (link.type === "video") return downloadByVideoId(link.videoId, args);
 	if (link.type === "clip") return downloadClip(link.slug, args);
-	return downloadByChannelLogin(link.channelLogin, args);
+	if (link.type === "channel") return downloadByChannelLogin(link.channelLogin, args);
+	if (link.type === "statsService") return downloadByStatsService(link, args);
 };
 main().catch((e) => console.error(chalk.red("ERROR:"), e.message));
 
