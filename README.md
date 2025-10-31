@@ -6,7 +6,7 @@ Download any twitch VODs from start during live broadcast
 
 - Download live VODs from start (`--live-from-start`)
 - Download ongoing hidden VODs (or if they were hidden during the broadcast)
-- Download finished hidden VODs 
+- Download finished hidden VODs
   - Just use twitchtracker.com, streamscharts.com or sullygnome.com links
   - See more details [here](https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md)
 - Download specific part of the video (`--download-sections`)
@@ -45,9 +45,9 @@ npx twitch-dlp https://www.twitch.tv/xqc
 
 # Download a hidden VOD
 # Just use twitchtracker.com, streamscharts.com or sullygnome.com links
-npm twitch-dlp https://twitchtracker.com/xqc/streams/51582913581
-npm twitch-dlp https://streamscharts.com/channels/lirik/streams/51579711693
-npm twitch-dlp https://sullygnome.com/channel/summit1g/stream/315782796250
+npx twitch-dlp https://twitchtracker.com/xqc/streams/51582913581
+npx twitch-dlp https://streamscharts.com/channels/lirik/streams/51579711693
+npx twitch-dlp https://sullygnome.com/channel/summit1g/stream/315782796250
 # If it doesn't work for you, follow this instructions:
 # https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md
 

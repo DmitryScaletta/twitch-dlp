@@ -17,9 +17,9 @@
 Just use a direct link to a stream from twitchtracker.com, streamscharts.com or sullygnome.com
 
 ```bash
-npm twitch-dlp https://twitchtracker.com/xqc/streams/51582913581
-npm twitch-dlp https://streamscharts.com/channels/lirik/streams/51579711693
-npm twitch-dlp https://sullygnome.com/channel/summit1g/stream/315782796250
+npx twitch-dlp https://twitchtracker.com/xqc/streams/51582913581
+npx twitch-dlp https://streamscharts.com/channels/lirik/streams/51579711693
+npx twitch-dlp https://sullygnome.com/channel/summit1g/stream/315782796250
 ```
 
 It should work for most of cases. Try Method 2 if it doesn't work for you.
