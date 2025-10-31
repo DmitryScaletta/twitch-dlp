@@ -22,7 +22,7 @@ npx twitch-dlp https://streamscharts.com/channels/lirik/streams/51579711693
 npx twitch-dlp https://sullygnome.com/channel/summit1g/stream/315782796250
 ```
 
-It should work for most of cases. Try Method 2 if it doesn't work for you.
+It should work in most cases. Try Method 2 if it doesn't work for you.
 
 ## Method 2 (old)
 
