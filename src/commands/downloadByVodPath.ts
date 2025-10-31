@@ -6,6 +6,7 @@ import {
   getVideoFormatsByFullVodPath,
 } from '../utils/getVideoFormats.ts';
 import { getVideoInfoByVodPath } from '../utils/getVideoInfo.ts';
+import { getWhyCannotDownload } from '../utils/getWhyCannotDownload.ts';
 
 export const downloadByVodPath = async (
   parsedLink: ParsedLinkVodPath,
@@ -14,6 +15,12 @@ export const downloadByVodPath = async (
   const formats = await getVideoFormatsByFullVodPath(
     getFullVodPath(parsedLink.vodPath),
   );
+
+  if (formats.length === 0) {
+    const reasons = await getWhyCannotDownload();
+    throw new Error(`Cannot get video formats\n\n${reasons}`);
+  }
+
   const videoInfo = getVideoInfoByVodPath(parsedLink);
   return downloadVideo(formats, videoInfo, args);
 };

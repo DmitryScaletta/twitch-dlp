@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
 import { downloadByChannelLogin } from './commands/downloadByChannelLogin.ts';
+import { downloadByStatsService } from './commands/downloadByStatsService.ts';
 import { downloadByVideoId } from './commands/downloadByVideoId.ts';
 import { downloadByVodPath } from './commands/downloadByVodPath.ts';
 import { downloadClip } from './commands/downloadClip.ts';
@@ -106,7 +107,9 @@ const main = async () => {
   if (link.type === 'vodPath') return downloadByVodPath(link, args);
   if (link.type === 'video') return downloadByVideoId(link.videoId, args);
   if (link.type === 'clip') return downloadClip(link.slug, args);
-  return downloadByChannelLogin(link.channelLogin, args);
+  // prettier-ignore
+  if (link.type === 'channel') return downloadByChannelLogin(link.channelLogin, args);
+  if (link.type === 'statsService') return downloadByStatsService(link, args);
 };
 
 main().catch((e) => console.error(chalk.red('ERROR:'), e.message));

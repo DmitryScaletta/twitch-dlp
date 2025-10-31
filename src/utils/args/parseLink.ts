@@ -11,6 +11,20 @@ import {
 const VOD_PATH_REGEX =
   /^video:(?<vodPath>(?<channelLogin>\w+)_(?<videoId>\d+)_(?<startTimestamp>\d+))$/;
 
+const TWITCHTRACKER_REGEX =
+  /^(?:https:\/\/)?(?<service>twitchtracker)\.com\/(?<channelName>[^/]+)\/streams\/(?<streamId>\d+)$/;
+const STREAMSCHARTS_REGEX =
+  /^(?:https:\/\/)?(?<service>streamscharts)\.com\/channels\/(?<channelName>[^/]+)\/streams\/(?<streamId>\d+)$/;
+const SULLYGNOME_REGEX =
+  /^(?:https:\/\/)?(?<service>sullygnome)\.com\/channel\/(?<channelName>[^/]+)\/(?:[^/]+\/)?stream\/(?<streamId>\d+)$/;
+
+type StatsService = 'twitchtracker' | 'streamscharts' | 'sullygnome';
+type StatsServiceMatchGroups = {
+  service: StatsService;
+  channelName: string;
+  streamId: string;
+};
+
 export type ParsedLinkVodPath = {
   type: 'vodPath';
   vodPath: string;
@@ -30,12 +44,19 @@ export type ParsedLinkChannel = {
   type: 'channel';
   channelLogin: string;
 };
+export type ParsedLinkStatsService = {
+  type: 'statsService';
+  service: StatsService;
+  channelLogin: string;
+  streamId: number;
+};
 
 export type ParsedLink =
   | ParsedLinkVodPath
   | ParsedLinkVideo
   | ParsedLinkClip
-  | ParsedLinkChannel;
+  | ParsedLinkChannel
+  | ParsedLinkStatsService;
 
 export const parseLink = (link: string): ParsedLink => {
   let m = link.match(VOD_PATH_REGEX);
@@ -57,6 +78,20 @@ export const parseLink = (link: string): ParsedLink => {
       type: 'channel',
       channelLogin: channel.toLowerCase(),
     } satisfies ParsedLinkChannel;
+  }
+  m =
+    link.match(TWITCHTRACKER_REGEX) ||
+    link.match(STREAMSCHARTS_REGEX) ||
+    link.match(SULLYGNOME_REGEX);
+  if (m) {
+    const { service, channelName, streamId } =
+      m.groups as StatsServiceMatchGroups;
+    return {
+      type: 'statsService',
+      service,
+      channelLogin: channelName,
+      streamId: Number.parseInt(streamId),
+    } satisfies ParsedLinkStatsService;
   }
   throw new Error('Wrong link');
 };
