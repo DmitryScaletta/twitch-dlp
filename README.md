@@ -7,8 +7,7 @@ Download any twitch VODs from start during live broadcast
 - Download live VODs from start (`--live-from-start`)
 - Download ongoing hidden VODs (or if they were hidden during the broadcast)
 - Download finished hidden VODs
-  - Just use twitchtracker.com, streamscharts.com or sullygnome.com links
-  - See more details [here](https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md)
+  - Just use [twitchtracker.com](https://twitchtracker.com), [streamscharts.com](https://streamscharts.com) or [sullygnome.com](https://sullygnome.com) links ([details](https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md))
 - Download specific part of the video (`--download-sections`)
 - Download clips (including portrait versions)
 - Automatically unmute muted sections if possible
