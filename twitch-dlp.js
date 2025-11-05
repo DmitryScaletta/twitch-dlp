@@ -1517,12 +1517,18 @@ const downloadByChannelLogin = async (channelLogin, args) => {
 //#endregion
 //#region src/api/sullygnome.ts
 const BASE_URL = "https://sullygnome.com/api";
+const STANDARD_SEARCH_ITEM_TYPE = {
+	CHANNEL: 1,
+	GAME: 2,
+	TEAM: 4
+};
 const getStandardSearch = async (query) => {
-	const url = `${BASE_URL}/standardsearch/${query}/true/true/false/true`;
+	const url = `${BASE_URL}/standardsearch/${query}`;
 	return (await fetch(url)).json();
 };
-const getChannelStreams = async (channelId, page = 0) => {
-	const url = `${BASE_URL}/tables/channeltables/streams/365/${channelId}/%20/${page + 1}/1/desc/${page * 100}/100`;
+const CHANNEL_STREAMS_PAGE_SIZE = 100;
+const getChannelStreams = async (channelId, page = 0, pageSize = CHANNEL_STREAMS_PAGE_SIZE) => {
+	const url = `${BASE_URL}/tables/channeltables/streams/365/${channelId}/%20/${page + 1}/1/desc/${page * pageSize}/${pageSize}`;
 	return (await fetch(url)).json();
 };
 
@@ -1554,20 +1560,19 @@ const downloadByVodPath = async (parsedLink, args) => {
 //#endregion
 //#region src/commands/downloadByStatsService.ts
 const getChannelStream = async (channelLogin, streamId) => {
-	const channel = (await getStandardSearch(channelLogin)).find((item) => item.itemtype === 1 && item.siteurl === channelLogin);
+	const channel = (await getStandardSearch(channelLogin)).find((item) => item.itemtype === STANDARD_SEARCH_ITEM_TYPE.CHANNEL && item.siteurl === channelLogin);
 	if (!channel) throw new Error(`Channel "${channelLogin}" not found`);
 	const channelId = channel.value;
 	let page = 0;
-	while (true) {
-		const channelStreams = await getChannelStreams(channelId, page);
-		page += 1;
+	let channelStreams;
+	do {
+		channelStreams = await getChannelStreams(channelId, page);
 		const stream$1 = channelStreams.data.find((s) => s.streamId === streamId);
 		if (stream$1) return stream$1;
-		if (page * 100 >= channelStreams.recordsFiltered) {
-			const reasons = await getWhyCannotDownload();
-			throw new Error(`Stream "${streamId}" not found\n\n${reasons}`);
-		}
-	}
+		page += 1;
+	} while (page * CHANNEL_STREAMS_PAGE_SIZE < channelStreams.recordsFiltered);
+	const reasons = await getWhyCannotDownload();
+	throw new Error(`Stream "${streamId}" not found\n\n${reasons}`);
 };
 const downloadByStatsService = async ({ channelLogin, streamId }, args) => {
 	const stream$1 = await getChannelStream(channelLogin, streamId);
