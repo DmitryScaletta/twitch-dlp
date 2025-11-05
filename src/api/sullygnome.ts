@@ -64,7 +64,7 @@ type ChannelStreamsResponse = {
 const BASE_URL = 'https://sullygnome.com/api';
 
 export const getStandardSearch = async (query: string) => {
-  const url = `${BASE_URL}/standardsearch/${query}/true/true/false/true`;
+  const url = `${BASE_URL}/standardsearch/${query}`;
   const res = await fetch(url);
   return res.json() as Promise<StandardSearchResponse>;
 };
