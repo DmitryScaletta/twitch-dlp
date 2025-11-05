@@ -4,11 +4,7 @@ type StandardSearchItem = {
   value: number;
   /** Example: 6,338,452 */
   description: string;
-  /**
-   * 1 - Channel
-   * 2 - Game
-   */
-  itemtype: 1 | 2;
+  itemtype: (typeof STANDARD_SEARCH_ITEM_TYPE)[keyof typeof STANDARD_SEARCH_ITEM_TYPE];
   /** Example: summit1g */
   siteurl: string;
   boxart: string;
@@ -63,16 +59,28 @@ type ChannelStreamsResponse = {
 
 const BASE_URL = 'https://sullygnome.com/api';
 
+export const STANDARD_SEARCH_ITEM_TYPE = {
+  CHANNEL: 1,
+  GAME: 2,
+  TEAM: 4,
+} as const;
+
 export const getStandardSearch = async (query: string) => {
   const url = `${BASE_URL}/standardsearch/${query}`;
   const res = await fetch(url);
   return res.json() as Promise<StandardSearchResponse>;
 };
 
-export const getChannelStreams = async (channelId: number, page = 0) => {
+export const CHANNEL_STREAMS_PAGE_SIZE = 100;
+
+export const getChannelStreams = async (
+  channelId: number,
+  page = 0,
+  pageSize = CHANNEL_STREAMS_PAGE_SIZE,
+) => {
   const pageN = page + 1;
-  const start = page * 100;
-  const url = `${BASE_URL}/tables/channeltables/streams/365/${channelId}/%20/${pageN}/1/desc/${start}/100`;
+  const start = page * pageSize;
+  const url = `${BASE_URL}/tables/channeltables/streams/365/${channelId}/%20/${pageN}/1/desc/${start}/${pageSize}`;
   const res = await fetch(url);
   return res.json() as Promise<ChannelStreamsResponse>;
 };
