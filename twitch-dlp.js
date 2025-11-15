@@ -9,7 +9,7 @@ import os from "node:os";
 import stream from "node:stream";
 import crypto from "node:crypto";
 
-//#region node_modules/.pnpm/twitch-gql-queries@0.1.17/node_modules/twitch-gql-queries/dist/index.js
+//#region node_modules/.pnpm/twitch-gql-queries@0.1.18/node_modules/twitch-gql-queries/dist/index.js
 var CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
 var MAX_QUERIES_PER_REQUEST = 35;
 var gqlRequest = async (queries, requestInit) => {
@@ -27,12 +27,12 @@ var gqlRequest = async (queries, requestInit) => {
 	if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
 	return res.json();
 };
-var getQueryFfzBroadcastId = (variables) => ({
-	operationName: "FFZ_BroadcastID",
+var getQueryFfzRecentBroadcasts = (variables) => ({
+	operationName: "FFZ_RecentBroadcasts",
 	variables,
 	extensions: { persistedQuery: {
 		version: 1,
-		sha256Hash: "cc89dfe8fcfe71235313b05b34799eaa519d162ebf85faf0c51d17c274614f0f"
+		sha256Hash: "a92c0ad34fdba9b3f5e6125dce4b0acc9373f2b2c06c74c92187749d12f73d4c"
 	} }
 });
 var getQueryPlaybackAccessToken = (variables) => ({
@@ -111,7 +111,12 @@ const getVideoMetadata = (videoId) => apiRequest(getQueryVideoMetadata({
 	videoID: videoId
 }), "video", "video metadata");
 const getClipMetadata = (slug) => apiRequest(getQueryShareClipRenderStatus({ slug }), "clip", "clip metadata");
-const getBroadcast = (channelId) => apiRequest(getQueryFfzBroadcastId({ id: channelId }), "user", "broadcast id");
+const getRecentArchiveBroadcasts = (channelId) => apiRequest(getQueryFfzRecentBroadcasts({
+	id: channelId,
+	type: "ARCHIVE",
+	sort: "TIME",
+	limit: 1
+}), "user", "recent broadcast");
 const getManifest = (videoId, accessToken) => {
 	return fetchText(`https://usher.ttvnw.net/vod/${videoId}.m3u8?${new URLSearchParams({
 		allow_source: "true",
@@ -1456,18 +1461,17 @@ const getVideoFormatsByThumbUrl = (broadcastType, videoId, thumbUrl) => {
 const getLiveVideoInfo = async (streamMeta, channelLogin) => {
 	let formats = [];
 	let videoInfo = null;
-	let videoId = null;
 	if (!streamMeta.stream) throw new Error();
-	const broadcast = await getBroadcast(streamMeta.id);
-	if (broadcast?.stream?.archiveVideo) {
-		videoId = broadcast.stream.archiveVideo.id;
+	const broadcast = (await getRecentArchiveBroadcasts(streamMeta.id))?.videos.edges[0]?.node;
+	const startTimestampMs = new Date(streamMeta.stream.createdAt).getTime();
+	if (broadcast && startTimestampMs <= new Date(broadcast.createdAt).getTime()) {
 		let videoMeta;
-		[formats, videoMeta] = await Promise.all([getVideoFormats(videoId), getVideoMetadata(videoId)]);
+		[formats, videoMeta] = await Promise.all([getVideoFormats(broadcast.id), getVideoMetadata(broadcast.id)]);
 		if (videoMeta) videoInfo = getVideoInfoByVideoMeta(videoMeta);
 	}
-	if (!broadcast?.stream?.archiveVideo || formats.length === 0) {
+	if (formats.length === 0) {
 		console.warn("[live-from-start] Recovering the playlist");
-		const startTimestamp = new Date(streamMeta.stream.createdAt).getTime() / 1e3;
+		const startTimestamp = startTimestampMs / 1e3;
 		formats = await getVideoFormatsByFullVodPath(getFullVodPath(`${channelLogin}_${streamMeta.stream.id}_${startTimestamp}`));
 		videoInfo = getVideoInfoByStreamMeta(streamMeta, channelLogin);
 	}
