@@ -1,11 +1,11 @@
 import {
-  getQueryFfzBroadcastId,
+  getQueryFfzRecentBroadcasts,
   getQueryPlaybackAccessToken,
   getQueryShareClipRenderStatus,
   getQueryStreamMetadata,
   getQueryVideoMetadata,
   gqlRequest,
-  type FfzBroadcastIdUser,
+  type FfzRecentBroadcastsUser,
   type PlaybackAccessTokenVideo,
   type ShareClipRenderStatusClip,
   type StreamMetadataUser,
@@ -72,10 +72,19 @@ export type ClipMetadata = ShareClipRenderStatusClip;
 export const getClipMetadata = (slug: string): Promise<ClipMetadata | null> =>
   apiRequest(getQueryShareClipRenderStatus({ slug }), 'clip', 'clip metadata');
 
-export const getBroadcast = (
+export const getRecentArchiveBroadcasts = (
   channelId: string,
-): Promise<FfzBroadcastIdUser | null> =>
-  apiRequest(getQueryFfzBroadcastId({ id: channelId }), 'user', 'broadcast id');
+): Promise<FfzRecentBroadcastsUser | null> =>
+  apiRequest(
+    getQueryFfzRecentBroadcasts({
+      id: channelId,
+      type: 'ARCHIVE',
+      sort: 'TIME',
+      limit: 1,
+    }),
+    'user',
+    'recent broadcast',
+  );
 
 export const getManifest = (
   videoId: string,
