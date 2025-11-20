@@ -1469,7 +1469,7 @@ const getLiveVideoInfo = async (streamMeta, channelLogin) => {
 		[formats, videoMeta] = await Promise.all([getVideoFormats(broadcast.id), getVideoMetadata(broadcast.id)]);
 		if (videoMeta) videoInfo = getVideoInfoByVideoMeta(videoMeta);
 	}
-	if (formats.length === 0) {
+	if (startTimestampMs + 3e4 < Date.now() && formats.length === 0) {
 		console.warn("[live-from-start] Recovering the playlist");
 		const startTimestamp = startTimestampMs / 1e3;
 		formats = await getVideoFormatsByFullVodPath(getFullVodPath(`${channelLogin}_${streamMeta.stream.id}_${startTimestamp}`));
