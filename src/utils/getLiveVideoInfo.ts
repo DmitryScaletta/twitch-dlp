@@ -37,8 +37,12 @@ export const getLiveVideoInfo = async (
     if (videoMeta) videoInfo = getVideoInfoByVideoMeta(videoMeta);
   }
 
+  // A VOD is published about 5-20 seconds after a stream starts
+  // Wait at least 30 seconds before trying to recover the playlist
+  const checkPrivateVod = startTimestampMs + 30_000 < Date.now();
+
   // private VOD
-  if (formats.length === 0) {
+  if (checkPrivateVod && formats.length === 0) {
     console.warn('[live-from-start] Recovering the playlist');
     const startTimestamp = startTimestampMs / 1000;
     const vodPath = `${channelLogin}_${streamMeta.stream.id}_${startTimestamp}`;
