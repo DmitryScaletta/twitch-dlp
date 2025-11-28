@@ -24,7 +24,7 @@ Install the latest [Node.js](https://nodejs.org/) version (v22 or newer).
 npx twitch-dlp LINK
 
 # pnpm
-pnpm dlx twitch-dlp LINK
+pnpx twitch-dlp LINK
 
 # yarn v2+
 yarn dlx twitch-dlp LINK
