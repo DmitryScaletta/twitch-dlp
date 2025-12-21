@@ -19,6 +19,7 @@ export const VOD_DOMAINS = [
   'https://ddacn6pr5v0tl.cloudfront.net',
   'https://d3aqoihi2n8ty8.cloudfront.net',
   'https://d3fi1amfgojobc.cloudfront.net',
+  'https://d2vi6trrdongqn.cloudfront.net',
 ];
 
 export const DOWNLOADERS = ['aria2c', 'curl', 'fetch'] as const;
