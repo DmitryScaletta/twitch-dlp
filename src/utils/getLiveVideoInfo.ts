@@ -20,7 +20,7 @@ export const getLiveVideoInfo = async (
   if (!streamMeta.stream) throw new Error(); // make ts happy
 
   const broadcasts = await api.getRecentArchiveBroadcasts(streamMeta.id);
-  const broadcast = broadcasts?.videos.edges[0]?.node;
+  const broadcast = broadcasts?.videos?.edges[0]?.node;
 
   const startTimestampMs = new Date(streamMeta.stream.createdAt).getTime();
 
