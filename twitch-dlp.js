@@ -147,7 +147,8 @@ const VOD_DOMAINS = [
 	"https://ddacn6pr5v0tl.cloudfront.net",
 	"https://d3aqoihi2n8ty8.cloudfront.net",
 	"https://d3fi1amfgojobc.cloudfront.net",
-	"https://d2vi6trrdongqn.cloudfront.net"
+	"https://d2vi6trrdongqn.cloudfront.net",
+	"https://d3stzm2eumvgb4.cloudfront.net"
 ];
 const DOWNLOADERS = [
 	"aria2c",
@@ -1458,7 +1459,7 @@ const getLiveVideoInfo = async (streamMeta, channelLogin) => {
 	let formats = [];
 	let videoInfo = null;
 	if (!streamMeta.stream) throw new Error();
-	const broadcast = (await getRecentArchiveBroadcasts(streamMeta.id))?.videos.edges[0]?.node;
+	const broadcast = (await getRecentArchiveBroadcasts(streamMeta.id))?.videos?.edges[0]?.node;
 	const startTimestampMs = new Date(streamMeta.stream.createdAt).getTime();
 	if (broadcast && startTimestampMs <= new Date(broadcast.createdAt).getTime()) {
 		let videoMeta;
