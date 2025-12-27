@@ -20,7 +20,7 @@ Download any twitch VODs from start during live broadcast
 Install the latest [Node.js](https://nodejs.org/) version (v22 or newer).
 
 ```bash
-# npm
+# npm (comes with Node.js)
 npx twitch-dlp LINK
 
 # pnpm
@@ -28,6 +28,9 @@ pnpx twitch-dlp LINK
 
 # yarn v2+
 yarn dlx twitch-dlp LINK
+
+# bun
+bunx twitch-dlp LINK
 ```
 
 ### Examples

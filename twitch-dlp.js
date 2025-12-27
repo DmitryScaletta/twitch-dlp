@@ -9,7 +9,7 @@ import os from "node:os";
 import stream from "node:stream";
 import crypto from "node:crypto";
 
-//#region node_modules/.pnpm/twitch-gql-queries@0.1.18/node_modules/twitch-gql-queries/dist/index.js
+//#region node_modules/.pnpm/twitch-gql-queries@0.1.20/node_modules/twitch-gql-queries/dist/index.js
 var CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
 var MAX_QUERIES_PER_REQUEST = 35;
 var gqlRequest = async (queries, requestInit) => {
@@ -137,8 +137,6 @@ const DEFAULT_OUTPUT_TEMPLATE = "%(title)s [%(id)s].%(ext)s";
 const PRIVATE_VIDEO_INSTRUCTIONS = "This video might be private. Follow this article to download it: https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md";
 const NO_TRY_UNMUTE_MESSAGE = "[unmute] The video is old, not trying to unmute";
 const VOD_DOMAINS = [
-	"https://d2e2de1etea730.cloudfront.net",
-	"https://dqrpb9wgowsf5.cloudfront.net",
 	"https://ds0h3roq6wcgc.cloudfront.net",
 	"https://d2nvs31859zcd8.cloudfront.net",
 	"https://d2aba1wr3818hz.cloudfront.net",
@@ -146,12 +144,11 @@ const VOD_DOMAINS = [
 	"https://dgeft87wbj63p.cloudfront.net",
 	"https://d1m7jfoe9zdc1j.cloudfront.net",
 	"https://d3vd9lfkzbru3h.cloudfront.net",
-	"https://d2vjef5jvl6bfs.cloudfront.net",
-	"https://d1ymi26ma8va5x.cloudfront.net",
-	"https://d1mhjrowxxagfy.cloudfront.net",
 	"https://ddacn6pr5v0tl.cloudfront.net",
 	"https://d3aqoihi2n8ty8.cloudfront.net",
-	"https://d3fi1amfgojobc.cloudfront.net"
+	"https://d3fi1amfgojobc.cloudfront.net",
+	"https://d2vi6trrdongqn.cloudfront.net",
+	"https://d3stzm2eumvgb4.cloudfront.net"
 ];
 const DOWNLOADERS = [
 	"aria2c",
@@ -1462,7 +1459,7 @@ const getLiveVideoInfo = async (streamMeta, channelLogin) => {
 	let formats = [];
 	let videoInfo = null;
 	if (!streamMeta.stream) throw new Error();
-	const broadcast = (await getRecentArchiveBroadcasts(streamMeta.id))?.videos.edges[0]?.node;
+	const broadcast = (await getRecentArchiveBroadcasts(streamMeta.id))?.videos?.edges[0]?.node;
 	const startTimestampMs = new Date(streamMeta.stream.createdAt).getTime();
 	if (broadcast && startTimestampMs <= new Date(broadcast.createdAt).getTime()) {
 		let videoMeta;

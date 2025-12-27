@@ -10,16 +10,16 @@ importers:
     devDependencies:
       '@trivago/prettier-plugin-sort-imports':
         specifier: ^6.0.0
-        version: 6.0.0(prettier@3.6.2)
+        version: 6.0.0(prettier@3.7.4)
       '@types/node':
-        specifier: ^24.10.1
-        version: 24.10.1
+        specifier: ^25.0.3
+        version: 25.0.3
       prettier:
-        specifier: ^3.6.2
-        version: 3.6.2
+        specifier: ^3.7.4
+        version: 3.7.4
       twitch-gql-queries:
-        specifier: ^0.1.18
-        version: 0.1.18
+        specifier: ^0.1.20
+        version: 0.1.20
       twitch-regex:
         specifier: ^0.1.3
         version: 0.1.3
@@ -98,8 +98,8 @@ packages:
       svelte:
         optional: true
 
-  '@types/node@24.10.1':
-    resolution: {integrity: sha512-GNWcUTRBgIRJD5zj+Tq0fKOJ5XZajIiBroOF0yvj2bSU1WvNdYS/dn9UxwsujGW4JX06dnHyjV2y9rRaybH0iQ==}
+  '@types/node@25.0.3':
+    resolution: {integrity: sha512-W609buLVRVmeW693xKfzHeIV6nJGGz98uCPfeXI1ELMLXVeKYZ9m15fAMSaUPBHYLGFsVRcMmSCksQOrZV9BYA==}
 
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
@@ -146,13 +146,13 @@ packages:
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
 
-  prettier@3.6.2:
-    resolution: {integrity: sha512-I7AIg5boAr5R0FFtJ6rCfD+LFsWHp81dolrFD8S79U9tb8Az2nGrJncnMSnys+bpQJfRUzqs9hnA81OAA3hCuQ==}
+  prettier@3.7.4:
+    resolution: {integrity: sha512-v6UNi1+3hSlVvv8fSaoUbggEM5VErKmmpGA7Pl3HF8V6uKY7rvClBOJlH6yNwQtfTueNkGVpOv/mtWL9L4bgRA==}
     engines: {node: '>=14'}
     hasBin: true
 
-  twitch-gql-queries@0.1.18:
-    resolution: {integrity: sha512-TUO6ma1Fy5Kt7x+93unShItz0BV+xQYGw6uAk1NGsf2+FFvEyBiEzzLD7GuAqxSaBaxaT03+v05IvXVLyj6GUQ==}
+  twitch-gql-queries@0.1.20:
+    resolution: {integrity: sha512-wBxsemVD3PimKrEWUd7Qi2PNvPQqKI6lLtS2Z08l3a/GY2NexBO2ezi/ShDquzlJm8AIvN7yn09Ad1ExZiMIgQ==}
 
   twitch-regex@0.1.3:
     resolution: {integrity: sha512-7NJn4fRBlwhDlBdzWAAVdTvDruNuEfqKHGufcHpMpZlMFuuXNl61Nt2o8V550WVHs8XRkXlEJsUp3eATuE9big==}
@@ -228,7 +228,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@trivago/prettier-plugin-sort-imports@6.0.0(prettier@3.6.2)':
+  '@trivago/prettier-plugin-sort-imports@6.0.0(prettier@3.7.4)':
     dependencies:
       '@babel/generator': 7.28.5
       '@babel/parser': 7.28.5
@@ -238,11 +238,11 @@ snapshots:
       lodash-es: 4.17.21
       minimatch: 9.0.5
       parse-imports-exports: 0.2.4
-      prettier: 3.6.2
+      prettier: 3.7.4
     transitivePeerDependencies:
       - supports-color
 
-  '@types/node@24.10.1':
+  '@types/node@25.0.3':
     dependencies:
       undici-types: 7.16.0
 
@@ -278,9 +278,9 @@ snapshots:
 
   picocolors@1.1.1: {}
 
-  prettier@3.6.2: {}
+  prettier@3.7.4: {}
 
-  twitch-gql-queries@0.1.18: {}
+  twitch-gql-queries@0.1.20: {}
 
   twitch-regex@0.1.3: {}
 

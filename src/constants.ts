@@ -4,8 +4,6 @@ export const PRIVATE_VIDEO_INSTRUCTIONS =
 export const NO_TRY_UNMUTE_MESSAGE =
   '[unmute] The video is old, not trying to unmute';
 export const VOD_DOMAINS = [
-  'https://d2e2de1etea730.cloudfront.net',
-  'https://dqrpb9wgowsf5.cloudfront.net',
   'https://ds0h3roq6wcgc.cloudfront.net',
   'https://d2nvs31859zcd8.cloudfront.net',
   'https://d2aba1wr3818hz.cloudfront.net',
@@ -13,12 +11,11 @@ export const VOD_DOMAINS = [
   'https://dgeft87wbj63p.cloudfront.net',
   'https://d1m7jfoe9zdc1j.cloudfront.net',
   'https://d3vd9lfkzbru3h.cloudfront.net',
-  'https://d2vjef5jvl6bfs.cloudfront.net',
-  'https://d1ymi26ma8va5x.cloudfront.net',
-  'https://d1mhjrowxxagfy.cloudfront.net',
   'https://ddacn6pr5v0tl.cloudfront.net',
   'https://d3aqoihi2n8ty8.cloudfront.net',
   'https://d3fi1amfgojobc.cloudfront.net',
+  'https://d2vi6trrdongqn.cloudfront.net',
+  'https://d3stzm2eumvgb4.cloudfront.net',
 ];
 
 export const DOWNLOADERS = ['aria2c', 'curl', 'fetch'] as const;
