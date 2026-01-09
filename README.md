@@ -113,6 +113,7 @@ npx twitch-dlp "./Chillin [v2222470239].mp4" --merge-fragments --unmute quality
                             between each attempt
 -r, --limit-rate RATE       Limit download rate to RATE
 --keep-fragments            Keep fragments after downloading
+--keep-log                  Keep log after merge
 --download-sections TEXT    Download specific part of the video.
                             Syntax: "*start_time-end_time".
                             Examples: "*0-12:34", "*3:14:15-inf".
