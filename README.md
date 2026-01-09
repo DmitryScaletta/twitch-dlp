@@ -1,3 +1,35 @@
+
+<div align="right">
+  <details>
+    <summary >🌐 Language</summary>
+    <div>
+      <div align="center">
+        <a href="https://openaitx.github.io/view.html?user=DmitryScaletta&project=twitch-dlp&lang=en">English</a>
+        | <a href="https://openaitx.github.io/view.html?user=DmitryScaletta&project=twitch-dlp&lang=zh-CN">简体中文</a>
+        | <a href="https://openaitx.github.io/view.html?user=DmitryScaletta&project=twitch-dlp&lang=zh-TW">繁體中文</a>
+        | <a href="https://openaitx.github.io/view.html?user=DmitryScaletta&project=twitch-dlp&lang=ja">日本語</a>
+        | <a href="https://openaitx.github.io/view.html?user=DmitryScaletta&project=twitch-dlp&lang=ko">한국어</a>
+        | <a href="https://openaitx.github.io/view.html?user=DmitryScaletta&project=twitch-dlp&lang=hi">हिन्दी</a>
+        | <a href="https://openaitx.github.io/view.html?user=DmitryScaletta&project=twitch-dlp&lang=th">ไทย</a>
+        | <a href="https://openaitx.github.io/view.html?user=DmitryScaletta&project=twitch-dlp&lang=fr">Français</a>
+        | <a href="https://openaitx.github.io/view.html?user=DmitryScaletta&project=twitch-dlp&lang=de">Deutsch</a>
+        | <a href="https://openaitx.github.io/view.html?user=DmitryScaletta&project=twitch-dlp&lang=es">Español</a>
+        | <a href="https://openaitx.github.io/view.html?user=DmitryScaletta&project=twitch-dlp&lang=it">Italiano</a>
+        | <a href="https://openaitx.github.io/view.html?user=DmitryScaletta&project=twitch-dlp&lang=ru">Русский</a>
+        | <a href="https://openaitx.github.io/view.html?user=DmitryScaletta&project=twitch-dlp&lang=pt">Português</a>
+        | <a href="https://openaitx.github.io/view.html?user=DmitryScaletta&project=twitch-dlp&lang=nl">Nederlands</a>
+        | <a href="https://openaitx.github.io/view.html?user=DmitryScaletta&project=twitch-dlp&lang=pl">Polski</a>
+        | <a href="https://openaitx.github.io/view.html?user=DmitryScaletta&project=twitch-dlp&lang=ar">العربية</a>
+        | <a href="https://openaitx.github.io/view.html?user=DmitryScaletta&project=twitch-dlp&lang=fa">فارسی</a>
+        | <a href="https://openaitx.github.io/view.html?user=DmitryScaletta&project=twitch-dlp&lang=tr">Türkçe</a>
+        | <a href="https://openaitx.github.io/view.html?user=DmitryScaletta&project=twitch-dlp&lang=vi">Tiếng Việt</a>
+        | <a href="https://openaitx.github.io/view.html?user=DmitryScaletta&project=twitch-dlp&lang=id">Bahasa Indonesia</a>
+        | <a href="https://openaitx.github.io/view.html?user=DmitryScaletta&project=twitch-dlp&lang=as">অসমীয়া</
+      </div>
+    </div>
+  </details>
+</div>
+
 # twitch-dlp
 
 Download any twitch VODs from start during live broadcast
