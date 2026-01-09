@@ -47,6 +47,10 @@ export const getArgs = () =>
         type: 'boolean',
         default: false,
       },
+      'keep-log': {
+        type: 'boolean',
+        default: false,
+      },
       'limit-rate': {
         type: 'string',
         short: 'r',
