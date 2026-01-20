@@ -97,7 +97,7 @@ const main = async () => {
 
   // Node.js v25.4.0+
   // @ts-ignore wait for @types/node to be updated
-  http?.setGlobalProxyFromEnv(
+  http.setGlobalProxyFromEnv?.(
     args.proxy
       ? { http_proxy: args.proxy, https_proxy: args.proxy }
       : undefined,
