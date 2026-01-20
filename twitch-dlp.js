@@ -1912,7 +1912,7 @@ const main = async () => {
 	if (args.version) return showVersion();
 	if (args.help || positionals.length === 0) return showHelp();
 	if (positionals.length !== 1) throw new Error("Expected exactly one positional argument");
-	http?.setGlobalProxyFromEnv(args.proxy ? {
+	http.setGlobalProxyFromEnv?.(args.proxy ? {
 		http_proxy: args.proxy,
 		https_proxy: args.proxy
 	} : void 0);
