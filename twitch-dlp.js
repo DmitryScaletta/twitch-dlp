@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import http from "node:http";
 import { parseArgs } from "node:util";
 import { setTimeout as setTimeout$1 } from "node:timers/promises";
 import fsp from "node:fs/promises";
@@ -9,7 +10,7 @@ import os from "node:os";
 import stream from "node:stream";
 import crypto from "node:crypto";
 
-//#region node_modules/.pnpm/twitch-gql-queries@0.1.20/node_modules/twitch-gql-queries/dist/index.js
+//#region node_modules/.pnpm/twitch-gql-queries@0.1.21/node_modules/twitch-gql-queries/dist/index.js
 var CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
 var MAX_QUERIES_PER_REQUEST = 35;
 var gqlRequest = async (queries, requestInit) => {
@@ -1910,12 +1911,11 @@ const main = async () => {
 	const positionals = parsedArgs.positionals;
 	if (args.version) return showVersion();
 	if (args.help || positionals.length === 0) return showHelp();
-	if (args.proxy) {
-		process.env.NODE_USE_ENV_PROXY = "1";
-		process.env.HTTP_PROXY = args.proxy;
-		process.env.HTTPS_PROXY = args.proxy;
-	}
 	if (positionals.length !== 1) throw new Error("Expected exactly one positional argument");
+	http?.setGlobalProxyFromEnv(args.proxy ? {
+		http_proxy: args.proxy,
+		https_proxy: args.proxy
+	} : void 0);
 	if (args["merge-fragments"]) return mergeFragments(positionals[0], args);
 	const link = parseLink(positionals[0]);
 	if (link.type === "vodPath") return downloadByVodPath(link, args);
