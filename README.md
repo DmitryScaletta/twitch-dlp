@@ -138,6 +138,8 @@ npx twitch-dlp "./Chillin [v2222470239].mp4" --merge-fragments --unmute quality
                             e.g. socks5://user:pass@127.0.0.1:1080/.
                             Pass in an empty string (--proxy "") for
                             direct connection. Currently only works with fetch
+                            and Node.js v25.4.0+, but all downloaders support
+                            HTTPS_PROXY env variable
 --merge-method METHOD       How fragments should be merged. Merging happens
                             only after all fragments are downloaded.
                             Available values:

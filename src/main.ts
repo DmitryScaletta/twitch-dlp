@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import http from 'node:http';
 import { parseArgs } from 'node:util';
 import { downloadByChannelLogin } from './commands/downloadByChannelLogin.ts';
 import { downloadByStatsService } from './commands/downloadByStatsService.ts';
@@ -90,16 +91,17 @@ const main = async () => {
   if (args.version) return showVersion();
   if (args.help || positionals.length === 0) return showHelp();
 
-  // https://github.com/nodejs/node/pull/57165
-  if (args.proxy) {
-    process.env.NODE_USE_ENV_PROXY = '1';
-    process.env.HTTP_PROXY = args.proxy;
-    process.env.HTTPS_PROXY = args.proxy;
-  }
-
   if (positionals.length !== 1) {
     throw new Error('Expected exactly one positional argument');
   }
+
+  // Node.js v25.4.0+
+  // @ts-ignore wait for @types/node to be updated
+  http?.setGlobalProxyFromEnv(
+    args.proxy
+      ? { http_proxy: args.proxy, https_proxy: args.proxy }
+      : undefined,
+  );
 
   if (args['merge-fragments']) return mergeFragments(positionals[0], args);
 
