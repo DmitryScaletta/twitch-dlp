@@ -37,9 +37,18 @@ export const getLiveVideoInfo = async (
     if (videoMeta) videoInfo = getVideoInfoByVideoMeta(videoMeta);
   }
 
-  // A VOD is published about 5-20 seconds after a stream starts
-  // Wait at least 30 seconds before trying to recover the playlist
-  const checkPrivateVod = startTimestampMs + 30_000 < Date.now();
+  // StreamMetadata response available after ~7-12 sec after a stream is started
+  // FfzRecentBroadcasts response available after ~7-40 sec after a VOD is published
+  // A VOD itself is published ~6-20 sec after a stream is started
+  // A delay for FfzRecentBroadcasts and FilterableVideoTowerVideos (type: ARCHIVE) is identical
+
+  // | ------> | ---------> | ---------------> |
+  // ^         ^            ^                  ^
+  // stream    VOD          stream response    VOD response
+  // started   published    available          available
+
+  // So wait at least 90 sec before trying to recover the playlist
+  const checkPrivateVod = Date.now() - startTimestampMs > 90_000;
 
   // private VOD
   if (checkPrivateVod && formats.length === 0) {
