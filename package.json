@@ -1,6 +1,6 @@
 {
   "name": "twitch-dlp",
-  "version": "0.5.30",
+  "version": "0.5.31",
   "author": "DmitryScaletta",
   "description": "Download any twitch VODs from start during live broadcast",
   "license": "MIT",
@@ -15,15 +15,15 @@
   "bin": "twitch-dlp.js",
   "scripts": {
     "start": "node ./src/main.ts",
-    "build": "pnpm dlx rolldown src/main.ts --file twitch-dlp.js --platform node",
+    "build": "pnpx rolldown src/main.ts --file twitch-dlp.js --platform node",
     "test": "node --experimental-transform-types --test **/*.test.ts",
     "test:watch": "node --experimental-transform-types --test --watch **/*.test.ts",
     "test:types": "tsc --noEmit"
   },
   "devDependencies": {
     "@trivago/prettier-plugin-sort-imports": "^6.0.2",
-    "@types/node": "^25.0.9",
-    "prettier": "^3.8.0",
+    "@types/node": "^25.2.0",
+    "prettier": "^3.8.1",
     "twitch-gql-queries": "^0.1.21",
     "twitch-regex": "^0.1.3",
     "typescript": "^5.9.3"

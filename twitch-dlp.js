@@ -281,9 +281,9 @@ const isInstalled = (cmd) => new Promise((resolve) => {
 
 //#endregion
 //#region src/lib/statsOrNull.ts
-const statsOrNull = async (path$1) => {
+const statsOrNull = async (path) => {
 	try {
-		return await fsp.stat(path$1);
+		return await fsp.stat(path);
 	} catch (e) {
 		return null;
 	}
@@ -390,17 +390,17 @@ const MAX_INT_STR = "2147483647";
 const spawnFfmpeg = (args) => new Promise((resolve, reject) => {
 	let isInputSection = true;
 	let prevLinePart = "";
-	const handleFfmpegData = (stream$1) => (data) => {
-		if (!isInputSection) return stream$1.write(data);
+	const handleFfmpegData = (stream) => (data) => {
+		if (!isInputSection) return stream.write(data);
 		const lines = data.toString().split("\n");
 		lines[0] = prevLinePart + lines[0];
 		prevLinePart = lines.pop() || "";
 		for (const line of lines) {
 			if (line.startsWith("  Stream #")) continue;
 			if (line.startsWith("Stream mapping:")) isInputSection = false;
-			stream$1.write(line + "\n");
+			stream.write(line + "\n");
 		}
-		if (!isInputSection) stream$1.write(prevLinePart);
+		if (!isInputSection) stream.write(prevLinePart);
 	};
 	const child = childProcess.spawn("ffmpeg", args);
 	child.stdout.on("data", handleFfmpegData(process.stdout));
@@ -841,9 +841,9 @@ const isTsFile = async (filePath, packetsToCheck = 1) => {
 
 //#endregion
 //#region src/lib/unlinkIfAny.ts
-const unlinkIfAny = async (path$1) => {
+const unlinkIfAny = async (path) => {
 	try {
-		return await fsp.unlink(path$1);
+		return await fsp.unlink(path);
 	} catch {}
 };
 
@@ -1467,7 +1467,7 @@ const getLiveVideoInfo = async (streamMeta, channelLogin) => {
 		[formats, videoMeta] = await Promise.all([getVideoFormats(broadcast.id), getVideoMetadata(broadcast.id)]);
 		if (videoMeta) videoInfo = getVideoInfoByVideoMeta(videoMeta);
 	}
-	if (startTimestampMs + 3e4 < Date.now() && formats.length === 0) {
+	if (Date.now() - startTimestampMs > 9e4 && formats.length === 0) {
 		console.warn("[live-from-start] Recovering the playlist");
 		const startTimestamp = startTimestampMs / 1e3;
 		formats = await getVideoFormatsByFullVodPath(getFullVodPath(`${channelLogin}_${streamMeta.stream.id}_${startTimestamp}`));
@@ -1569,16 +1569,16 @@ const getChannelStream = async (channelLogin, streamId) => {
 	let channelStreams;
 	do {
 		channelStreams = await getChannelStreams(channelId, page);
-		const stream$1 = channelStreams.data.find((s) => s.streamId === streamId);
-		if (stream$1) return stream$1;
+		const stream = channelStreams.data.find((s) => s.streamId === streamId);
+		if (stream) return stream;
 		page += 1;
 	} while (page * CHANNEL_STREAMS_PAGE_SIZE < channelStreams.recordsFiltered);
 	const reasons = await getWhyCannotDownload();
 	throw new Error(`Stream "${streamId}" not found\n\n${reasons}`);
 };
 const downloadByStatsService = async ({ channelLogin, streamId }, args) => {
-	const stream$1 = await getChannelStream(channelLogin, streamId);
-	const startTimestamp = new Date(stream$1.startDateTime).getTime() / 1e3;
+	const stream = await getChannelStream(channelLogin, streamId);
+	const startTimestamp = new Date(stream.startDateTime).getTime() / 1e3;
 	return downloadByVodPath({
 		type: "vodPath",
 		vodPath: `${channelLogin}_${streamId}_${startTimestamp}`,
@@ -1788,13 +1788,13 @@ const normalizeArgs = async (args) => {
 //#endregion
 //#region node_modules/.pnpm/twitch-regex@0.1.3/node_modules/twitch-regex/dist/index.js
 var CLIP_REGEX_STRING = "https?:\\/\\/(?:clips\\.twitch\\.tv\\/(?:embed\\?.*?\\bclip=|\\/*)|(?:(?:www|go|m)\\.)?twitch\\.tv\\/(?:(?<channel>[^/]+)\\/)?clip\\/)(?<slug>[\\w-]+)\\S*";
-var CLIP_REGEX_EXACT = /* @__PURE__ */ new RegExp(`^${CLIP_REGEX_STRING}$`);
+var CLIP_REGEX_EXACT = new RegExp(`^${CLIP_REGEX_STRING}$`);
 var VIDEO_REGEX_STRING = "https?:\\/\\/(?:(?:(?:www|go|m)\\.)?twitch\\.tv\\/(?:videos|(?<channel>[^/]+)\\/v(?:ideo)?)\\/|player\\.twitch\\.tv\\/\\?.*?\\bvideo=v?|www\\.twitch\\.tv\\/(?:[^/]+)\\/schedule\\?vodID=)(?<id>\\d+)\\S*";
-var VIDEO_REGEX_EXACT = /* @__PURE__ */ new RegExp(`^${VIDEO_REGEX_STRING}$`);
+var VIDEO_REGEX_EXACT = new RegExp(`^${VIDEO_REGEX_STRING}$`);
 var CHANNEL_REGEX_STRING = "https?:\\/\\/(?:(?:(?:www|go|m)\\.)?twitch\\.tv\\/|player\\.twitch\\.tv\\/\\?.*?\\bchannel=)(?<channel>\\w+)[^\\s/]*";
-var CHANNEL_REGEX_EXACT = /* @__PURE__ */ new RegExp(`^${CHANNEL_REGEX_STRING}$`);
+var CHANNEL_REGEX_EXACT = new RegExp(`^${CHANNEL_REGEX_STRING}$`);
 var COLLECTION_REGEX_STRING = "https?:\\/\\/(?:(?:(?:www|go|m)\\.)?twitch\\.tv\\/collections\\/|player\\.twitch\\.tv\\/\\?.*?\\bcollection=)(?<id>[\\w-]+)\\S*";
-var COLLECTION_REGEX_EXACT = /* @__PURE__ */ new RegExp(`^${COLLECTION_REGEX_STRING}$`);
+var COLLECTION_REGEX_EXACT = new RegExp(`^${COLLECTION_REGEX_STRING}$`);
 
 //#endregion
 //#region src/utils/args/parseLink.ts
