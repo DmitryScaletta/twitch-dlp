@@ -37,9 +37,9 @@ export const getLiveVideoInfo = async (
     if (videoMeta) videoInfo = getVideoInfoByVideoMeta(videoMeta);
   }
 
-  // StreamMetadata response available after ~7-12 sec after a stream is started
-  // FfzRecentBroadcasts response available after ~7-40 sec after a VOD is published
-  // A VOD itself is published ~6-20 sec after a stream is started
+  // StreamMetadata response available after ~7-50 sec after a stream is started
+  // FfzRecentBroadcasts response available after ~5-60 sec after a VOD is published
+  // A VOD itself is published ~5-20 sec after a stream is started
   // A delay for FfzRecentBroadcasts and FilterableVideoTowerVideos (type: ARCHIVE) is identical
 
   // | ------> | ---------> | ---------------> |
