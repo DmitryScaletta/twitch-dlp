@@ -27,7 +27,7 @@ export const getVideoInfoByStreamMeta = (
   description: null,
   duration: null,
   uploader: channelLogin,
-  uploader_id: streamMeta.id,
+  uploader_id: channelLogin,
   upload_date: streamMeta.stream!.createdAt,
   release_date: streamMeta.stream!.createdAt,
   view_count: null,
