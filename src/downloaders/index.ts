@@ -1,4 +1,4 @@
-import { setTimeout as sleep } from 'node:timers/promises';
+import timers from 'node:timers/promises';
 import { DOWNLOADERS, RET_CODE } from '../constants.ts';
 import type { Downloader } from '../types.ts';
 import * as aria2c from './aria2c.ts';
@@ -27,7 +27,7 @@ export const downloadFile = async (
       retCode = await fetch.downloadFile(url, destPath, rateLimit, gzip);
     }
     if (retCode === RET_CODE.OK) return retCode;
-    await sleep(1000);
+    await timers.setTimeout(1000);
   }
   return RET_CODE.UNKNOWN_ERROR;
 };
