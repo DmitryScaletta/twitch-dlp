@@ -117,9 +117,9 @@ npx twitch-dlp "./Chillin [v2222470239].mp4" --merge-fragments --unmute quality
                             Syntax: "*start_time-end_time".
                             Examples: "*0-12:34", "*3:14:15-inf".
                             A "*" prefix is for yt-dlp compatibility.
-                            Negative timestamps and multiple sections are not 
-                            supported. Cutting is done by the closest fragments 
-                            (not by keyframes), so the accuracy is not very high
+                            Negative timestamps and multiple sections are not
+                            supported. Cutting is done by the closest fragments
+                            (not by keyframes), so its not very accurate
 --unmute POLICY             Try to unmute muted fragments. Keep in mind that
                             160p and 360p have slightly worse audio quality.
                             Available values:
@@ -143,12 +143,12 @@ npx twitch-dlp "./Chillin [v2222470239].mp4" --merge-fragments --unmute quality
 --merge-method METHOD       How fragments should be merged. Merging happens
                             only after all fragments are downloaded.
                             Available values:
-                            * ffconcat (default) - using ffmpeg's concat 
+                            * ffconcat (default) - using ffmpeg's concat
                               demuxer, no fixup needed
                             * append - merge all fragments into one file and
                               fixup using ffmpeg (like yt-dlp does)
 --merge-fragments           Merge already downloaded fragments. A FILENAME
-                            should be passed instead of a video link. The 
+                            should be passed instead of a video link. The
                             FILENAME must match the fragment names but without
                             ".part-FragN". Example: "npx twitch-dlp FILENAME
                             --merge-fragments".
@@ -159,6 +159,35 @@ npx twitch-dlp "./Chillin [v2222470239].mp4" --merge-fragments --unmute quality
                               according to passed unmute policy (off by
                               default)
                             * --merge-method - change merge method
+--webbrowser VALUE          Enable or disable API to launch a web browser and
+                            extract data from websites when it cannot be done
+                            otherwise. The web browser is run isolated and in
+                            a clean environment without access to regular user
+                            data. Currently only supports Chromium-based web
+                            browsers using the Chrome Devtools Protocol (CDP).
+                            Available values: yes,true,1,on,no,false,0,off
+                            Default: true
+--webbrowser-executable PATH
+                            Path to the web browser's executable. By default,
+                            it is looked up automatically.
+--webbrowser-timeout TIME   The maximum amount of time which the web browser
+                            can take to launch and execute. Default: 10
+--webbrowser-cdp-host HOST  Host for the web browser's inter-process
+                            communication interface (CDP specific).
+                            Default: 127.0.0.1
+--webbrowser-cdp-port PORT  Port for the web browser's inter-process
+                            communication interface (CDP specific).
+                            Default: 9222
+--webbrowser-cdp-timeout TIME
+                            The maximum amount of time for waiting on a single
+                            CDP command response. Default: 2
+--webbrowser-headless VALUE Whether to launch the web browser in headless mode
+                            or not. When enabled, it stays completely hidden
+                            and doesn't require a desktop environment to run.
+                            Please be aware that headless mode might be blocked
+                            by websites which implement bot detections.
+                            Available values: yes,true,1,on,no,false,0,off
+                            Default is: false.
 
 It's also possible to pass streamlink twitch plugin args:
 --twitch-disable-ads, --twitch-low-latency, --twitch-api-header,

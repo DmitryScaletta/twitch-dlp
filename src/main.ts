@@ -71,6 +71,16 @@ export const getArgs = () =>
         type: 'string',
         default: 'ffconcat',
       },
+
+      // https://streamlink.github.io/cli.html#web-browser-options
+      webbrowser: { type: 'string', default: 'true' },
+      'webbrowser-executable': { type: 'string' },
+      'webbrowser-timeout': { type: 'string', default: '10' },
+      'webbrowser-cdp-host': { type: 'string', default: '127.0.0.1' },
+      'webbrowser-cdp-port': { type: 'string', default: '9222' },
+      'webbrowser-cdp-timeout': { type: 'string', default: '2' },
+      'webbrowser-headless': { type: 'string', default: 'false' },
+
       // streamlink twitch plugin args
       // https://streamlink.github.io/cli.html#twitch
       'twitch-disable-ads': { type: 'boolean' },

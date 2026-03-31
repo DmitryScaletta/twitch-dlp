@@ -7,12 +7,23 @@ export type MergeMethod = (typeof MERGE_METHODS)[number];
 export type RawArgs = ReturnType<typeof getArgs>;
 export type AppArgs = Omit<
   RawArgs['values'],
-  'download-sections' | 'retry-streams'
+  | 'download-sections'
+  | 'retry-streams'
+  | 'webbrowser'
+  | 'webbrowser-timeout'
+  | 'webbrowser-cdp-port'
+  | 'webbrowser-cdp-timeout'
+  | 'webbrowser-headless'
 > & {
   downloader: Downloader;
   'download-sections': readonly [startTime: number, endTime: number] | null;
   'retry-streams': number | undefined;
   'merge-method': MergeMethod;
+  webbrowser: boolean;
+  'webbrowser-timeout': number;
+  'webbrowser-cdp-port': number;
+  'webbrowser-cdp-timeout': number;
+  'webbrowser-headless': boolean;
 };
 
 export type Frag = {
