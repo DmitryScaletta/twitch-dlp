@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import http from "node:http";
-import { parseArgs } from "node:util";
-import { setTimeout as setTimeout$1 } from "node:timers/promises";
+import util from "node:util";
+import timers from "node:timers/promises";
 import fsp from "node:fs/promises";
 import childProcess from "node:child_process";
 import fs from "node:fs";
@@ -9,13 +9,12 @@ import path from "node:path";
 import os from "node:os";
 import stream from "node:stream";
 import crypto from "node:crypto";
-
-//#region node_modules/.pnpm/twitch-gql-queries@0.1.21/node_modules/twitch-gql-queries/dist/index.js
+import assert from "node:assert/strict";
+//#region node_modules/.pnpm/twitch-gql-queries@0.1.24/node_modules/twitch-gql-queries/dist/index.js
 var CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
-var MAX_QUERIES_PER_REQUEST = 35;
 var gqlRequest = async (queries, requestInit) => {
 	if (queries.length === 0) return [];
-	if (queries.length > MAX_QUERIES_PER_REQUEST) throw new Error(`Too many queries. Max: ${MAX_QUERIES_PER_REQUEST}`);
+	if (queries.length > 35) throw new Error(`Too many queries. Max: 35`);
 	const res = await fetch("https://gql.twitch.tv/gql", {
 		method: "POST",
 		body: JSON.stringify(queries),
@@ -49,7 +48,7 @@ var getQueryShareClipRenderStatus = (variables) => ({
 	variables,
 	extensions: { persistedQuery: {
 		version: 1,
-		sha256Hash: "e0a46b287d760c6890a39d1ccd736af5ec9479a267d02c710e9ac33326b651d2"
+		sha256Hash: "0a02bb974443b576f5579aab0fef1d4b7f44e58a8a256f0c5adfead0db70640f"
 	} }
 });
 var getQueryStreamMetadata = (variables) => ({
@@ -68,7 +67,6 @@ var getQueryVideoMetadata = (variables) => ({
 		sha256Hash: "45111672eea2e507f8ba44d101a61862f9c56b11dee09a15634cb75cb9b9084d"
 	} }
 });
-
 //#endregion
 //#region src/utils/fetchText.ts
 const fetchText = async (url, description = "metadata") => {
@@ -82,7 +80,6 @@ const fetchText = async (url, description = "metadata") => {
 		return null;
 	}
 };
-
 //#endregion
 //#region src/api/twitch.ts
 const apiRequest = async (query, resultKey, description = "metadata") => {
@@ -131,10 +128,6 @@ const getManifest = (videoId, accessToken) => {
 		token: accessToken.value
 	})}`, "video manifest");
 };
-
-//#endregion
-//#region src/constants.ts
-const DEFAULT_OUTPUT_TEMPLATE = "%(title)s [%(id)s].%(ext)s";
 const PRIVATE_VIDEO_INSTRUCTIONS = "This video might be private. Follow this article to download it: https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md";
 const NO_TRY_UNMUTE_MESSAGE = "[unmute] The video is old, not trying to unmute";
 const VOD_DOMAINS = [
@@ -168,10 +161,7 @@ const RET_CODE = {
 	UNKNOWN_ERROR: 1,
 	HTTP_RETURNED_ERROR: 22
 };
-
-//#endregion
-//#region src/lib/chalk.ts
-const styles = { color: {
+const chalk = Object.entries({ color: {
 	black: [30, 39],
 	red: [31, 39],
 	green: [32, 39],
@@ -180,12 +170,10 @@ const styles = { color: {
 	magenta: [35, 39],
 	cyan: [36, 39],
 	white: [37, 39]
-} };
-const chalk = Object.entries(styles.color).reduce((acc, [color, [open, close]]) => {
+} }.color).reduce((acc, [color, [open, close]]) => {
 	acc[color] = (s) => `\x1b[${open}m${s}\x1b[${close}m`;
 	return acc;
 }, {});
-
 //#endregion
 //#region src/lib/hlsParser.ts
 const PLAYLIST_LINE_KV_REGEX = /(?<key>[A-Z-]+)=(?:"(?<stringValue>[^"]+)"|(?<value>[^,]+))/g;
@@ -270,7 +258,6 @@ const parse = (playlist) => {
 	const lines = playlist.split("\n").map((line) => line.trim()).filter(Boolean);
 	return MASTER_PLAYLIST_TAGS.some((s) => lines.some((line) => line.startsWith(`#${s}:`))) ? parseMasterPlaylist(lines) : parseMediaPlaylist(lines);
 };
-
 //#endregion
 //#region src/lib/isInstalled.ts
 const isInstalled = (cmd) => new Promise((resolve) => {
@@ -278,7 +265,6 @@ const isInstalled = (cmd) => new Promise((resolve) => {
 	child.on("error", (e) => resolve(e.code !== "ENOENT"));
 	child.on("close", () => resolve(true));
 });
-
 //#endregion
 //#region src/lib/statsOrNull.ts
 const statsOrNull = async (path) => {
@@ -288,7 +274,6 @@ const statsOrNull = async (path) => {
 		return null;
 	}
 };
-
 //#endregion
 //#region src/lib/spawn.ts
 const spawn = (command, args = [], silent = false) => new Promise((resolve, reject) => {
@@ -300,7 +285,6 @@ const spawn = (command, args = [], silent = false) => new Promise((resolve, reje
 	child.on("error", (err) => reject(err));
 	child.on("close", (code) => resolve(code));
 });
-
 //#endregion
 //#region src/utils/getPath.ts
 const ILLEGAL_PATH_CHARS_MAP = {
@@ -336,7 +320,6 @@ const getPath = {
 	frag: (filePath, i) => `${filePath}.part-Frag${i}`,
 	fragUnmuted: (fragPath) => `${fragPath}-unmuted`
 };
-
 //#endregion
 //#region src/merge/append.ts
 const concatFrags = async (files, outputPath) => {
@@ -383,7 +366,6 @@ const mergeFrags$2 = async (frags, outputPath, keepFragments) => {
 	await fsp.rename(outputPathTmp, outputPath);
 	if (!keepFragments) await Promise.all([...fragFiles.map((filename) => fsp.unlink(filename)), fsp.unlink(getPath.playlist(outputPath))]);
 };
-
 //#endregion
 //#region src/merge/ffconcat.ts
 const MAX_INT_STR = "2147483647";
@@ -453,7 +435,6 @@ const mergeFrags$1 = async (frags, outputPath, keepFragments) => {
 	if (!keepFragments) await Promise.all([...fragFiles.map(([filename]) => fsp.unlink(filename)), fsp.unlink(getPath.playlist(outputPath))]);
 	return retCode;
 };
-
 //#endregion
 //#region src/merge/index.ts
 const [FFCONCAT, APPEND] = MERGE_METHODS;
@@ -470,7 +451,6 @@ const mergeFrags = async (method, frags, outputPath, keepFragments) => {
 	if (method === APPEND) return mergeFrags$2(frags, outputPath, keepFragments);
 	throw new Error();
 };
-
 //#endregion
 //#region src/lib/groupBy.ts
 const groupBy = (array, getKey) => array.reduce((groups, item) => {
@@ -479,7 +459,6 @@ const groupBy = (array, getKey) => array.reduce((groups, item) => {
 	groups[key].push(item);
 	return groups;
 }, {});
-
 //#endregion
 //#region src/stats.ts
 const DL_EVENT = {
@@ -602,7 +581,6 @@ const showStats = async (logPath) => {
 		...statsUnmuted
 	} : stats);
 };
-
 //#endregion
 //#region src/downloaders/aria2c.ts
 const isUrlsAvailableAria2c = (urls, urlsPath, gzip) => new Promise((resolve) => {
@@ -650,7 +628,6 @@ const downloadFile$3 = async (url, destPath, rateLimit = "0", gzip = false) => n
 	child.on("error", () => resolve(RET_CODE.UNKNOWN_ERROR));
 	child.on("close", (code) => resolve(code || RET_CODE.OK));
 });
-
 //#endregion
 //#region src/downloaders/curl.ts
 const getIsUrlsAvailableCurl = (urls, gzip) => new Promise((resolve) => {
@@ -703,7 +680,6 @@ const downloadFile$2 = async (url, destPath, retries, rateLimit = "0", gzip = fa
 	child.on("error", () => resolve(RET_CODE.UNKNOWN_ERROR));
 	child.on("close", (code) => resolve(code || RET_CODE.OK));
 });
-
 //#endregion
 //#region src/lib/throttleTransform.ts
 var ThrottleTransform = class extends stream.Transform {
@@ -731,7 +707,6 @@ var ThrottleTransform = class extends stream.Transform {
 		}
 	}
 };
-
 //#endregion
 //#region src/downloaders/fetch.ts
 const WRONG_LIMIT_RATE_SYNTAX = "Wrong --limit-rate syntax";
@@ -772,7 +747,6 @@ const downloadFile$1 = async (url, destPath, rateLimit, gzip = true) => {
 		return RET_CODE.UNKNOWN_ERROR;
 	}
 };
-
 //#endregion
 //#region src/downloaders/index.ts
 const [ARIA2C$1, CURL$1, FETCH$1] = DOWNLOADERS;
@@ -783,7 +757,7 @@ const downloadFile = async (downloader, url, destPath, rateLimit, gzip, retries 
 		if (downloader === ARIA2C$1) retCode = await downloadFile$3(url, destPath, rateLimit, gzip);
 		if (downloader === FETCH$1) retCode = await downloadFile$1(url, destPath, rateLimit, gzip);
 		if (retCode === RET_CODE.OK) return retCode;
-		await setTimeout$1(1e3);
+		await timers.setTimeout(1e3);
 	}
 	return RET_CODE.UNKNOWN_ERROR;
 };
@@ -793,7 +767,6 @@ const IS_URLS_AVAILABLE_MAP = {
 	[FETCH$1]: isUrlsAvailable$1
 };
 const isUrlsAvailable = async (downloader, urls) => IS_URLS_AVAILABLE_MAP[downloader](urls);
-
 //#endregion
 //#region src/lib/isFMp4MediaFile.ts
 const isFMp4MediaFile = async (filePath) => {
@@ -808,7 +781,6 @@ const isFMp4MediaFile = async (filePath) => {
 		await fd.close();
 	}
 };
-
 //#endregion
 //#region src/lib/isMp4File.ts
 const isMp4File = async (filePath) => {
@@ -821,7 +793,6 @@ const isMp4File = async (filePath) => {
 		await fd.close();
 	}
 };
-
 //#endregion
 //#region src/lib/isTsFile.ts
 const PACKET_SIZE = 188;
@@ -838,7 +809,6 @@ const isTsFile = async (filePath, packetsToCheck = 1) => {
 		await fd.close();
 	}
 };
-
 //#endregion
 //#region src/lib/unlinkIfAny.ts
 const unlinkIfAny = async (path) => {
@@ -846,7 +816,6 @@ const unlinkIfAny = async (path) => {
 		return await fsp.unlink(path);
 	} catch {}
 };
-
 //#endregion
 //#region src/utils/downloadFrag.ts
 const CHECK_FILE_TYPE = {
@@ -877,7 +846,6 @@ const downloadFrag = async (downloader, url, destPath, limitRateArg, gzip, type 
 		time: endTime - startTime
 	};
 };
-
 //#endregion
 //#region src/utils/getDlFormat.ts
 const getDlFormat = (formats, formatArg) => {
@@ -885,7 +853,6 @@ const getDlFormat = (formats, formatArg) => {
 	if (!dlFormat) throw new Error(`Wrong format: ${formatArg}`);
 	return dlFormat;
 };
-
 //#endregion
 //#region src/utils/getExistingFrags.ts
 const getExistingFrags = (frags, outputPath, dir) => {
@@ -893,7 +860,6 @@ const getExistingFrags = (frags, outputPath, dir) => {
 	existingFrags.isFMp4 = frags.isFMp4;
 	return existingFrags;
 };
-
 //#endregion
 //#region src/utils/getFragsForDownloading.ts
 const getFragsForDownloading = (playlistUrl, playlist, args) => {
@@ -936,7 +902,6 @@ const getFragsForDownloading = (playlistUrl, playlist, args) => {
 	dlFrags.isFMp4 = !!mapFrag;
 	return dlFrags;
 };
-
 //#endregion
 //#region src/utils/getTryUnmute.ts
 const ONE_WEEK_MS = 10080 * 60 * 1e3;
@@ -946,7 +911,6 @@ const getTryUnmute = (videoInfo) => {
 	const videoDateMs = new Date(videoDate).getTime();
 	return Date.now() - videoDateMs < ONE_WEEK_MS;
 };
-
 //#endregion
 //#region src/utils/getUnmutedFrag.ts
 const LOWER_AUDIO_QUALITY = ["160p30", "360p30"];
@@ -996,7 +960,6 @@ const getUnmutedFrag = async (downloader, unmuteArg, fragUrl, formats) => {
 	}
 	throw new Error();
 };
-
 //#endregion
 //#region src/utils/processUnmutedFrags.ts
 const processUnmutedFrags = async (frags, outputPath, dir, writeLog) => {
@@ -1038,11 +1001,9 @@ const processUnmutedFrags = async (frags, outputPath, dir, writeLog) => {
 		writeLog?.([DL_EVENT.FRAG_REPLACE_AUDIO_SUCCESS, frag.idx]);
 	}
 };
-
 //#endregion
 //#region src/utils/readOutputDir.ts
 const readOutputDir = (outputPath) => fsp.readdir(path.parse(outputPath).dir || ".");
-
 //#endregion
 //#region src/utils/showFormats.ts
 const showFormats = (formats) => {
@@ -1059,7 +1020,6 @@ const showFormats = (formats) => {
 		return fmt;
 	}));
 };
-
 //#endregion
 //#region src/utils/showProgress.ts
 const UNITS = [
@@ -1118,7 +1078,6 @@ const showProgress = (downloadedFrags, fragsCount) => {
 	].join("");
 	process.stdout.write(progress);
 };
-
 //#endregion
 //#region src/utils/downloadVideo.ts
 const WAIT_BETWEEN_CYCLES_SEC = 60;
@@ -1131,7 +1090,7 @@ const downloadVideo = async (formats, videoInfo, args) => {
 	}
 	if (!await isInstalled("ffmpeg")) throw new Error("ffmpeg is not installed. Install it from https://ffmpeg.org/");
 	const dlFormat = getDlFormat(formats, args.format);
-	const outputPath = getPath.output(args.output || DEFAULT_OUTPUT_TEMPLATE, videoInfo);
+	const outputPath = getPath.output(args.output || "%(title)s [%(id)s].%(ext)s", videoInfo);
 	let frags;
 	let fragsCount = 0;
 	let playlistUrl = dlFormat.url;
@@ -1163,7 +1122,7 @@ const downloadVideo = async (formats, videoInfo, args) => {
 		if (!playlistContent && !args["live-from-start"]) throw new Error("Cannot download the playlist");
 		if (!playlistContent) {
 			console.warn(`[live-from-start] Waiting for the playlist. ${RETRY_MESSAGE}`);
-			await setTimeout$1(WAIT_BETWEEN_CYCLES_SEC * 1e3);
+			await timers.setTimeout(WAIT_BETWEEN_CYCLES_SEC * 1e3);
 			continue;
 		}
 		const playlist = parse(playlistContent);
@@ -1177,7 +1136,7 @@ const downloadVideo = async (formats, videoInfo, args) => {
 		if (!hasNewFrags && !playlist.endlist) {
 			const message = `[live-from-start] ${chalk.green("VOD ONLINE")}: waiting for new fragments`;
 			console.log(`${message}. ${RETRY_MESSAGE}`);
-			await setTimeout$1(WAIT_BETWEEN_CYCLES_SEC * 1e3);
+			await timers.setTimeout(WAIT_BETWEEN_CYCLES_SEC * 1e3);
 			continue;
 		}
 		for (const [i, frag] of frags.entries()) {
@@ -1232,9 +1191,8 @@ const downloadVideo = async (formats, videoInfo, args) => {
 	await processUnmutedFrags(existingFrags, outputPath, dir, writeLog);
 	writeLog([await mergeFrags(args["merge-method"], existingFrags, outputPath, args["keep-fragments"]) ? DL_EVENT.MERGE_FRAGS_FAILURE : DL_EVENT.MERGE_FRAGS_SUCCESS]);
 	await showStats(logPath);
-	if (!args["keep-fragments"]) await fsp.unlink(logPath);
+	if (!args["keep-fragments"] && !args["keep-log"]) await fsp.unlink(logPath);
 };
-
 //#endregion
 //#region src/utils/getVideoInfo.ts
 const DEFAULT_TITLE = "Untitled Broadcast";
@@ -1251,12 +1209,12 @@ const getVideoInfoByVideoMeta = (videoMeta) => ({
 	ext: "mp4"
 });
 const getVideoInfoByStreamMeta = (streamMeta, channelLogin) => ({
-	id: `v${streamMeta.lastBroadcast.id}`,
-	title: streamMeta.lastBroadcast.title || DEFAULT_TITLE,
+	id: `v${streamMeta.lastBroadcast?.id || 0}`,
+	title: streamMeta.lastBroadcast?.title || DEFAULT_TITLE,
 	description: null,
 	duration: null,
 	uploader: channelLogin,
-	uploader_id: streamMeta.id,
+	uploader_id: channelLogin,
 	upload_date: streamMeta.stream.createdAt,
 	release_date: streamMeta.stream.createdAt,
 	view_count: null,
@@ -1286,7 +1244,6 @@ const getVideoInfoByClipMeta = (clipMeta) => ({
 	view_count: clipMeta.viewCount,
 	ext: "mp4"
 });
-
 //#endregion
 //#region src/utils/downloadWithStreamlink.ts
 const DEFAULT_STREAMLINK_ARGS = ["--twitch-force-client-integrity", "--twitch-access-token-param=playerType=frontpage"];
@@ -1316,7 +1273,6 @@ const downloadWithStreamlink = async (link, streamMeta, channelLogin, args) => {
 		...streamlinkArgs.length ? streamlinkArgs : DEFAULT_STREAMLINK_ARGS
 	]);
 };
-
 //#endregion
 //#region src/utils/parseDownloadFormats.ts
 const parseDownloadFormats = (playlistContent) => {
@@ -1380,7 +1336,6 @@ const parseDownloadFormats = (playlistContent) => {
 	});
 	return formats;
 };
-
 //#endregion
 //#region src/utils/getVideoFormats.ts
 const FORMATS = [
@@ -1453,7 +1408,6 @@ const getVideoFormatsByThumbUrl = (broadcastType, videoId, thumbUrl) => {
 	const { fullVodPath } = m.groups;
 	return getVideoFormatsByFullVodPath(fullVodPath, broadcastType, videoId);
 };
-
 //#endregion
 //#region src/utils/getLiveVideoInfo.ts
 const getLiveVideoInfo = async (streamMeta, channelLogin) => {
@@ -1479,7 +1433,6 @@ const getLiveVideoInfo = async (streamMeta, channelLogin) => {
 		videoInfo
 	};
 };
-
 //#endregion
 //#region src/commands/downloadByChannelLogin.ts
 const downloadByChannelLogin = async (channelLogin, args) => {
@@ -1512,10 +1465,21 @@ const downloadByChannelLogin = async (channelLogin, args) => {
 				}
 			}
 		}
-		await setTimeout$1(delay * 1e3);
+		await timers.setTimeout(delay * 1e3);
 	}
 };
-
+//#endregion
+//#region src/api/streamcharts.ts
+const LIVEWIRE_COMPONENTS_REGEX = /<div\s+[^>]*wire:id="[^"]+"[^>]*wire:initial-data="(?<data>[^"]+)"[^>]*>/g;
+const parseLivewireComponents = (html) => {
+	const results = [];
+	for (const m of html.matchAll(LIVEWIRE_COMPONENTS_REGEX)) {
+		const { data } = m.groups;
+		const json = data.replaceAll("&quot;", "\"").replaceAll("&amp;", "&");
+		results.push(JSON.parse(json));
+	}
+	return results;
+};
 //#endregion
 //#region src/api/sullygnome.ts
 const BASE_URL = "https://sullygnome.com/api";
@@ -1528,12 +1492,305 @@ const getStandardSearch = async (query) => {
 	const url = `${BASE_URL}/standardsearch/${query}`;
 	return (await fetch(url)).json();
 };
-const CHANNEL_STREAMS_PAGE_SIZE = 100;
-const getChannelStreams = async (channelId, page = 0, pageSize = CHANNEL_STREAMS_PAGE_SIZE) => {
+const getChannelStreams = async (channelId, page = 0, pageSize = 100) => {
 	const url = `${BASE_URL}/tables/channeltables/streams/365/${channelId}/%20/${page + 1}/1/desc/${page * pageSize}/${pageSize}`;
 	return (await fetch(url)).json();
 };
-
+//#endregion
+//#region src/api/twitchtracker.ts
+const parseEcs = (html) => {
+	const m = html.match(/<meta id="ecs" content="([^"]+)">/);
+	if (!m) throw new Error(`Element not found: meta#ecs`);
+	const ecsRaw = m[1].replaceAll("#", "W").split("!").map((s) => JSON.parse(atob(s)));
+	const ecs = {};
+	const headers = ecsRaw.at(-1);
+	for (let i = 0; i < ecsRaw.length - 1; i += 1) ecs[headers[i]] = ecsRaw[i];
+	return ecs;
+};
+const getStreamInfo = (html) => parseEcs(html);
+//#endregion
+//#region src/browsers/browser.ts
+const checkExecutable = (executable) => {
+	try {
+		fs.accessSync(executable);
+		return true;
+	} catch {
+		return false;
+	}
+};
+const findExecutable = (name) => {
+	const pathDirs = (process.env.PATH ?? "").split(process.platform === "win32" ? ";" : ":");
+	for (const dir of pathDirs) {
+		const fullPath = path.join(dir, name);
+		if (checkExecutable(fullPath)) return fullPath;
+		if (process.platform === "win32" && checkExecutable(fullPath + ".exe")) return fullPath + ".exe";
+	}
+	return null;
+};
+const resolveExecutable = (executable, names, fallback_paths) => {
+	if (executable) return checkExecutable(executable) ? executable : null;
+	for (const name of names) {
+		const found = findExecutable(name);
+		if (found) return found;
+	}
+	for (const fallback of fallback_paths) if (checkExecutable(fallback)) return fallback;
+	return null;
+};
+const launch = (executable, args, timeoutMs = null) => {
+	console.log(`[webbrowser] Launching web browser: ${executable}`);
+	const proc = childProcess.spawn(executable, args, { stdio: [
+		"ignore",
+		"pipe",
+		"pipe"
+	] });
+	let timeout = null;
+	if (timeoutMs) timeout = setTimeout(() => {
+		proc.kill();
+		console.warn("[webbrowser] Timeout reached. The browser process has been killed.");
+	}, timeoutMs);
+	proc.on("close", () => {
+		if (timeout) clearTimeout(timeout);
+	});
+	proc.stdout?.on("data", () => {});
+	proc.stderr?.on("data", () => {});
+	return proc;
+};
+//#endregion
+//#region src/browsers/chromium.ts
+const isWin32 = process.platform === "win32";
+const isDarwin = process.platform === "darwin";
+const CHROMIUM_LAUNCH_ARGS = [
+	"--autoplay-policy=user-gesture-required",
+	"--deny-permission-prompts",
+	"--disable-background-networking",
+	"--disable-backgrounding-occluded-windows",
+	"--disable-breakpad",
+	"--disable-client-side-phishing-detection",
+	"--disable-component-extensions-with-background-pages",
+	"--disable-component-update",
+	"--disable-default-apps",
+	"--disable-extensions",
+	"--disable-features=GlobalMediaControls",
+	"--disable-features=MediaRouter",
+	"--disable-features=Translate",
+	"--disable-hang-monitor",
+	"--disable-logging",
+	"--disable-notifications",
+	"--disable-popup-blocking",
+	"--disable-prompt-on-repost",
+	"--disable-sync",
+	"--disk-cache-size=0",
+	"--metrics-recording-only",
+	"--mute-audio",
+	"--no-default-browser-check",
+	"--no-experiments",
+	"--no-first-run",
+	"--no-service-autorun",
+	"--password-store=basic",
+	"--use-mock-keychain",
+	"--window-size=0,0"
+];
+const CHROMIUM_NAMES = [
+	"chromium",
+	"chromium-browser",
+	"chrome",
+	"google-chrome",
+	"google-chrome-stable"
+];
+const CHROMIUM_PATHS = (() => {
+	if (isWin32) {
+		const msEdge = [];
+		const googleChrome = [];
+		const programFiles = [process.env.PROGRAMFILES, process.env["PROGRAMFILES(X86)"]].filter(Boolean);
+		const localAppData = process.env.LOCALAPPDATA;
+		for (const base of programFiles) {
+			if (!base) continue;
+			for (const sub of [
+				"Microsoft\\Edge\\Application",
+				"Microsoft\\Edge Beta\\Application",
+				"Microsoft\\Edge Dev\\Application"
+			]) msEdge.push(path.join(base, sub, "msedge.exe"));
+		}
+		for (const base of programFiles) {
+			if (!base) continue;
+			for (const sub of [
+				"Google\\Chrome\\Application",
+				"Google\\Chrome Beta\\Application",
+				"Google\\Chrome Canary\\Application"
+			]) googleChrome.push(path.join(base, sub, "chrome.exe"));
+		}
+		if (localAppData) for (const sub of [
+			"Google\\Chrome\\Application",
+			"Google\\Chrome Beta\\Application",
+			"Google\\Chrome Canary\\Application"
+		]) googleChrome.push(path.join(localAppData, sub, "chrome.exe"));
+		return [...msEdge, ...googleChrome];
+	}
+	if (isDarwin) return [
+		"/Applications/Chromium.app/Contents/MacOS/Chromium",
+		path.join(os.homedir(), "Applications/Chromium.app/Contents/MacOS/Chromium"),
+		"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+		path.join(os.homedir(), "Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+	];
+	return [];
+})();
+const getExe = (executable) => {
+	const exe = resolveExecutable(executable, CHROMIUM_NAMES, CHROMIUM_PATHS);
+	if (!exe) throw new Error("[webbrowser] Could not find Chromium-based web browser executable");
+	return exe;
+};
+const getWsUrls = async (host, port) => {
+	const wsHost = host.includes(":") ? `[${host}]` : host;
+	const browserUrl = `http://${wsHost}:${port}/json/version`;
+	const targetUrl = `http://${wsHost}:${port}/json/list`;
+	for (let i = 0; i < 10; i++) {
+		try {
+			const [browserRes, targetsRes] = await Promise.all([fetch(browserUrl, { signal: AbortSignal.timeout(100) }), fetch(targetUrl, { signal: AbortSignal.timeout(100) })]);
+			if (!browserRes.ok || !targetsRes.ok) continue;
+			const [browser, targets] = await Promise.all([browserRes.json(), targetsRes.json()]);
+			const target = Array.isArray(targets) ? targets.find((t) => t.type === "page") : null;
+			return {
+				browserWsUrl: browser.webSocketDebuggerUrl,
+				targetWsUrl: target?.webSocketDebuggerUrl
+			};
+		} catch {}
+		await timers.setTimeout(250);
+	}
+	throw new Error("[webbrowser] Failed to get websocket URL");
+};
+//#endregion
+//#region src/lib/cdp.ts
+var CDP = class CDP {
+	ws = null;
+	timeoutMs = null;
+	id = 1;
+	pendingResolvers = /* @__PURE__ */ new Map();
+	eventListeners = /* @__PURE__ */ new Map();
+	static create() {
+		return new CDP();
+	}
+	async connect(wsUrl, timeoutMs = null) {
+		this.timeoutMs = timeoutMs;
+		return new Promise((resolve, reject) => {
+			this.ws = new WebSocket(wsUrl);
+			this.ws.addEventListener("open", resolve);
+			this.ws.addEventListener("error", () => reject(/* @__PURE__ */ new Error("Failed to connect to WebSocket")));
+			this.ws.addEventListener("message", (event) => {
+				const msg = JSON.parse(event.data);
+				if (typeof msg.id === "number" && this.pendingResolvers.has(msg.id)) {
+					const { resolve, reject } = this.pendingResolvers.get(msg.id);
+					this.pendingResolvers.delete(msg.id);
+					if (msg.error) reject(new Error(msg.error.message));
+					else resolve(msg.result);
+				}
+				if (typeof msg.method === "string" && this.eventListeners.has(msg.method)) this.eventListeners.get(msg.method)(msg.params);
+			});
+		});
+	}
+	send(method, params) {
+		return new Promise((resolve, reject) => {
+			if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return reject(/* @__PURE__ */ new Error("WebSocket is not connected"));
+			let timeout = null;
+			if (this.timeoutMs) timeout = setTimeout(() => {
+				reject(/* @__PURE__ */ new Error(`Request timed out: ${method}`));
+			}, this.timeoutMs);
+			const id = this.id;
+			this.id += 1;
+			this.pendingResolvers.set(id, {
+				resolve: (arg) => {
+					if (timeout) clearTimeout(timeout);
+					return resolve(arg);
+				},
+				reject
+			});
+			this.ws.send(JSON.stringify({
+				id,
+				method,
+				params
+			}));
+		});
+	}
+	on(event, callback) {
+		this.eventListeners.set(event, callback);
+	}
+	off(event) {
+		this.eventListeners.delete(event);
+	}
+	disconnect() {
+		this.ws?.close();
+	}
+};
+//#endregion
+//#region src/utils/fetchHtmlWithBrowser.ts
+const DOCUMENT_WAIT_TIMEOUT = 1e4;
+const cleanupBrowser = async (browser, browserExe, userDataDir) => {
+	console.log("[webbrowser] Closing browser");
+	if (browser) try {
+		await browser.send("Browser.close");
+	} catch {}
+	if (!browserExe.killed) {
+		const waitForExit = new Promise((resolve) => {
+			browserExe.once("exit", resolve);
+			setTimeout(resolve, 3e3);
+		});
+		browserExe.kill();
+		await waitForExit;
+	}
+	await timers.setTimeout(500);
+	try {
+		console.log("[webbrowser] Removing temporary user-data-dir");
+		await fsp.rm(userDataDir, {
+			recursive: true,
+			force: true
+		});
+		console.log("[webbrowser] Temporary user-data-dir removed");
+	} catch (e) {
+		console.warn("[webbrowser] Error removing user-data-dir:", e.message);
+		console.warn(`[webbrowser] Please remove it manually: ${userDataDir}`);
+	}
+};
+const fetchHtmlWithBrowser = async (url, args) => {
+	const exe = getExe(args["webbrowser-executable"]);
+	const host = args["webbrowser-cdp-host"];
+	const port = args["webbrowser-cdp-port"];
+	const timeout = args["webbrowser-timeout"] * 1e3;
+	const cdpTimeout = args["webbrowser-cdp-timeout"] * 1e3;
+	console.log("[webbrowser] Creating temporary user-data-dir");
+	const userDataDir = await fsp.mkdtemp(path.join(os.tmpdir(), "twitch-dlp-"));
+	const launchArgs = [...CHROMIUM_LAUNCH_ARGS];
+	if (args["webbrowser-headless"]) launchArgs.push("--headless=new");
+	launchArgs.push(`--remote-debugging-host=${host}`, `--remote-debugging-port=${port}`, `--user-data-dir=${userDataDir}`);
+	const browserExe = launch(exe, launchArgs, timeout);
+	let browser = null;
+	try {
+		const { browserWsUrl, targetWsUrl } = await getWsUrls(host, port);
+		browser = CDP.create();
+		const page = CDP.create();
+		await Promise.all([browser.connect(browserWsUrl, cdpTimeout), page.connect(targetWsUrl, cdpTimeout)]);
+		await Promise.all([page.send("Page.enable"), page.send("Network.enable")]);
+		const requestIdPromise = new Promise((resolve, reject) => {
+			const timeout = setTimeout(reject, DOCUMENT_WAIT_TIMEOUT, "[webbrowser] Timeout waiting for document");
+			page.on("Network.responseReceived", (p) => {
+				if (p.type === "Document" && p.response.url === url && p.response.status === 200) {
+					const requestId = p.requestId;
+					page.on("Network.loadingFinished", (p) => {
+						clearTimeout(timeout);
+						if (p.requestId === requestId) resolve(p.requestId);
+					});
+				}
+			});
+		});
+		console.log(`[webbrowser] Navigating to ${url}`);
+		await page.send("Page.navigate", { url });
+		console.log("[webbrowser] Waiting for document response");
+		const requestId = await requestIdPromise;
+		console.log("[webbrowser] Getting document body");
+		const response = await page.send("Network.getResponseBody", { requestId });
+		return response.base64Encoded ? Buffer.from(response.body, "base64").toString("utf8") : response.body;
+	} finally {
+		await cleanupBrowser(browser, browserExe, userDataDir);
+	}
+};
 //#endregion
 //#region src/utils/getWhyCannotDownload.ts
 const getWhyCannotDownload = async () => {
@@ -1547,7 +1804,6 @@ const getWhyCannotDownload = async () => {
 		return "";
 	}
 };
-
 //#endregion
 //#region src/commands/downloadByVodPath.ts
 const downloadByVodPath = async (parsedLink, args) => {
@@ -1558,12 +1814,16 @@ const downloadByVodPath = async (parsedLink, args) => {
 	}
 	return downloadVideo(formats, getVideoInfoByVodPath(parsedLink), args);
 };
-
 //#endregion
 //#region src/commands/downloadByStatsService.ts
+var StreamNotFoundError = class extends Error {
+	constructor(message) {
+		super(message);
+	}
+};
 const getChannelStream = async (channelLogin, streamId) => {
 	const channel = (await getStandardSearch(channelLogin)).find((item) => item.itemtype === STANDARD_SEARCH_ITEM_TYPE.CHANNEL && item.siteurl === channelLogin);
-	if (!channel) throw new Error(`Channel "${channelLogin}" not found`);
+	if (!channel) throw new StreamNotFoundError(`Channel "${channelLogin}" not found`);
 	const channelId = channel.value;
 	let page = 0;
 	let channelStreams;
@@ -1572,13 +1832,32 @@ const getChannelStream = async (channelLogin, streamId) => {
 		const stream = channelStreams.data.find((s) => s.streamId === streamId);
 		if (stream) return stream;
 		page += 1;
-	} while (page * CHANNEL_STREAMS_PAGE_SIZE < channelStreams.recordsFiltered);
-	const reasons = await getWhyCannotDownload();
-	throw new Error(`Stream "${streamId}" not found\n\n${reasons}`);
+	} while (page * 100 < channelStreams.recordsFiltered);
+	throw new StreamNotFoundError(`Stream "${streamId}" not found\n\n${await getWhyCannotDownload()}`);
 };
-const downloadByStatsService = async ({ channelLogin, streamId }, args) => {
-	const stream = await getChannelStream(channelLogin, streamId);
-	const startTimestamp = new Date(stream.startDateTime).getTime() / 1e3;
+const downloadByStatsService = async ({ channelLogin, streamId, service, url }, args) => {
+	let startDate = null;
+	try {
+		startDate = (await getChannelStream(channelLogin, streamId)).startDateTime;
+	} catch (e) {
+		if (e instanceof StreamNotFoundError) throw e;
+	}
+	if (startDate === null) {
+		console.warn("[download] Cannot get a stream info");
+		if (!args.webbrowser) {
+			console.warn("[download] You can enable --webbrowser and try again");
+			process.exit(1);
+		}
+		console.warn("[download] Using webbrowser. This feature is experimental and may not work");
+		if (service === "twitchtracker") startDate = getStreamInfo(await fetchHtmlWithBrowser(url, args)).created_at;
+		else if (service === "streamscharts") {
+			const comp = parseLivewireComponents(await fetchHtmlWithBrowser(url, args)).find((c) => c.serverMemo.data.stream);
+			if (!comp) throw new Error("Cannot get a stream info");
+			startDate = comp.serverMemo.data.stream.stream_created_at + "+00:00";
+		} else if (service === "sullygnome") throw new Error(`Not implemented for ${service}`);
+		else startDate = null;
+	}
+	const startTimestamp = new Date(startDate).getTime() / 1e3;
 	return downloadByVodPath({
 		type: "vodPath",
 		vodPath: `${channelLogin}_${streamId}_${startTimestamp}`,
@@ -1587,7 +1866,6 @@ const downloadByStatsService = async ({ channelLogin, streamId }, args) => {
 		startTimestamp
 	}, args);
 };
-
 //#endregion
 //#region src/commands/downloadByVideoId.ts
 const downloadByVideoId = async (videoId, args) => {
@@ -1600,7 +1878,6 @@ const downloadByVideoId = async (videoId, args) => {
 	const videoInfo = getVideoInfoByVideoMeta(videoMeta);
 	return downloadVideo(formats, videoInfo, args);
 };
-
 //#endregion
 //#region src/commands/downloadClip.ts
 const getClipFormats = (clipMeta) => {
@@ -1631,7 +1908,7 @@ const downloadClip = async (slug, args) => {
 	const formats = getClipFormats(clipMeta);
 	if (args["list-formats"]) return showFormats(formats);
 	const dlFormat = getDlFormat(formats, args.format);
-	const destPath = getPath.output(args.output || DEFAULT_OUTPUT_TEMPLATE, getVideoInfoByClipMeta(clipMeta));
+	const destPath = getPath.output(args.output || "%(title)s [%(id)s].%(ext)s", getVideoInfoByClipMeta(clipMeta));
 	console.log(`[download] Destination: ${destPath}`);
 	if (await statsOrNull(destPath)) {
 		console.warn(`[download] File already exists, skipping`);
@@ -1643,7 +1920,6 @@ const downloadClip = async (slug, args) => {
 	if (!await downloadFrag(args.downloader, dlFormat.url, destPath, args["limit-rate"], void 0, "mp4")) throw new Error("[download] Download failed");
 	console.log("[download] Done");
 };
-
 //#endregion
 //#region src/commands/mergeFragments.ts
 const tryUnmuteFrags = async (outputPath, log, frags, formats, args, writeLog) => {
@@ -1699,7 +1975,6 @@ const mergeFragments = async (outputPath, args) => {
 	await mergeFrags(args["merge-method"], frags, outputPath, true);
 	await showStats(logPath);
 };
-
 //#endregion
 //#region src/commands/showHelp.ts
 const showHelp = async () => {
@@ -1719,7 +1994,6 @@ const showHelp = async () => {
 	];
 	console.log(help.join("\n"));
 };
-
 //#endregion
 //#region src/commands/showVersion.ts
 const showVersion = async () => {
@@ -1727,7 +2001,6 @@ const showVersion = async () => {
 	const pkg = await fsp.readFile(pkgPath, "utf8");
 	console.log(JSON.parse(pkg).version);
 };
-
 //#endregion
 //#region src/utils/args/getDownloader.ts
 const [ARIA2C, CURL, FETCH] = DOWNLOADERS;
@@ -1744,7 +2017,6 @@ const getDownloader = async (downloaderArg) => {
 	}
 	throw new Error(`Unknown downloader: ${downloaderArg}. Available: ${DOWNLOADERS.join(", ")}`);
 };
-
 //#endregion
 //#region src/utils/args/parseDownloadSectionsArg.ts
 const DOWNLOAD_SECTIONS_ERROR = "Wrong --download-sections syntax";
@@ -1766,36 +2038,63 @@ const parseDownloadSectionsArg = (downloadSectionsArg) => {
 	if (startTime >= endTime) throw new Error(DOWNLOAD_SECTIONS_ERROR);
 	return [startTime, endTime];
 };
-
 //#endregion
 //#region src/utils/args/normalizeArgs.ts
+const BOOL_TRUE = [
+	"true",
+	"yes",
+	"1",
+	"on"
+];
+const BOOL_FALSE = [
+	"false",
+	"no",
+	"0",
+	"off"
+];
+const parseBoolLike = (value) => {
+	if (value !== void 0) {
+		const lower = value.toLowerCase();
+		if (BOOL_TRUE.includes(lower)) return true;
+		if (BOOL_FALSE.includes(lower)) return false;
+	}
+	throw new Error(`Invalid boolean-like value: ${value}. Available: ${[...BOOL_TRUE, ...BOOL_FALSE].join(", ")}`);
+};
+const isPositiveInt = (n) => !Number.isNaN(n) && Number.isFinite(n) && n > 0;
+const assertArg = (args, name, value) => {
+	assert(value, `Invalid ${name} value: ${args[name]}`);
+};
 const normalizeArgs = async (args) => {
 	const newArgs = { ...args };
 	newArgs.downloader = await getDownloader(args.downloader);
 	newArgs["download-sections"] = parseDownloadSectionsArg(args["download-sections"]);
 	if (args["retry-streams"]) {
 		const delay = Number.parseInt(args["retry-streams"]);
-		if (!delay) throw new Error("Wrong --retry-streams delay");
-		if (delay < 10) throw new Error("Min --retry-streams delay is 10");
+		assertArg(args, "retry-streams", isPositiveInt(delay));
+		const RETRY_STREAMS_MIN = 10;
+		if (delay < RETRY_STREAMS_MIN) throw new Error(`Min --retry-streams delay is ${RETRY_STREAMS_MIN}`);
 		newArgs["retry-streams"] = delay;
 	}
 	if (!MERGE_METHODS.includes(args["merge-method"])) throw new Error(`Unknown merge method: ${args["merge-method"]}. Available: ${MERGE_METHODS.join(", ")}`);
 	const unmuteValues = Object.values(UNMUTE);
 	if (args["unmute"] && !unmuteValues.includes(args["unmute"])) throw new Error(`Unknown unmute policy: ${args["unmute"]}. Available: ${unmuteValues.join(", ")}`);
+	newArgs.webbrowser = parseBoolLike(args.webbrowser);
+	newArgs["webbrowser-headless"] = parseBoolLike(args["webbrowser-headless"]);
+	const wbTimeout = Number.parseInt(args["webbrowser-timeout"]);
+	const wbCdpTimeout = Number.parseInt(args["webbrowser-cdp-timeout"]);
+	const wbCdpPort = Number.parseInt(args["webbrowser-cdp-port"]);
+	assertArg(args, "webbrowser-timeout", isPositiveInt(wbTimeout));
+	assertArg(args, "webbrowser-cdp-timeout", isPositiveInt(wbCdpTimeout));
+	assertArg(args, "webbrowser-cdp-port", isPositiveInt(wbCdpPort));
+	newArgs["webbrowser-timeout"] = wbTimeout;
+	newArgs["webbrowser-cdp-timeout"] = wbCdpTimeout;
+	newArgs["webbrowser-cdp-port"] = wbCdpPort;
 	return newArgs;
 };
-
-//#endregion
-//#region node_modules/.pnpm/twitch-regex@0.1.3/node_modules/twitch-regex/dist/index.js
-var CLIP_REGEX_STRING = "https?:\\/\\/(?:clips\\.twitch\\.tv\\/(?:embed\\?.*?\\bclip=|\\/*)|(?:(?:www|go|m)\\.)?twitch\\.tv\\/(?:(?<channel>[^/]+)\\/)?clip\\/)(?<slug>[\\w-]+)\\S*";
-var CLIP_REGEX_EXACT = new RegExp(`^${CLIP_REGEX_STRING}$`);
-var VIDEO_REGEX_STRING = "https?:\\/\\/(?:(?:(?:www|go|m)\\.)?twitch\\.tv\\/(?:videos|(?<channel>[^/]+)\\/v(?:ideo)?)\\/|player\\.twitch\\.tv\\/\\?.*?\\bvideo=v?|www\\.twitch\\.tv\\/(?:[^/]+)\\/schedule\\?vodID=)(?<id>\\d+)\\S*";
-var VIDEO_REGEX_EXACT = new RegExp(`^${VIDEO_REGEX_STRING}$`);
-var CHANNEL_REGEX_STRING = "https?:\\/\\/(?:(?:(?:www|go|m)\\.)?twitch\\.tv\\/|player\\.twitch\\.tv\\/\\?.*?\\bchannel=)(?<channel>\\w+)[^\\s/]*";
-var CHANNEL_REGEX_EXACT = new RegExp(`^${CHANNEL_REGEX_STRING}$`);
-var COLLECTION_REGEX_STRING = "https?:\\/\\/(?:(?:(?:www|go|m)\\.)?twitch\\.tv\\/collections\\/|player\\.twitch\\.tv\\/\\?.*?\\bcollection=)(?<id>[\\w-]+)\\S*";
-var COLLECTION_REGEX_EXACT = new RegExp(`^${COLLECTION_REGEX_STRING}$`);
-
+var CLIP_REGEX_EXACT = new RegExp(`^https?:\\/\\/(?:clips\\.twitch\\.tv\\/(?:embed\\?.*?\\bclip=|\\/*)|(?:(?:www|go|m)\\.)?twitch\\.tv\\/(?:(?<channel>[^/]+)\\/)?clip\\/)(?<slug>[\\w-]+)\\S*$`);
+var VIDEO_REGEX_EXACT = new RegExp(`^https?:\\/\\/(?:(?:(?:www|go|m)\\.)?twitch\\.tv\\/(?:videos|(?<channel>[^/]+)\\/v(?:ideo)?)\\/|player\\.twitch\\.tv\\/\\?.*?\\bvideo=v?|www\\.twitch\\.tv\\/(?:[^/]+)\\/schedule\\?vodID=)(?<id>\\d+)\\S*$`);
+var CHANNEL_REGEX_EXACT = new RegExp(`^https?:\\/\\/(?:(?:(?:www|go|m)\\.)?twitch\\.tv\\/|player\\.twitch\\.tv\\/\\?.*?\\bchannel=)(?<channel>\\w+)[^\\s/]*$`);
+new RegExp(`^https?:\\/\\/(?:(?:(?:www|go|m)\\.)?twitch\\.tv\\/collections\\/|player\\.twitch\\.tv\\/\\?.*?\\bcollection=)(?<id>[\\w-]+)\\S*$`);
 //#endregion
 //#region src/utils/args/parseLink.ts
 const VOD_PATH_REGEX = /^video:(?<vodPath>(?<channelLogin>\w+)_(?<videoId>\d+)_(?<startTimestamp>\d+))$/;
@@ -1839,15 +2138,15 @@ const parseLink = (link) => {
 			type: "statsService",
 			service,
 			channelLogin: channelName,
-			streamId: Number.parseInt(streamId)
+			streamId: Number.parseInt(streamId),
+			url: link
 		};
 	}
 	throw new Error("Wrong link");
 };
-
 //#endregion
 //#region src/main.ts
-const getArgs = () => parseArgs({
+const getArgs = () => util.parseArgs({
 	args: process.argv.slice(2),
 	options: {
 		help: {
@@ -1877,6 +2176,10 @@ const getArgs = () => parseArgs({
 			type: "boolean",
 			default: false
 		},
+		"keep-log": {
+			type: "boolean",
+			default: false
+		},
 		"limit-rate": {
 			type: "string",
 			short: "r"
@@ -1889,6 +2192,31 @@ const getArgs = () => parseArgs({
 		"merge-method": {
 			type: "string",
 			default: "ffconcat"
+		},
+		webbrowser: {
+			type: "string",
+			default: "true"
+		},
+		"webbrowser-executable": { type: "string" },
+		"webbrowser-timeout": {
+			type: "string",
+			default: "10"
+		},
+		"webbrowser-cdp-host": {
+			type: "string",
+			default: "127.0.0.1"
+		},
+		"webbrowser-cdp-port": {
+			type: "string",
+			default: "9222"
+		},
+		"webbrowser-cdp-timeout": {
+			type: "string",
+			default: "2"
+		},
+		"webbrowser-headless": {
+			type: "string",
+			default: "false"
 		},
 		"twitch-disable-ads": { type: "boolean" },
 		"twitch-low-latency": { type: "boolean" },
@@ -1925,6 +2253,5 @@ const main = async () => {
 	if (link.type === "statsService") return downloadByStatsService(link, args);
 };
 main().catch((e) => console.error(chalk.red("ERROR:"), e.message));
-
 //#endregion
 export { getArgs };
