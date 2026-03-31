@@ -12,20 +12,20 @@ importers:
         specifier: ^6.0.2
         version: 6.0.2(prettier@3.8.1)
       '@types/node':
-        specifier: ^25.2.0
-        version: 25.2.0
+        specifier: ^25.5.0
+        version: 25.5.0
       prettier:
         specifier: ^3.8.1
         version: 3.8.1
       twitch-gql-queries:
-        specifier: ^0.1.21
-        version: 0.1.21
+        specifier: ^0.1.24
+        version: 0.1.24
       twitch-regex:
         specifier: ^0.1.3
         version: 0.1.3
       typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
+        specifier: ^6.0.2
+        version: 6.0.2
 
 packages:
 
@@ -98,8 +98,8 @@ packages:
       svelte:
         optional: true
 
-  '@types/node@25.2.0':
-    resolution: {integrity: sha512-DZ8VwRFUNzuqJ5khrvwMXHmvPe+zGayJhr2CDNiKB1WBE1ST8Djl00D0IC4vvNmHMdj6DlbYRIaFE7WHjlDl5w==}
+  '@types/node@25.5.0':
+    resolution: {integrity: sha512-jp2P3tQMSxWugkCUKLRPVUpGaL5MVFwF8RDuSRztfwgN1wmqJeMSbKlnEtQqU8UrhTmzEmZdu2I6v2dpp7XIxw==}
 
   balanced-match@1.0.2:
     resolution: {integrity: sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw==}
@@ -151,19 +151,19 @@ packages:
     engines: {node: '>=14'}
     hasBin: true
 
-  twitch-gql-queries@0.1.21:
-    resolution: {integrity: sha512-1EAQFUZMs3k2rF+5qXq3dRmWQVL4avyi/Z0NR2EccztvKmSTYXmQgs0oiO9ECViS2wLVKa/TfmXizaXl0mfOBA==}
+  twitch-gql-queries@0.1.24:
+    resolution: {integrity: sha512-UrYSxCMwx/JgVzCTVtbiu8CTyV8imIZ+SFnSSjuf0NZlYslocPfL+YYwaU7qMKesT6nnMQj/LjiWo+FhBGid9w==}
 
   twitch-regex@0.1.3:
     resolution: {integrity: sha512-7NJn4fRBlwhDlBdzWAAVdTvDruNuEfqKHGufcHpMpZlMFuuXNl61Nt2o8V550WVHs8XRkXlEJsUp3eATuE9big==}
 
-  typescript@5.9.3:
-    resolution: {integrity: sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw==}
+  typescript@6.0.2:
+    resolution: {integrity: sha512-bGdAIrZ0wiGDo5l8c++HWtbaNCWTS4UTv7RaTH/ThVIgjkveJt83m74bBHMJkuCbslY8ixgLBVZJIOiQlQTjfQ==}
     engines: {node: '>=14.17'}
     hasBin: true
 
-  undici-types@7.16.0:
-    resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
+  undici-types@7.18.2:
+    resolution: {integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==}
 
 snapshots:
 
@@ -242,9 +242,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@types/node@25.2.0':
+  '@types/node@25.5.0':
     dependencies:
-      undici-types: 7.16.0
+      undici-types: 7.18.2
 
   balanced-match@1.0.2: {}
 
@@ -280,10 +280,10 @@ snapshots:
 
   prettier@3.8.1: {}
 
-  twitch-gql-queries@0.1.21: {}
+  twitch-gql-queries@0.1.24: {}
 
   twitch-regex@0.1.3: {}
 
-  typescript@5.9.3: {}
+  typescript@6.0.2: {}
 
-  undici-types@7.16.0: {}
+  undici-types@7.18.2: {}
