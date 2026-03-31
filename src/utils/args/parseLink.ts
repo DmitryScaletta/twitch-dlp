@@ -49,6 +49,7 @@ export type ParsedLinkStatsService = {
   service: StatsService;
   channelLogin: string;
   streamId: number;
+  url: string;
 };
 
 export type ParsedLink =
@@ -91,6 +92,7 @@ export const parseLink = (link: string): ParsedLink => {
       service,
       channelLogin: channelName,
       streamId: Number.parseInt(streamId),
+      url: link,
     } satisfies ParsedLinkStatsService;
   }
   throw new Error('Wrong link');
