@@ -48,7 +48,7 @@ export const resolveExecutable = (
 };
 
 export const createTempDir = () =>
-  fs.mkdtempSync(path.join(os.tmpdir(), `twitch-dlp-${Date.now()}`));
+  fs.mkdtempSync(path.join(os.tmpdir(), 'twitch-dlp-'));
 
 export const launch = (
   executable: string,
