@@ -49,14 +49,17 @@ export const fetchHtmlWithBrowser = async (url: string, args: AppArgs) => {
         DOCUMENT_WAIT_TIMEOUT,
         '[webbrowser] Timeout waiting for document',
       );
-      page!.on('Network.responseReceived', (p) => {
+      page.on('Network.responseReceived', (p) => {
         if (
           p.type === 'Document' &&
           p.response.url === url &&
           p.response.status === 200
         ) {
-          clearTimeout(timeout);
-          resolve(p.requestId);
+          const requestId = p.requestId;
+          page.on('Network.loadingFinished', (p) => {
+            clearTimeout(timeout);
+            if (p.requestId === requestId) resolve(p.requestId);
+          });
         }
       });
     });

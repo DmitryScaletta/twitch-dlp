@@ -10,6 +10,11 @@ type CDPEvents = {
     type: string;
     response: { url: string; status: number };
   };
+  'Network.loadingFinished': {
+    requestId: string;
+    timestamp: number;
+    encodedDataLength: number;
+  };
 };
 
 type ResolverPair = {
