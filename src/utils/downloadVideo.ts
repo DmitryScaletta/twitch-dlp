@@ -1,5 +1,5 @@
 import fsp from 'node:fs/promises';
-import { setTimeout as sleep } from 'node:timers/promises';
+import timers from 'node:timers/promises';
 import {
   DEFAULT_OUTPUT_TEMPLATE,
   NO_TRY_UNMUTE_MESSAGE,
@@ -102,7 +102,7 @@ export const downloadVideo = async (
       console.warn(
         `[live-from-start] Waiting for the playlist. ${RETRY_MESSAGE}`,
       );
-      await sleep(WAIT_BETWEEN_CYCLES_SEC * 1000);
+      await timers.setTimeout(WAIT_BETWEEN_CYCLES_SEC * 1000);
       continue;
     }
 
@@ -125,7 +125,7 @@ export const downloadVideo = async (
     if (!hasNewFrags && !playlist.endlist) {
       const message = `[live-from-start] ${chalk.green('VOD ONLINE')}: waiting for new fragments`;
       console.log(`${message}. ${RETRY_MESSAGE}`);
-      await sleep(WAIT_BETWEEN_CYCLES_SEC * 1000);
+      await timers.setTimeout(WAIT_BETWEEN_CYCLES_SEC * 1000);
       continue;
     }
 

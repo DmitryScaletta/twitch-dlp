@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import http from 'node:http';
-import { parseArgs } from 'node:util';
+import util from 'node:util';
 import { downloadByChannelLogin } from './commands/downloadByChannelLogin.ts';
 import { downloadByStatsService } from './commands/downloadByStatsService.ts';
 import { downloadByVideoId } from './commands/downloadByVideoId.ts';
@@ -14,7 +14,7 @@ import { normalizeArgs } from './utils/args/normalizeArgs.ts';
 import { parseLink } from './utils/args/parseLink.ts';
 
 export const getArgs = () =>
-  parseArgs({
+  util.parseArgs({
     args: process.argv.slice(2),
     options: {
       help: {
@@ -96,7 +96,6 @@ const main = async () => {
   }
 
   // Node.js v25.4.0+
-  // @ts-ignore wait for @types/node to be updated
   http.setGlobalProxyFromEnv?.(
     args.proxy
       ? { http_proxy: args.proxy, https_proxy: args.proxy }

@@ -1,4 +1,4 @@
-import { setTimeout as sleep } from 'node:timers/promises';
+import timers from 'node:timers/promises';
 import * as api from '../api/twitch.ts';
 import type { AppArgs } from '../types.ts';
 import { downloadVideo } from '../utils/downloadVideo.ts';
@@ -56,6 +56,6 @@ export const downloadByChannelLogin = async (
       }
     }
 
-    await sleep(delay * 1000);
+    await timers.setTimeout(delay * 1000);
   }
 };
