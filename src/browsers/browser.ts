@@ -1,6 +1,5 @@
 import childProcess from 'node:child_process';
 import fs from 'node:fs';
-import os from 'node:os';
 import path from 'node:path';
 
 const checkExecutable = (executable: string) => {
@@ -46,9 +45,6 @@ export const resolveExecutable = (
 
   return null;
 };
-
-export const createTempDir = () =>
-  fs.mkdtempSync(path.join(os.tmpdir(), 'twitch-dlp-'));
 
 export const launch = (
   executable: string,

@@ -1,6 +1,9 @@
+import type childProcess from 'node:child_process';
 import fsp from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import timers from 'node:timers/promises';
-import { createTempDir, launch } from '../browsers/browser.ts';
+import { launch } from '../browsers/browser.ts';
 import {
   getWsUrls,
   CHROMIUM_LAUNCH_ARGS,
@@ -11,6 +14,41 @@ import type { AppArgs } from '../types.ts';
 
 const DOCUMENT_WAIT_TIMEOUT = 10_000;
 
+const cleanupBrowser = async (
+  browser: CDP | null,
+  browserExe: childProcess.ChildProcess,
+  userDataDir: string,
+) => {
+  console.log('[webbrowser] Closing browser');
+
+  if (browser) {
+    try {
+      await browser.send('Browser.close');
+    } catch {}
+  }
+
+  if (!browserExe.killed) {
+    const waitForExit = new Promise((resolve) => {
+      browserExe.once('exit', resolve);
+      setTimeout(resolve, 3000);
+    });
+    browserExe.kill();
+    await waitForExit;
+  }
+
+  // Give OS time to release file handles
+  await timers.setTimeout(500);
+
+  try {
+    console.log('[webbrowser] Removing temporary user-data-dir');
+    await fsp.rm(userDataDir, { recursive: true, force: true });
+    console.log('[webbrowser] Temporary user-data-dir removed');
+  } catch (e: any) {
+    console.warn('[webbrowser] Error removing user-data-dir:', e.message);
+    console.warn(`[webbrowser] Please remove it manually: ${userDataDir}`);
+  }
+};
+
 export const fetchHtmlWithBrowser = async (url: string, args: AppArgs) => {
   const exe = getExe(args['webbrowser-executable']);
   const host = args['webbrowser-cdp-host'];
@@ -18,7 +56,9 @@ export const fetchHtmlWithBrowser = async (url: string, args: AppArgs) => {
   const timeout = args['webbrowser-timeout'] * 1000;
   const cdpTimeout = args['webbrowser-cdp-timeout'] * 1000;
 
-  const userDataDir = createTempDir();
+  console.log('[webbrowser] Creating temporary user-data-dir');
+  const userDataDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'twitch-dlp-'));
+
   const launchArgs = [...CHROMIUM_LAUNCH_ARGS];
   if (args['webbrowser-headless']) launchArgs.push('--headless=new');
   launchArgs.push(
@@ -64,21 +104,19 @@ export const fetchHtmlWithBrowser = async (url: string, args: AppArgs) => {
       });
     });
 
+    console.log(`[webbrowser] Navigating to ${url}`);
     await page.send('Page.navigate', { url });
 
+    console.log('[webbrowser] Waiting for document response');
     const requestId = await requestIdPromise;
+    console.log('[webbrowser] Getting document body');
     const response = await page.send('Network.getResponseBody', {
       requestId,
     });
     return response.base64Encoded
       ? Buffer.from(response.body, 'base64').toString('utf8')
       : response.body;
-  } catch (e) {
-    throw e;
   } finally {
-    await browser?.send('Browser.close');
-    browserExe.kill();
-    await timers.setTimeout(500);
-    await fsp.rm(userDataDir, { recursive: true, force: true });
+    await cleanupBrowser(browser, browserExe, userDataDir);
   }
 };
