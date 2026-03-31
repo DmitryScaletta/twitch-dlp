@@ -222,5 +222,5 @@ export const downloadVideo = async (
   ]);
 
   await showStats(logPath);
-  if (!args['keep-fragments']) await fsp.unlink(logPath);
+  if (!args['keep-fragments'] && !args['keep-log']) await fsp.unlink(logPath);
 };
