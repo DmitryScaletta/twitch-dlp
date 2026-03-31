@@ -52,6 +52,9 @@ export const launch = (
   timeoutMs: number | null = null,
 ) => {
   console.log(`[webbrowser] Launching web browser: ${executable}`);
+  console.log(
+    "[webbrowser] NOTE: If this browser is already running in the background, it will ignore the `--remote-debugging-*` flags and won't work",
+  );
 
   const proc = childProcess.spawn(executable, args, {
     stdio: ['ignore', 'pipe', 'pipe'],
