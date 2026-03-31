@@ -1,4 +1,5 @@
-import * as api from '../api/sullygnome.ts';
+import * as streamcharts from '../api/streamcharts.ts';
+import * as sullygnome from '../api/sullygnome.ts';
 import * as twitchtracker from '../api/twitchtracker.ts';
 import type { AppArgs } from '../types.ts';
 import type {
@@ -16,10 +17,10 @@ class StreamNotFoundError extends Error {
 }
 
 const getChannelStream = async (channelLogin: string, streamId: number) => {
-  const search = await api.getStandardSearch(channelLogin);
+  const search = await sullygnome.getStandardSearch(channelLogin);
   const channel = search.find(
     (item) =>
-      item.itemtype === api.STANDARD_SEARCH_ITEM_TYPE.CHANNEL &&
+      item.itemtype === sullygnome.STANDARD_SEARCH_ITEM_TYPE.CHANNEL &&
       item.siteurl === channelLogin,
   );
   if (!channel) {
@@ -28,15 +29,15 @@ const getChannelStream = async (channelLogin: string, streamId: number) => {
 
   const channelId = channel.value;
   let page = 0;
-  let channelStreams: Awaited<ReturnType<typeof api.getChannelStreams>>;
+  let channelStreams: Awaited<ReturnType<typeof sullygnome.getChannelStreams>>;
 
   do {
-    channelStreams = await api.getChannelStreams(channelId, page);
+    channelStreams = await sullygnome.getChannelStreams(channelId, page);
     const stream = channelStreams.data.find((s) => s.streamId === streamId);
     if (stream) return stream;
     page += 1;
   } while (
-    page * api.CHANNEL_STREAMS_PAGE_SIZE <
+    page * sullygnome.CHANNEL_STREAMS_PAGE_SIZE <
     channelStreams.recordsFiltered
   );
 
@@ -48,16 +49,16 @@ export const downloadByStatsService = async (
   { channelLogin, streamId, service, url }: ParsedLinkStatsService,
   args: AppArgs,
 ) => {
-  let startTimestamp: number | null = null;
+  let startDate: string | null = null;
 
   try {
     const stream = await getChannelStream(channelLogin, streamId);
-    startTimestamp = new Date(stream.startDateTime).getTime() / 1000;
+    startDate = stream.startDateTime;
   } catch (e) {
     if (e instanceof StreamNotFoundError) throw e;
   }
 
-  if (startTimestamp === null) {
+  if (startDate === null) {
     console.warn('[download] Cannot get a stream info');
     if (!args.webbrowser) {
       console.warn('[download] You can enable --webbrowser and try again');
@@ -66,16 +67,28 @@ export const downloadByStatsService = async (
     console.warn(
       '[download] Using webbrowser. This feature is experimental and may not work',
     );
+
     if (service === 'twitchtracker') {
       const html = await fetchHtmlWithBrowser(url, args);
       const streamInfo = twitchtracker.getStreamInfo(html);
-      startTimestamp = new Date(streamInfo.created_at).getTime() / 1000;
+      startDate = streamInfo.created_at;
+    } else if (service === 'streamscharts') {
+      const html = await fetchHtmlWithBrowser(url, args);
+      const comps = streamcharts.parseLivewireComponents(html);
+      const comp = comps.find((c: any) => c.serverMemo.data.stream) as
+        | Record<string, any>
+        | undefined;
+      if (!comp) throw new Error('Cannot get a stream info');
+      startDate =
+        (comp.serverMemo.data.stream.stream_created_at as string) + '+00:00';
+    } else if (service === 'sullygnome') {
+      throw new Error(`Not implemented for ${service}`);
     } else {
-      throw new Error(
-        `[download] Web browser is not implemented for ${service}`,
-      );
+      startDate = null as never;
     }
   }
+
+  const startTimestamp = new Date(startDate).getTime() / 1000;
 
   return downloadByVodPath(
     {
