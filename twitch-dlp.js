@@ -1130,7 +1130,10 @@ const downloadVideo = async (formats, videoInfo, args) => {
 		frags = getFragsForDownloading(playlistUrl, playlist, args);
 		writeLog(logFragsForDownloading(frags));
 		await fsp.writeFile(getPath.playlist(outputPath), playlistContent);
-		if (args["download-sections"] && downloadedFrags.size === frags.length) break;
+		if (args["download-sections"] && downloadedFrags.size === frags.length) {
+			const [, endTime] = args["download-sections"];
+			if (endTime !== Infinity) break;
+		}
 		const hasNewFrags = frags.length > fragsCount;
 		fragsCount = frags.length;
 		if (!hasNewFrags && !playlist.endlist) {
@@ -1538,6 +1541,7 @@ const resolveExecutable = (executable, names, fallback_paths) => {
 };
 const launch = (executable, args, timeoutMs = null) => {
 	console.log(`[webbrowser] Launching web browser: ${executable}`);
+	console.log("[webbrowser] NOTE: If this browser is already running in the background, it will ignore the `--remote-debugging-*` flags and won't work");
 	const proc = childProcess.spawn(executable, args, { stdio: [
 		"ignore",
 		"pipe",
