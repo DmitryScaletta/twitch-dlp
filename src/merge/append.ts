@@ -2,8 +2,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from '../lib/spawn.ts';
-import type { Frags } from '../types.ts';
-import { getPath } from '../utils/getPath.ts';
+import type { FragFile } from './index.ts';
 
 const concatFrags = async (files: string[], outputPath: string) => {
   const writeStream = fs.createWriteStream(outputPath, { flags: 'w' });
@@ -23,23 +22,18 @@ const concatFrags = async (files: string[], outputPath: string) => {
   }
 };
 
-export const mergeFrags = async (
-  frags: Frags,
-  outputPath: string,
-  keepFragments: boolean,
-) => {
-  const fragFiles: string[] = frags.map((frag) =>
-    getPath.frag(outputPath, frag.idx + 1),
+export const mergeFrags = async (fragFiles: FragFile[], outputPath: string) => {
+  await concatFrags(
+    fragFiles.map(([filename]) => filename),
+    outputPath,
   );
-
-  await concatFrags(fragFiles, outputPath);
 
   const parsed = path.parse(outputPath);
   const outputPathTmp = path.join(parsed.dir, `${parsed.name}.temp.mp4`);
 
   // fixup
   // prettier-ignore
-  await spawn('ffmpeg', [
+  const retCode = await spawn('ffmpeg', [
     '-y',
     '-loglevel', 'repeat+info',
     '-i', `file:${outputPath}`,
@@ -56,10 +50,5 @@ export const mergeFrags = async (
   await fsp.unlink(outputPath);
   await fsp.rename(outputPathTmp, outputPath);
 
-  if (!keepFragments) {
-    await Promise.all([
-      ...fragFiles.map((filename) => fsp.unlink(filename)),
-      fsp.unlink(getPath.playlist(outputPath)),
-    ]);
-  }
+  return retCode;
 };

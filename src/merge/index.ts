@@ -1,8 +1,12 @@
+import fsp from 'node:fs/promises';
 import { MERGE_METHODS } from '../constants.ts';
 import { chalk } from '../lib/chalk.ts';
 import type { Frags, MergeMethod } from '../types.ts';
+import { getPath } from '../utils/getPath.ts';
 import * as append from './append.ts';
 import * as ffconcat from './ffconcat.ts';
+
+export type FragFile = [filename: string, duration: number];
 
 const [FFCONCAT, APPEND] = MERGE_METHODS;
 
@@ -24,13 +28,37 @@ export const mergeFrags = async (
     method = APPEND;
   }
 
-  if (method === FFCONCAT) {
-    return ffconcat.mergeFrags(frags, outputPath, keepFragments);
+  const fragFiles: FragFile[] = frags.map((frag) => [
+    getPath.frag(outputPath, frag.idx + 1),
+    frag.duration,
+  ]);
+
+  let retCode: number;
+  switch (method) {
+    case FFCONCAT:
+      retCode = await ffconcat.mergeFrags(fragFiles, outputPath);
+      break;
+    case APPEND:
+      retCode = await append.mergeFrags(fragFiles, outputPath);
+      break;
+    default:
+      throw new Error();
   }
 
-  if (method === APPEND) {
-    return append.mergeFrags(frags, outputPath, keepFragments);
+  let keepFrags = keepFragments;
+  if (retCode) {
+    console.warn(
+      `${chalk.yellow('WARN:')} Keeping fragments because merging failed with code ${retCode}`,
+    );
+    keepFrags = true;
   }
 
-  throw new Error();
+  if (!keepFrags) {
+    await Promise.all([
+      ...fragFiles.map(([filename]) => fsp.unlink(filename)),
+      fsp.unlink(getPath.playlist(outputPath)),
+    ]);
+  }
+
+  return retCode;
 };

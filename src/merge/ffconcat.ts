@@ -1,11 +1,9 @@
 import childProcess from 'node:child_process';
 import fsp from 'node:fs/promises';
-import type { Frags } from '../types.ts';
 import { getPath } from '../utils/getPath.ts';
+import type { FragFile } from './index.ts';
 
 const MAX_INT_STR = '2147483647';
-
-type FragFile = [filename: string, duration: number];
 
 const spawnFfmpeg = (args: string[]): Promise<number> =>
   new Promise((resolve, reject) => {
@@ -71,28 +69,13 @@ const generateFfconcat = (files: FragFile[]) => {
   return ffconcat;
 };
 
-export const mergeFrags = async (
-  frags: Frags,
-  outputPath: string,
-  keepFragments: boolean,
-) => {
-  const fragFiles: FragFile[] = frags.map((frag) => [
-    getPath.frag(outputPath, frag.idx + 1),
-    frag.duration,
-  ]);
+export const mergeFrags = async (fragFiles: FragFile[], outputPath: string) => {
   const ffconcat = generateFfconcat(fragFiles);
   const ffconcatPath = getPath.ffconcat(outputPath);
   await fsp.writeFile(ffconcatPath, ffconcat);
 
   const retCode = await runFfconcat(ffconcatPath, outputPath);
   fsp.unlink(ffconcatPath);
-
-  if (!keepFragments) {
-    await Promise.all([
-      ...fragFiles.map(([filename]) => fsp.unlink(filename)),
-      fsp.unlink(getPath.playlist(outputPath)),
-    ]);
-  }
 
   return retCode;
 };
