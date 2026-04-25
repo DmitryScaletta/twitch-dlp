@@ -4,8 +4,8 @@ import util from "node:util";
 import timers from "node:timers/promises";
 import fsp from "node:fs/promises";
 import childProcess from "node:child_process";
-import fs from "node:fs";
 import path from "node:path";
+import fs from "node:fs";
 import os from "node:os";
 import stream from "node:stream";
 import crypto from "node:crypto";
@@ -275,17 +275,6 @@ const statsOrNull = async (path) => {
 	}
 };
 //#endregion
-//#region src/lib/spawn.ts
-const spawn = (command, args = [], silent = false) => new Promise((resolve, reject) => {
-	const child = childProcess.spawn(command, args);
-	if (!silent) {
-		child.stdout.on("data", (data) => process.stdout.write(data));
-		child.stderr.on("data", (data) => process.stderr.write(data));
-	}
-	child.on("error", (err) => reject(err));
-	child.on("close", (code) => resolve(code));
-});
-//#endregion
 //#region src/utils/getPath.ts
 const ILLEGAL_PATH_CHARS_MAP = {
 	"\\": "⧹",
@@ -321,6 +310,17 @@ const getPath = {
 	fragUnmuted: (fragPath) => `${fragPath}-unmuted`
 };
 //#endregion
+//#region src/lib/spawn.ts
+const spawn = (command, args = [], silent = false) => new Promise((resolve, reject) => {
+	const child = childProcess.spawn(command, args);
+	if (!silent) {
+		child.stdout.on("data", (data) => process.stdout.write(data));
+		child.stderr.on("data", (data) => process.stderr.write(data));
+	}
+	child.on("error", (err) => reject(err));
+	child.on("close", (code) => resolve(code || 0));
+});
+//#endregion
 //#region src/merge/append.ts
 const concatFrags = async (files, outputPath) => {
 	const writeStream = fs.createWriteStream(outputPath, { flags: "w" });
@@ -337,12 +337,11 @@ const concatFrags = async (files, outputPath) => {
 		writeStream.end();
 	}
 };
-const mergeFrags$2 = async (frags, outputPath, keepFragments) => {
-	const fragFiles = frags.map((frag) => getPath.frag(outputPath, frag.idx + 1));
-	await concatFrags(fragFiles, outputPath);
+const mergeFrags$2 = async (fragFiles, outputPath) => {
+	await concatFrags(fragFiles.map(([filename]) => filename), outputPath);
 	const parsed = path.parse(outputPath);
 	const outputPathTmp = path.join(parsed.dir, `${parsed.name}.temp.mp4`);
-	await spawn("ffmpeg", [
+	const retCode = await spawn("ffmpeg", [
 		"-y",
 		"-loglevel",
 		"repeat+info",
@@ -364,7 +363,7 @@ const mergeFrags$2 = async (frags, outputPath, keepFragments) => {
 	]);
 	await fsp.unlink(outputPath);
 	await fsp.rename(outputPathTmp, outputPath);
-	if (!keepFragments) await Promise.all([...fragFiles.map((filename) => fsp.unlink(filename)), fsp.unlink(getPath.playlist(outputPath))]);
+	return retCode;
 };
 //#endregion
 //#region src/merge/ffconcat.ts
@@ -425,14 +424,12 @@ const generateFfconcat = (files) => {
 	].join("\n")).join("\n");
 	return ffconcat;
 };
-const mergeFrags$1 = async (frags, outputPath, keepFragments) => {
-	const fragFiles = frags.map((frag) => [getPath.frag(outputPath, frag.idx + 1), frag.duration]);
+const mergeFrags$1 = async (fragFiles, outputPath) => {
 	const ffconcat = generateFfconcat(fragFiles);
 	const ffconcatPath = getPath.ffconcat(outputPath);
 	await fsp.writeFile(ffconcatPath, ffconcat);
 	const retCode = await runFfconcat(ffconcatPath, outputPath);
 	fsp.unlink(ffconcatPath);
-	if (!keepFragments) await Promise.all([...fragFiles.map(([filename]) => fsp.unlink(filename)), fsp.unlink(getPath.playlist(outputPath))]);
 	return retCode;
 };
 //#endregion
@@ -447,9 +444,24 @@ const mergeFrags = async (method, frags, outputPath, keepFragments) => {
 		console.warn(`${chalk.yellow("WARN:")} ${FFCONCAT} merge method is not supported for fMP4 streams. Using ${APPEND} instead`);
 		method = APPEND;
 	}
-	if (method === FFCONCAT) return mergeFrags$1(frags, outputPath, keepFragments);
-	if (method === APPEND) return mergeFrags$2(frags, outputPath, keepFragments);
-	throw new Error();
+	const fragFiles = frags.map((frag) => [getPath.frag(outputPath, frag.idx + 1), frag.duration]);
+	let retCode;
+	switch (method) {
+		case FFCONCAT:
+			retCode = await mergeFrags$1(fragFiles, outputPath);
+			break;
+		case APPEND:
+			retCode = await mergeFrags$2(fragFiles, outputPath);
+			break;
+		default: throw new Error();
+	}
+	let keepFrags = keepFragments;
+	if (retCode) {
+		console.warn(`${chalk.yellow("WARN:")} Keeping fragments because merging failed with code ${retCode}`);
+		keepFrags = true;
+	}
+	if (!keepFrags) await Promise.all([...fragFiles.map(([filename]) => fsp.unlink(filename)), fsp.unlink(getPath.playlist(outputPath))]);
+	return retCode;
 };
 //#endregion
 //#region src/lib/groupBy.ts
@@ -1192,9 +1204,10 @@ const downloadVideo = async (formats, videoInfo, args) => {
 	const existingFrags = getExistingFrags(frags, outputPath, dir);
 	writeLog([DL_EVENT.FRAGS_EXISTING, existingFrags.length]);
 	await processUnmutedFrags(existingFrags, outputPath, dir, writeLog);
-	writeLog([await mergeFrags(args["merge-method"], existingFrags, outputPath, args["keep-fragments"]) ? DL_EVENT.MERGE_FRAGS_FAILURE : DL_EVENT.MERGE_FRAGS_SUCCESS]);
+	const retCode = await mergeFrags(args["merge-method"], existingFrags, outputPath, args["keep-fragments"]);
+	writeLog([retCode ? DL_EVENT.MERGE_FRAGS_FAILURE : DL_EVENT.MERGE_FRAGS_SUCCESS]);
 	await showStats(logPath);
-	if (!args["keep-fragments"] && !args["keep-log"]) await fsp.unlink(logPath);
+	if (!args["keep-fragments"] && !args["keep-log"] && !retCode) await fsp.unlink(logPath);
 };
 //#endregion
 //#region src/utils/getVideoInfo.ts
