@@ -1,6 +1,10 @@
 import childProcess from 'node:child_process';
 
-export const spawn = (command: string, args: string[] = [], silent = false) =>
+export const spawn = (
+  command: string,
+  args: string[] = [],
+  silent = false,
+): Promise<number> =>
   new Promise((resolve, reject) => {
     const child = childProcess.spawn(command, args);
     if (!silent) {
@@ -8,5 +12,5 @@ export const spawn = (command: string, args: string[] = [], silent = false) =>
       child.stderr.on('data', (data) => process.stderr.write(data));
     }
     child.on('error', (err) => reject(err));
-    child.on('close', (code) => resolve(code));
+    child.on('close', (code) => resolve(code || 0));
   });
