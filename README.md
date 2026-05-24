@@ -1,6 +1,6 @@
 # twitch-dlp
 
-Download any twitch VODs from start during live broadcast
+Download any Twitch VODs from the start during a live broadcast
 
 ## Features
 
@@ -53,12 +53,12 @@ npx twitch-dlp https://sullygnome.com/channel/summit1g/stream/315782796250
 # If it doesn't work for you, follow this instructions:
 # https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md
 
-# Check every 60 seconds is channel live
-# If it's live, start to download it using streamlink
+# Check every 60 seconds if the channel is live
+# If it's live, start downloading it using streamlink
 npx twitch-dlp https://www.twitch.tv/xqc --retry-streams 60
 
-# Check every 60 seconds is channel live
-# If it's live, start to download it's VOD from start
+# Check every 60 seconds if the channel is live
+# If it's live, start downloading its VOD from the start
 npx twitch-dlp https://www.twitch.tv/xqc --retry-streams 60 --live-from-start
 
 # Download 10 minutes in the middle of the VOD
@@ -120,7 +120,7 @@ npx twitch-dlp "./Chillin [v2222470239].mp4" --merge-fragments --unmute quality
                             A "*" prefix is for yt-dlp compatibility.
                             Negative timestamps and multiple sections are not
                             supported. Cutting is done by the closest fragments
-                            (not by keyframes), so its not very accurate
+                            (not by keyframes), so it's not very accurate
 --unmute POLICY             Try to unmute muted fragments. Keep in mind that
                             160p and 360p have slightly worse audio quality.
                             Available values:
@@ -160,7 +160,7 @@ npx twitch-dlp "./Chillin [v2222470239].mp4" --merge-fragments --unmute quality
                               according to passed unmute policy (off by
                               default)
                             * --merge-method - change merge method
---webbrowser VALUE          Enable or disable API to launch a web browser and
+--webbrowser VALUE          Enable/disable the API to launch a web browser and
                             extract data from websites when it cannot be done
                             otherwise. The web browser is run isolated and in
                             a clean environment without access to regular user

@@ -3,7 +3,7 @@
 > [!IMPORTANT]
 > This tutorial is only relevant for finished streams.
 >
-> If You want to download hidden VOD which is currently live, just use a channel link and `--live-from-start` option.
+> If you want to download a hidden VOD which is currently live, just use a channel link and `--live-from-start` option.
 >
 > It's not possible to download if:
 >
@@ -107,4 +107,4 @@ Q: Is it automatable?
 A: Only partially. These services are using anti DDoS protection, so it's not easy to retrieve the HTML content of these pages.
 
 Q: Why is my VOD only partially downloaded?  
-A: It can happen if there was a disconnect during the broadcast or if a streamer ended the broadcast and started it again in a few minutes. Twitchtracker combine these streams into one and only store information about the first one. So use streamscharts instead.
+A: It can happen if there was a disconnect during the broadcast or if a streamer ended the broadcast and started it again a few minutes later. Twitchtracker combines these streams into one and only stores information about the first one. So use streamscharts instead.
