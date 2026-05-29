@@ -108,12 +108,18 @@ const main = async () => {
     throw new Error('Expected exactly one positional argument');
   }
 
-  // Node.js v25.4.0+
-  http.setGlobalProxyFromEnv?.(
-    args.proxy
-      ? { http_proxy: args.proxy, https_proxy: args.proxy }
-      : undefined,
-  );
+  if (args.proxy) {
+    if (http.setGlobalProxyFromEnv) {
+      http.setGlobalProxyFromEnv({
+        http_proxy: args.proxy,
+        https_proxy: args.proxy,
+      });
+    } else {
+      console.warn(
+        `${util.styleText('yellow', 'WARN:')} ${util.styleText('bold', '--proxy')} requires Node.js v25.4.0+. Proxy won't be applied. Use ${util.styleText('bold', 'HTTPS_PROXY')} env variable instead.`,
+      );
+    }
+  }
 
   if (args['merge-fragments']) return mergeFragments(positionals[0], args);
 
