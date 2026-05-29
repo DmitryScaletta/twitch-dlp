@@ -131,14 +131,13 @@ export const downloadVideo = async (
     }
 
     for (const [i, frag] of frags.entries()) {
-      showProgress(downloadedFrags, fragsCount);
+      if (!downloadedFrags.has(i)) showProgress(downloadedFrags, fragsCount);
 
       const fragPath = getPath.frag(outputPath, frag.idx + 1);
       const fragStats = await statsOrNull(fragPath);
       if (fragStats) {
         if (!downloadedFrags.has(i)) {
           downloadedFrags.set(i, { size: fragStats.size, time: 0 });
-          showProgress(downloadedFrags, fragsCount);
         }
         continue;
       }
@@ -198,9 +197,8 @@ export const downloadVideo = async (
           frag.idx,
         ]);
       }
-
-      showProgress(downloadedFrags, fragsCount);
     }
+    showProgress(downloadedFrags, fragsCount);
     process.stdout.write('\n');
 
     if (playlist.endlist) break;
