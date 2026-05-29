@@ -10,7 +10,7 @@ import os from "node:os";
 import stream from "node:stream";
 import crypto from "node:crypto";
 import assert from "node:assert/strict";
-//#region node_modules/.pnpm/twitch-gql-queries@0.1.24/node_modules/twitch-gql-queries/dist/index.js
+//#region node_modules/.pnpm/twitch-gql-queries@0.1.25/node_modules/twitch-gql-queries/dist/index.js
 var CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
 var gqlRequest = async (queries, requestInit) => {
 	if (queries.length === 0) return [];
@@ -48,7 +48,7 @@ var getQueryShareClipRenderStatus = (variables) => ({
 	variables,
 	extensions: { persistedQuery: {
 		version: 1,
-		sha256Hash: "0a02bb974443b576f5579aab0fef1d4b7f44e58a8a256f0c5adfead0db70640f"
+		sha256Hash: "324783ea014524fa10a88739aa507de7a52f9624574dba9739a52b8c97d885cf"
 	} }
 });
 var getQueryStreamMetadata = (variables) => ({
@@ -161,19 +161,6 @@ const RET_CODE = {
 	UNKNOWN_ERROR: 1,
 	HTTP_RETURNED_ERROR: 22
 };
-const chalk = Object.entries({ color: {
-	black: [30, 39],
-	red: [31, 39],
-	green: [32, 39],
-	yellow: [33, 39],
-	blue: [34, 39],
-	magenta: [35, 39],
-	cyan: [36, 39],
-	white: [37, 39]
-} }.color).reduce((acc, [color, [open, close]]) => {
-	acc[color] = (s) => `\x1b[${open}m${s}\x1b[${close}m`;
-	return acc;
-}, {});
 //#endregion
 //#region src/lib/hlsParser.ts
 const PLAYLIST_LINE_KV_REGEX = /(?<key>[A-Z-]+)=(?:"(?<stringValue>[^"]+)"|(?<value>[^,]+))/g;
@@ -437,11 +424,11 @@ const mergeFrags$1 = async (fragFiles, outputPath) => {
 const [FFCONCAT, APPEND] = MERGE_METHODS;
 const mergeFrags = async (method, frags, outputPath, keepFragments) => {
 	if (frags.length === 0) {
-		console.error(`${chalk.red("ERROR:")} No fragments were downloaded`);
+		console.error(`${util.styleText("red", "ERROR:")} No fragments were downloaded`);
 		return 1;
 	}
 	if (method === FFCONCAT && frags.isFMp4) {
-		console.warn(`${chalk.yellow("WARN:")} ${FFCONCAT} merge method is not supported for fMP4 streams. Using ${APPEND} instead`);
+		console.warn(`${util.styleText("yellow", "WARN:")} ${FFCONCAT} merge method is not supported for fMP4 streams. Using ${APPEND} instead`);
 		method = APPEND;
 	}
 	const fragFiles = frags.map((frag) => [getPath.frag(outputPath, frag.idx + 1), frag.duration]);
@@ -457,7 +444,7 @@ const mergeFrags = async (method, frags, outputPath, keepFragments) => {
 	}
 	let keepFrags = keepFragments;
 	if (retCode) {
-		console.warn(`${chalk.yellow("WARN:")} Keeping fragments because merging failed with code ${retCode}`);
+		console.warn(`${util.styleText("yellow", "WARN:")} Keeping fragments because merging failed with code ${retCode}`);
 		keepFrags = true;
 	}
 	if (!keepFrags) await Promise.all([...fragFiles.map(([filename]) => fsp.unlink(filename)), fsp.unlink(getPath.playlist(outputPath))]);
@@ -1070,25 +1057,26 @@ const showProgress = (downloadedFrags, fragsCount) => {
 	const dlSize = dlFrags.reduce((acc, f) => acc + f.size, 0);
 	const avgFragSize = dlFrags.length ? dlSize / dlFrags.length : 0;
 	const last5 = dlFrags.filter((f) => f.time !== 0).slice(-5);
-	const currentSpeedBps = last5.length ? last5.map((f) => f.size / f.time * 1e3).reduce((a, b) => a + b, 0) / last5.length : 0;
+	const speedBps = last5.length ? last5.map((f) => f.size / f.time * 1e3).reduce((a, b) => a + b, 0) / last5.length : 0;
 	const estFullSize = avgFragSize * fragsCount;
 	const estSizeLeft = estFullSize - dlSize;
-	let estTimeLeftSec = currentSpeedBps ? estSizeLeft / currentSpeedBps : 0;
-	let downloadedPercent = estFullSize ? dlSize / estFullSize : 0;
-	downloadedPercent = Math.min(100, downloadedPercent) || 0;
+	let estTimeLeftSec = speedBps ? estSizeLeft / speedBps : 0;
+	let dlPercent = estFullSize ? dlSize / estFullSize : 0;
+	dlPercent = Math.min(100, dlPercent) || 0;
 	if (estTimeLeftSec < 0) estTimeLeftSec = 0;
 	const progress = [
 		"[download] ",
-		chalk.cyan(percentFmt.format(downloadedPercent).padStart(6, " ")),
+		util.styleText("cyan", percentFmt.format(dlPercent).padStart(6, " ")),
 		" of ~ ",
 		formatSize(estFullSize || 0).padStart(9, " "),
 		" at ",
-		chalk.green(formatSpeed(currentSpeedBps || 0).padStart(11, " ")),
+		util.styleText("green", formatSpeed(speedBps || 0).padStart(11, " ")),
 		" ETA ",
-		chalk.yellow(timeFmt.format(estTimeLeftSec * 1e3)),
-		` (frag ${dlFrags.length}/${fragsCount})\r`
-	].join("");
-	process.stdout.write(progress);
+		util.styleText("yellow", timeFmt.format(estTimeLeftSec * 1e3)),
+		` (frag ${dlFrags.length}/${fragsCount})`
+	];
+	process.stdout.write(progress.join(""));
+	process.stdout.write(process.stdout.isTTY ? "\r" : "\n");
 };
 //#endregion
 //#region src/utils/downloadVideo.ts
@@ -1149,23 +1137,20 @@ const downloadVideo = async (formats, videoInfo, args) => {
 		const hasNewFrags = frags.length > fragsCount;
 		fragsCount = frags.length;
 		if (!hasNewFrags && !playlist.endlist) {
-			const message = `[live-from-start] ${chalk.green("VOD ONLINE")}: waiting for new fragments`;
+			const message = `[live-from-start] ${util.styleText("green", "VOD ONLINE")}: waiting for new fragments`;
 			console.log(`${message}. ${RETRY_MESSAGE}`);
 			await timers.setTimeout(WAIT_BETWEEN_CYCLES_SEC * 1e3);
 			continue;
 		}
 		for (const [i, frag] of frags.entries()) {
-			showProgress(downloadedFrags, fragsCount);
+			if (!downloadedFrags.has(i)) showProgress(downloadedFrags, fragsCount);
 			const fragPath = getPath.frag(outputPath, frag.idx + 1);
 			const fragStats = await statsOrNull(fragPath);
 			if (fragStats) {
-				if (!downloadedFrags.has(i)) {
-					downloadedFrags.set(i, {
-						size: fragStats.size,
-						time: 0
-					});
-					showProgress(downloadedFrags, fragsCount);
-				}
+				if (!downloadedFrags.has(i)) downloadedFrags.set(i, {
+					size: fragStats.size,
+					time: 0
+				});
 				continue;
 			}
 			if (frag.url.includes("-unmuted")) {
@@ -1195,8 +1180,8 @@ const downloadVideo = async (formats, videoInfo, args) => {
 				fragMeta = await downloadFrag(args.downloader, unmutedFrag.url, getPath.fragUnmuted(fragPath), args["limit-rate"], unmutedFrag.gzip, frags.isFMp4 ? "fmp4-media" : "ts");
 				writeLog([fragMeta ? DL_EVENT.FRAG_DOWNLOAD_UNMUTED_SUCCESS : DL_EVENT.FRAG_DOWNLOAD_UNMUTED_FAILURE, frag.idx]);
 			}
-			showProgress(downloadedFrags, fragsCount);
 		}
+		showProgress(downloadedFrags, fragsCount);
 		process.stdout.write("\n");
 		if (playlist.endlist) break;
 	}
@@ -1314,7 +1299,7 @@ const parseDownloadFormats = (playlistContent) => {
 		try {
 			unavailableMedia = JSON.parse(atob(sessionData.value));
 		} catch (e) {
-			console.warn(`${chalk.yellow("WARN:")} Failed to parse unavailable media: ${e.message}`);
+			console.warn(`${util.styleText("yellow", "WARN:")} Failed to parse unavailable media: ${e.message}`);
 		}
 		if (unavailableMedia.length > 0) formats.forEach((f) => f.source = null);
 		for (const media of unavailableMedia) {
@@ -1508,8 +1493,8 @@ const getStandardSearch = async (query) => {
 	const url = `${BASE_URL}/standardsearch/${query}`;
 	return (await fetch(url)).json();
 };
-const getChannelStreams = async (channelId, page = 0, pageSize = 100) => {
-	const url = `${BASE_URL}/tables/channeltables/streams/365/${channelId}/%20/${page + 1}/1/desc/${page * pageSize}/${pageSize}`;
+const getChannelStreams = async (range, channelId, page = 0, pageSize = 100) => {
+	const url = `${BASE_URL}/tables/channeltables/streams/${range}/${channelId}/%20/${page + 1}/1/desc/${page * pageSize}/${pageSize}`;
 	return (await fetch(url)).json();
 };
 //#endregion
@@ -1845,7 +1830,7 @@ const getChannelStream = async (channelLogin, streamId) => {
 	let page = 0;
 	let channelStreams;
 	do {
-		channelStreams = await getChannelStreams(channelId, page);
+		channelStreams = await getChannelStreams("365", channelId, page);
 		const stream = channelStreams.data.find((s) => s.streamId === streamId);
 		if (stream) return stream;
 		page += 1;
@@ -2269,6 +2254,6 @@ const main = async () => {
 	if (link.type === "channel") return downloadByChannelLogin(link.channelLogin, args);
 	if (link.type === "statsService") return downloadByStatsService(link, args);
 };
-main().catch((e) => console.error(chalk.red("ERROR:"), e.message));
+main().catch((e) => console.error(util.styleText("red", "ERROR:"), e.message));
 //#endregion
 export { getArgs };
