@@ -1,4 +1,4 @@
-import { chalk } from '../lib/chalk.ts';
+import util from 'node:util';
 import type { FragMetadata } from '../types.ts';
 
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
@@ -38,29 +38,30 @@ export const showProgress = (
   const dlSize = dlFrags.reduce((acc, f) => acc + f.size, 0);
   const avgFragSize = dlFrags.length ? dlSize / dlFrags.length : 0;
   const last5 = dlFrags.filter((f) => f.time !== 0).slice(-5);
-  const currentSpeedBps = last5.length
+  const speedBps = last5.length
     ? last5.map((f) => (f.size / f.time) * 1000).reduce((a, b) => a + b, 0) /
       last5.length
     : 0;
 
   const estFullSize = avgFragSize * fragsCount;
   const estSizeLeft = estFullSize - dlSize;
-  let estTimeLeftSec = currentSpeedBps ? estSizeLeft / currentSpeedBps : 0;
-  let downloadedPercent = estFullSize ? dlSize / estFullSize : 0;
+  let estTimeLeftSec = speedBps ? estSizeLeft / speedBps : 0;
+  let dlPercent = estFullSize ? dlSize / estFullSize : 0;
 
-  downloadedPercent = Math.min(100, downloadedPercent) || 0;
+  dlPercent = Math.min(100, dlPercent) || 0;
   if (estTimeLeftSec < 0) estTimeLeftSec = 0;
 
   const progress = [
     '[download] ',
-    chalk.cyan(percentFmt.format(downloadedPercent).padStart(6, ' ')),
+    util.styleText('cyan', percentFmt.format(dlPercent).padStart(6, ' ')),
     ' of ~ ',
     formatSize(estFullSize || 0).padStart(9, ' '),
     ' at ',
-    chalk.green(formatSpeed(currentSpeedBps || 0).padStart(11, ' ')),
+    util.styleText('green', formatSpeed(speedBps || 0).padStart(11, ' ')),
     ' ETA ',
-    chalk.yellow(timeFmt.format(estTimeLeftSec * 1000)),
-    ` (frag ${dlFrags.length}/${fragsCount})\r`,
-  ].join('');
-  process.stdout.write(progress);
+    util.styleText('yellow', timeFmt.format(estTimeLeftSec * 1000)),
+    ` (frag ${dlFrags.length}/${fragsCount})`,
+  ];
+  process.stdout.write(progress.join(''));
+  process.stdout.write(process.stdout.isTTY ? '\r' : '\n');
 };

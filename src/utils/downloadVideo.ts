@@ -1,10 +1,10 @@
 import fsp from 'node:fs/promises';
 import timers from 'node:timers/promises';
+import util from 'node:util';
 import {
   DEFAULT_OUTPUT_TEMPLATE,
   NO_TRY_UNMUTE_MESSAGE,
 } from '../constants.ts';
-import { chalk } from '../lib/chalk.ts';
 import * as hlsParser from '../lib/hlsParser.ts';
 import { isInstalled } from '../lib/isInstalled.ts';
 import { statsOrNull } from '../lib/statsOrNull.ts';
@@ -124,7 +124,7 @@ export const downloadVideo = async (
     const hasNewFrags = frags.length > fragsCount;
     fragsCount = frags.length;
     if (!hasNewFrags && !playlist.endlist) {
-      const message = `[live-from-start] ${chalk.green('VOD ONLINE')}: waiting for new fragments`;
+      const message = `[live-from-start] ${util.styleText('green', 'VOD ONLINE')}: waiting for new fragments`;
       console.log(`${message}. ${RETRY_MESSAGE}`);
       await timers.setTimeout(WAIT_BETWEEN_CYCLES_SEC * 1000);
       continue;

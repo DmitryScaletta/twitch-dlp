@@ -1,6 +1,6 @@
 import fsp from 'node:fs/promises';
+import util from 'node:util';
 import { MERGE_METHODS } from '../constants.ts';
-import { chalk } from '../lib/chalk.ts';
 import type { Frags, MergeMethod } from '../types.ts';
 import { getPath } from '../utils/getPath.ts';
 import * as append from './append.ts';
@@ -17,13 +17,15 @@ export const mergeFrags = async (
   keepFragments: boolean,
 ) => {
   if (frags.length === 0) {
-    console.error(`${chalk.red('ERROR:')} No fragments were downloaded`);
+    console.error(
+      `${util.styleText('red', 'ERROR:')} No fragments were downloaded`,
+    );
     return 1;
   }
 
   if (method === FFCONCAT && frags.isFMp4) {
     console.warn(
-      `${chalk.yellow('WARN:')} ${FFCONCAT} merge method is not supported for fMP4 streams. Using ${APPEND} instead`,
+      `${util.styleText('yellow', 'WARN:')} ${FFCONCAT} merge method is not supported for fMP4 streams. Using ${APPEND} instead`,
     );
     method = APPEND;
   }
@@ -48,7 +50,7 @@ export const mergeFrags = async (
   let keepFrags = keepFragments;
   if (retCode) {
     console.warn(
-      `${chalk.yellow('WARN:')} Keeping fragments because merging failed with code ${retCode}`,
+      `${util.styleText('yellow', 'WARN:')} Keeping fragments because merging failed with code ${retCode}`,
     );
     keepFrags = true;
   }

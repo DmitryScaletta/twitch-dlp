@@ -1,4 +1,4 @@
-import { chalk } from '../lib/chalk.ts';
+import util from 'node:util';
 import * as hlsParser from '../lib/hlsParser.ts';
 import type { DownloadFormat } from '../types.ts';
 
@@ -43,7 +43,7 @@ export const parseDownloadFormats = (playlistContent: string) => {
       unavailableMedia = JSON.parse(atob(sessionData.value));
     } catch (e: any) {
       console.warn(
-        `${chalk.yellow('WARN:')} Failed to parse unavailable media: ${e.message}`,
+        `${util.styleText('yellow', 'WARN:')} Failed to parse unavailable media: ${e.message}`,
       );
     }
 

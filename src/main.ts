@@ -9,7 +9,6 @@ import { downloadClip } from './commands/downloadClip.ts';
 import { mergeFragments } from './commands/mergeFragments.ts';
 import { showHelp } from './commands/showHelp.ts';
 import { showVersion } from './commands/showVersion.ts';
-import { chalk } from './lib/chalk.ts';
 import { normalizeArgs } from './utils/args/normalizeArgs.ts';
 import { parseLink } from './utils/args/parseLink.ts';
 
@@ -127,4 +126,4 @@ const main = async () => {
   if (link.type === 'statsService') return downloadByStatsService(link, args);
 };
 
-main().catch((e) => console.error(chalk.red('ERROR:'), e.message));
+main().catch((e) => console.error(util.styleText('red', 'ERROR:'), e.message));
