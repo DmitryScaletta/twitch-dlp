@@ -29,10 +29,18 @@ const formatSize = (n: number) => {
   return `${value.toFixed(2)}${UNITS[i]}`;
 };
 
+
+let lastLoggedFragCount = -1;
+
 export const showProgress = (
   downloadedFrags: Map<number, FragMetadata>,
   fragsCount: number,
 ) => {
+  const isTTY = process.stdout.isTTY;
+  const currentFragCount = downloadedFrags.size;
+  
+  if (!isTTY && currentFragCount === lastLoggedFragCount) return;
+  
   const dlFrags = Array.from(downloadedFrags.values());
 
   const dlSize = dlFrags.reduce((acc, f) => acc + f.size, 0);
@@ -50,17 +58,36 @@ export const showProgress = (
 
   downloadedPercent = Math.min(100, downloadedPercent) || 0;
   if (estTimeLeftSec < 0) estTimeLeftSec = 0;
-
-  const progress = [
-    '[download] ',
-    chalk.cyan(percentFmt.format(downloadedPercent).padStart(6, ' ')),
-    ' of ~ ',
-    formatSize(estFullSize || 0).padStart(9, ' '),
-    ' at ',
-    chalk.green(formatSpeed(currentSpeedBps || 0).padStart(11, ' ')),
-    ' ETA ',
-    chalk.yellow(timeFmt.format(estTimeLeftSec * 1000)),
-    ` (frag ${dlFrags.length}/${fragsCount})\r`,
-  ].join('');
-  process.stdout.write(progress);
+  
+  if (isTTY) {
+    const progress = [
+      '[download] ',
+      chalk.cyan(percentFmt.format(downloadedPercent).padStart(6, ' ')),
+      ' of ~ ',
+      formatSize(estFullSize || 0).padStart(9, ' '),
+      ' at ',
+      chalk.green(formatSpeed(currentSpeedBps || 0).padStart(11, ' ')),
+      ' ETA ',
+      chalk.yellow(timeFmt.format(estTimeLeftSec * 1000)),
+      ` (frag ${dlFrags.length}/${fragsCount})\r`,
+    ].join('');
+    
+    process.stdout.write(progress);
+  } else {
+      lastLoggedFragCount = currentFragCount;
+    
+      const progress = [
+      '[download] ',
+      percentFmt.format(downloadedPercent).padStart(6, ' '),
+      ' of ~ ',
+      formatSize(estFullSize || 0).padStart(9, ' '),
+      ' at ',
+      formatSpeed(currentSpeedBps || 0).padStart(11, ' '),
+      ' ETA ',
+      timeFmt.format(estTimeLeftSec * 1000),
+      ` (frag ${dlFrags.length}/${fragsCount})`,
+    ].join('');
+    
+    console.log(progress);
+  }
 };
