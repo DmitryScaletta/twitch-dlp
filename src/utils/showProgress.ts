@@ -62,6 +62,6 @@ export const showProgress = (
     util.styleText('yellow', timeFmt.format(estTimeLeftSec * 1000)),
     ` (frag ${dlFrags.length}/${fragsCount})`,
   ];
-  process.stdout.write(progress.join(''));
-  process.stdout.write(process.stdout.isTTY ? '\r' : '\n');
+  process.stdout.write('\r' + progress.join(''));
+  if (!process.stdout.isTTY) process.stdout.write('\n');
 };
