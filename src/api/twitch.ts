@@ -25,7 +25,7 @@ const apiRequest = async <
   try {
     const [res] = await gqlRequest([query]);
     return (res as any)?.data[resultKey] || null;
-  } catch (e) {
+  } catch {
     console.error(`Unable to download ${description}`);
     return null;
   }

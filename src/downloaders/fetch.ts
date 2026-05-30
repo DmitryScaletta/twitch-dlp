@@ -31,7 +31,7 @@ const isUrlsAvailableFetch = async (urls: string[], gzip: boolean) => {
       ),
     );
     return responses.map((res) => res.ok);
-  } catch (e) {
+  } catch {
     return urls.map(() => false);
   }
 };
@@ -62,7 +62,7 @@ export const downloadFile = async (
       fs.createWriteStream(destPath, { flags: 'wx' }),
     );
     return RET_CODE.OK;
-  } catch (e) {
+  } catch {
     return RET_CODE.UNKNOWN_ERROR;
   }
 };

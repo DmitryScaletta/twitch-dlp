@@ -4,7 +4,7 @@ export const fetchText = async (url: string, description = 'metadata') => {
     const res = await fetch(url);
     if (!res.ok) throw new Error();
     return res.text();
-  } catch (e) {
+  } catch {
     console.error(`Unable to download ${description}`);
     return null;
   }

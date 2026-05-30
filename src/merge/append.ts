@@ -15,8 +15,6 @@ const concatFrags = async (files: string[], outputPath: string) => {
         readStream.on('error', reject);
       });
     }
-  } catch (error) {
-    throw error;
   } finally {
     writeStream.end();
   }

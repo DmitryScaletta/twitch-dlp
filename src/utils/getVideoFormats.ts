@@ -111,7 +111,7 @@ export const getVideoFormatsByFullVodPath = async (
 // thumb subdomain is not always the same as playlist subdomain
 // https://regex101.com/r/t8lsxY/1
 const THUMB_REGEX =
-  /cf_vods\/(?<subdomain>[^\/]+)\/(?<fullVodPath>(?:[^\/]+|[^\/]+\/[^\/]+\/[^\/]+))\/?\/thumb\//;
+  /cf_vods\/(?<subdomain>[^/]+)\/(?<fullVodPath>(?:[^/]+|[^/]+\/[^/]+\/[^/]+))\/?\/thumb\//;
 
 type ThumbGroups = {
   subdomain: string;
