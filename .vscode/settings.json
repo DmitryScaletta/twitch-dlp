@@ -1,4 +1,16 @@
 {
+  "[typescript]": {
+    "editor.defaultFormatter": "oxc.oxc-vscode"
+  },
+  "[yaml]": {
+    "editor.defaultFormatter": "oxc.oxc-vscode"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "oxc.oxc-vscode"
+  },
+  "[markdown]": {
+    "editor.defaultFormatter": "DavidAnson.vscode-markdownlint"
+  },
   "cSpell.words": [
     "autoselect",
     "demuxer",
@@ -9,6 +21,8 @@
     "livewire",
     "mdat",
     "moof",
+    "oxfmt",
+    "oxlint",
     "positionals",
     "streamcharts",
     "streamlink",

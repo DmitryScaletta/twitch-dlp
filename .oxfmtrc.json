@@ -1,0 +1,11 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "printWidth": 80,
+  "singleQuote": true,
+  "trailingComma": "all",
+  "ignorePatterns": ["twitch-dlp.js", "DOWNLOAD_PRIVATE_VIDEOS.md"],
+  "sortImports": {
+    "newlinesBetween": false,
+    "groups": ["builtin", "external", "parent", ["sibling", "index"], "unknown"]
+  }
+}

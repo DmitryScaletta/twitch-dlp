@@ -22,9 +22,8 @@ jobs:
         with:
           node-version: 22
           cache: 'pnpm'
-      - name: Install dependencies
-        run: pnpm i --frozen-lockfile
-      - name: Run tests
-        run: pnpm test
-      - name: Run type tests
-        run: pnpm test:types
+      - run: pnpm i --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm test:types
+      - run: pnpm lint
+      - run: pnpm fmt:check

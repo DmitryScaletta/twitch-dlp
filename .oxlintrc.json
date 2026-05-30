@@ -1,0 +1,7 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "env": {
+    "node": true
+  },
+  "ignorePatterns": ["twitch-dlp.js", "DOWNLOAD_PRIVATE_VIDEOS.md"]
+}
