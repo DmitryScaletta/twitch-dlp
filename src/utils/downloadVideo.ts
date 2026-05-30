@@ -27,13 +27,13 @@ import { downloadFrag } from './downloadFrag.ts';
 import { fetchText } from './fetchText.ts';
 import { getDlFormat } from './getDlFormat.ts';
 import { getExistingFrags } from './getExistingFrags.ts';
+import { getFormatsTable } from './getFormatsTable.ts';
 import { getFragsForDownloading } from './getFragsForDownloading.ts';
 import { getPath } from './getPath.ts';
 import { getTryUnmute } from './getTryUnmute.ts';
 import { getUnmutedFrag, type UnmutedFrag } from './getUnmutedFrag.ts';
 import { processUnmutedFrags } from './processUnmutedFrags.ts';
 import { readOutputDir } from './readOutputDir.ts';
-import { showFormats } from './showFormats.ts';
 import { showProgress } from './showProgress.ts';
 
 const WAIT_BETWEEN_CYCLES_SEC = 60;
@@ -48,7 +48,7 @@ export const downloadVideo = async (
   if (formats.length === 0) throw new Error('Cannot get video formats');
 
   if (args['list-formats']) {
-    showFormats(formats);
+    console.table(getFormatsTable(formats));
     process.exit();
   }
 

@@ -4,9 +4,9 @@ import { statsOrNull } from '../lib/statsOrNull.ts';
 import type { AppArgs, DownloadFormat } from '../types.ts';
 import { downloadFrag } from '../utils/downloadFrag.ts';
 import { getDlFormat } from '../utils/getDlFormat.ts';
+import { getFormatsTable } from '../utils/getFormatsTable.ts';
 import { getPath } from '../utils/getPath.ts';
 import { getVideoInfoByClipMeta } from '../utils/getVideoInfo.ts';
-import { showFormats } from '../utils/showFormats.ts';
 
 type VideoQuality = ClipMetadata['assets'][number]['videoQualities'][number];
 
@@ -42,7 +42,7 @@ export const downloadClip = async (slug: string, args: AppArgs) => {
 
   const formats = getClipFormats(clipMeta);
 
-  if (args['list-formats']) return showFormats(formats);
+  if (args['list-formats']) return console.table(getFormatsTable(formats));
 
   const dlFormat = getDlFormat(formats, args.format);
   const destPath = getPath.output(
