@@ -1,6 +1,7 @@
 import childProcess from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import util from 'node:util';
 
 const checkExecutable = (executable: string) => {
   try {
@@ -52,8 +53,9 @@ export const launch = (
   timeoutMs: number | null = null,
 ) => {
   console.log(`[webbrowser] Launching web browser: ${executable}`);
+  const debugFlag = util.styleText('bold', '--remote-debugging-*');
   console.log(
-    "[webbrowser] NOTE: If this browser is already running in the background, it will ignore the `--remote-debugging-*` flags and won't work",
+    `[webbrowser] NOTE: If this browser is already running in the background, it will ignore the ${debugFlag} flags and won't work.`,
   );
 
   const proc = childProcess.spawn(executable, args, {

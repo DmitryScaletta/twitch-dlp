@@ -25,7 +25,7 @@ export const mergeFrags = async (
 
   if (method === FFCONCAT && frags.isFMp4) {
     console.warn(
-      `${util.styleText('yellow', 'WARN:')} ${FFCONCAT} merge method is not supported for fMP4 streams. Using ${APPEND} instead`,
+      `${util.styleText('yellow', 'WARN:')} ${FFCONCAT} merge method is not supported for fMP4 streams. Using ${util.styleText('bold', APPEND)} instead`,
     );
     method = APPEND;
   }

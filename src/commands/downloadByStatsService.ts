@@ -1,3 +1,4 @@
+import util from 'node:util';
 import * as streamcharts from '../api/streamcharts.ts';
 import * as sullygnome from '../api/sullygnome.ts';
 import * as twitchtracker from '../api/twitchtracker.ts';
@@ -61,7 +62,9 @@ export const downloadByStatsService = async (
   if (startDate === null) {
     console.warn('[download] Cannot get a stream info');
     if (!args.webbrowser) {
-      console.warn('[download] You can enable --webbrowser and try again');
+      console.warn(
+        `[download] You can enable ${util.styleText('bold', '--webbrowser')} and try again`,
+      );
       process.exit(1);
     }
     console.warn(
