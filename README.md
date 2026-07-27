@@ -108,6 +108,19 @@ npx twitch-dlp "./Chillin [v2222470239].mp4" --merge-fragments --unmute quality
                             * %(release_date)s
                             * %(view_count)s
 --live-from-start           Download live streams from the start
+--fallback-to-live          Only with --live-from-start. If the stream is
+                            live but its VOD playlist cannot be found yet,
+                            immediately start capturing the live stream with
+                            streamlink (" [live]" is appended to the output
+                            filename). The playlist is re-checked in the
+                            background: as soon as it appears, the live
+                            capture is stopped (the file is kept) and the
+                            VOD is downloaded from the start. If it never
+                            appears (for example when "Store past broadcasts" is
+                            disabled), the capture runs until the stream
+                            ends, and the playlist is then re-checked for up
+                            to one more minute in case it appears late.
+                            Requires --live-from-start
 --retry-streams DELAY       Retry fetching the list of available streams until
                             streams are found while waiting DELAY second(s)
                             between each attempt
@@ -227,4 +240,4 @@ Available streams: audio_only, 160p (worst), 360p, 480p, 720p, 720p60_alt, 720p6
 ## Dependencies
 
 - **ffmpeg**
-- **streamlink** (if downloading by channel link without `--live-from-start`)
+- **streamlink** (if downloading by channel link without `--live-from-start`, or when using `--fallback-to-live`)
