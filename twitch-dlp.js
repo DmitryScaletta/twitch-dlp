@@ -1251,13 +1251,18 @@ const DEFAULT_STREAMLINK_ARGS = ["--twitch-force-client-integrity", "--twitch-ac
 const getDefaultOutputTemplate = () => {
 	return `%(uploader)s (live) ${(/* @__PURE__ */ new Date()).toISOString().slice(0, 16).replace("T", " ").replace(":", "_")} [%(id)s].%(ext)s`;
 };
-const downloadWithStreamlink = async (link, streamMeta, channelLogin, args) => {
-	if (!await isInstalled("streamlink")) throw new Error("streamlink is not installed. Install it from https://streamlink.github.io/");
-	if (args["list-formats"]) {
-		await spawn("streamlink", ["-v", link]);
-		process.exit();
+const STREAMLINK_NOT_INSTALLED_MESSAGE = "streamlink is not installed. Install it from https://streamlink.github.io/";
+const buildStreamlinkArgs = (link, streamMeta, channelLogin, args, outputSuffix = "") => {
+	let outputPath = getPath.output(args.output || getDefaultOutputTemplate(), getVideoInfoByStreamMeta(streamMeta, channelLogin));
+	if (outputSuffix) {
+		const { dir, name, ext } = path.parse(outputPath);
+		outputPath = path.join(dir, `${name}${outputSuffix}${ext}`);
+		let n = 2;
+		while (fs.existsSync(outputPath)) {
+			outputPath = path.join(dir, `${name}${outputSuffix} (${n})${ext}`);
+			n += 1;
+		}
 	}
-	const outputPath = getPath.output(args.output || getDefaultOutputTemplate(), getVideoInfoByStreamMeta(streamMeta, channelLogin));
 	const streamlinkArgs = [];
 	for (const argName of Object.keys(args)) {
 		if (!argName.startsWith("twitch-")) continue;
@@ -1266,13 +1271,54 @@ const downloadWithStreamlink = async (link, streamMeta, channelLogin, args) => {
 		if (Array.isArray(argValue)) for (const v of argValue) streamlinkArgs.push(`--${argName}=${v}`);
 		else streamlinkArgs.push(typeof argValue === "boolean" ? `--${argName}` : `--${argName}=${argValue}`);
 	}
-	return spawn("streamlink", [
+	return [
 		"-o",
 		outputPath,
 		link,
 		args.format,
 		...streamlinkArgs.length ? streamlinkArgs : DEFAULT_STREAMLINK_ARGS
-	]);
+	];
+};
+const downloadWithStreamlink = async (link, streamMeta, channelLogin, args) => {
+	if (!await isInstalled("streamlink")) throw new Error(STREAMLINK_NOT_INSTALLED_MESSAGE);
+	if (args["list-formats"]) {
+		await spawn("streamlink", ["-v", link]);
+		process.exit();
+	}
+	return spawn("streamlink", buildStreamlinkArgs(link, streamMeta, channelLogin, args));
+};
+const KILL_ESCALATION_TIMEOUT_MS = 1e4;
+const startStreamlinkCapture = async (link, streamMeta, channelLogin, args) => {
+	if (!await isInstalled("streamlink")) throw new Error(STREAMLINK_NOT_INSTALLED_MESSAGE);
+	const child = childProcess.spawn("streamlink", buildStreamlinkArgs(link, streamMeta, channelLogin, args, " [live]"));
+	child.stdout.on("data", (data) => process.stdout.write(data));
+	child.stderr.on("data", (data) => process.stderr.write(data));
+	const exited = new Promise((resolve) => {
+		let error = null;
+		let settled = false;
+		const settle = (code, signal) => {
+			if (settled) return;
+			settled = true;
+			resolve({ code, signal, error });
+		};
+		child.on("error", (err) => {
+			error = err;
+		});
+		child.once("exit", settle);
+		child.once("close", settle);
+	});
+	return { child, exited };
+};
+const stopStreamlinkCapture = async (capture) => {
+	for (const signal of ["SIGINT", "SIGTERM", "SIGKILL"]) {
+		if (capture.child.exitCode !== null || capture.child.signalCode !== null) return capture.exited;
+		if (!capture.child.kill(signal)) console.warn(`[fallback-to-live] Could not send ${signal} to streamlink`);
+		const result = await Promise.race([capture.exited, timers.setTimeout(KILL_ESCALATION_TIMEOUT_MS, null, { ref: false })]);
+		if (result !== null) return result;
+		console.warn(`[fallback-to-live] streamlink did not stop after ${signal}`);
+	}
+	console.warn(`[fallback-to-live] streamlink did not exit after SIGKILL - continuing with the VOD download`);
+	return null;
 };
 //#endregion
 //#region src/utils/parseDownloadFormats.ts
@@ -1436,6 +1482,9 @@ const getLiveVideoInfo = async (streamMeta, channelLogin) => {
 };
 //#endregion
 //#region src/commands/downloadByChannelLogin.ts
+const FALLBACK_POLL_SECONDS = 30;
+const POST_STREAM_GRACE_ATTEMPTS = 6;
+const POST_STREAM_GRACE_DELAY_SECONDS = 10;
 const downloadByChannelLogin = async (channelLogin, args) => {
 	const delay = args["retry-streams"] || 0;
 	const isLiveFromStart = args["live-from-start"];
@@ -1455,6 +1504,63 @@ const downloadByChannelLogin = async (channelLogin, args) => {
 				const { formats, videoInfo } = liveVideoInfo;
 				await downloadVideo(formats, videoInfo, args);
 				if (!isRetry || args["download-sections"]) return;
+			} else if (args["fallback-to-live"]) {
+				if (args["list-formats"]) await downloadWithStreamlink(`https://www.twitch.tv/${channelLogin}`, streamMeta, channelLogin, args);
+				console.warn(`[fallback-to-live] Cannot find the playlist. Capturing the live stream while waiting for it`);
+				const capture = await startStreamlinkCapture(`https://www.twitch.tv/${channelLogin}`, streamMeta, channelLogin, args);
+				const checkPlaylist = () => getLiveVideoInfo(streamMeta, channelLogin).catch((error) => {
+					console.warn(`[fallback-to-live] Playlist check failed: ${error instanceof Error ? error.message : String(error)}`);
+					return null;
+				});
+				const exitEvent = capture.exited.then((value) => ({
+					type: "exit",
+					value
+				}));
+				let exit = null;
+				let foundVideoInfo = null;
+				let stoppedIntentionally = false;
+				while (!exit && !foundVideoInfo) {
+					const event = await Promise.race([exitEvent, timers.setTimeout(FALLBACK_POLL_SECONDS * 1e3, null, { ref: false }).then(() => ({ type: "poll" }))]);
+					if (event.type === "exit") {
+						exit = event.value;
+						break;
+					}
+					foundVideoInfo = await checkPlaylist();
+				}
+				if (foundVideoInfo && !exit) {
+					const captureWasRunning = capture.child.exitCode === null && capture.child.signalCode === null;
+					console.warn(captureWasRunning ? `[fallback-to-live] Playlist found. Stopping the live capture and downloading the VOD from the start` : `[fallback-to-live] Playlist found. Downloading the VOD from the start`);
+					stoppedIntentionally = captureWasRunning;
+					exit = await stopStreamlinkCapture(capture);
+				}
+				if (exit?.error) console.warn(`[fallback-to-live] streamlink error: ${exit.error.message}`);
+				else if (exit && !stoppedIntentionally) {
+					if (exit.signal) console.warn(`[fallback-to-live] streamlink exited due to signal ${exit.signal}`);
+					else if (exit.code !== 0) console.warn(`[fallback-to-live] streamlink exited with code ${exit.code}`);
+				}
+				if (!foundVideoInfo && exit && !exit.error) {
+					let streamIsLiveAgain = false;
+					for (let attempt = 0; attempt < POST_STREAM_GRACE_ATTEMPTS && !foundVideoInfo; attempt += 1) {
+						await timers.setTimeout(POST_STREAM_GRACE_DELAY_SECONDS * 1e3);
+						// network/GQL failures are caught by apiRequest and returned as null
+						const freshMeta = await getStreamMetadata(channelLogin);
+						if (freshMeta?.stream?.id) {
+							streamIsLiveAgain = true;
+							break;
+						}
+						foundVideoInfo = await checkPlaylist();
+					}
+					if (streamIsLiveAgain) {
+						console.warn(`[fallback-to-live] Channel is live again. Starting a new capture`);
+						continue;
+					}
+					if (foundVideoInfo) console.warn(`[fallback-to-live] Playlist appeared after the stream ended. Downloading the VOD`);
+				}
+				if (foundVideoInfo) {
+					const { formats, videoInfo } = foundVideoInfo;
+					await downloadVideo(formats, videoInfo, args);
+					if (!isRetry || args["download-sections"]) return;
+				} else if (!isRetry) return;
 			} else {
 				let message = `[live-from-start] Cannot find the playlist`;
 				if (isRetry) {
@@ -2077,6 +2183,7 @@ const normalizeArgs = async (args) => {
 		if (delay < RETRY_STREAMS_MIN) throw new Error(`Min --retry-streams delay is ${RETRY_STREAMS_MIN}`);
 		newArgs["retry-streams"] = delay;
 	}
+	if (args["fallback-to-live"] && !args["live-from-start"]) throw new Error("--fallback-to-live requires --live-from-start");
 	if (!MERGE_METHODS.includes(args["merge-method"])) throw new Error(`Unknown merge method: ${args["merge-method"]}. Available: ${MERGE_METHODS.join(", ")}`);
 	const unmuteValues = Object.values(UNMUTE);
 	if (args["unmute"] && !unmuteValues.includes(args["unmute"])) throw new Error(`Unknown unmute policy: ${args["unmute"]}. Available: ${unmuteValues.join(", ")}`);
@@ -2187,6 +2294,7 @@ const getArgs = () => util.parseArgs({
 			short: "r"
 		},
 		"live-from-start": { type: "boolean" },
+		"fallback-to-live": { type: "boolean" },
 		"retry-streams": { type: "string" },
 		"download-sections": { type: "string" },
 		unmute: { type: "string" },
@@ -2254,6 +2362,9 @@ const main = async () => {
 	if (link.type === "channel") return downloadByChannelLogin(link.channelLogin, args);
 	if (link.type === "statsService") return downloadByStatsService(link, args);
 };
-main().catch((e) => console.error(util.styleText("red", "ERROR:"), e.message));
+main().catch((e) => {
+	process.exitCode = 1;
+	console.error(util.styleText("red", "ERROR:"), e.message);
+});
 //#endregion
 export { getArgs };
