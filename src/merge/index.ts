@@ -1,6 +1,6 @@
-import fsp from 'node:fs/promises';
 import util from 'node:util';
 import { MERGE_METHODS } from '../constants.ts';
+import { unlinkIfAny } from '../lib/unlinkIfAny.ts';
 import type { Frags, MergeMethod } from '../types.ts';
 import { getPath } from '../utils/getPath.ts';
 import * as append from './append.ts';
@@ -57,8 +57,8 @@ export const mergeFrags = async (
 
   if (!keepFrags) {
     await Promise.all([
-      ...fragFiles.map(([filename]) => fsp.unlink(filename)),
-      fsp.unlink(getPath.playlist(outputPath)),
+      ...fragFiles.map(([filename]) => unlinkIfAny(filename)),
+      unlinkIfAny(getPath.playlist(outputPath)),
     ]);
   }
 
