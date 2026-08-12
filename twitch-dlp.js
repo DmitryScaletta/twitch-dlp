@@ -75,7 +75,7 @@ const fetchText = async (url, description = "metadata") => {
 		const res = await fetch(url);
 		if (!res.ok) throw new Error();
 		return res.text();
-	} catch (e) {
+	} catch {
 		console.error(`Unable to download ${description}`);
 		return null;
 	}
@@ -87,7 +87,7 @@ const apiRequest = async (query, resultKey, description = "metadata") => {
 	try {
 		const [res] = await gqlRequest([query]);
 		return res?.data[resultKey] || null;
-	} catch (e) {
+	} catch {
 		console.error(`Unable to download ${description}`);
 		return null;
 	}
@@ -116,7 +116,7 @@ const getRecentArchiveBroadcasts = (channelId) => apiRequest(getQueryFfzRecentBr
 	limit: 1
 }), "user", "recent broadcast");
 const getManifest = (videoId, accessToken) => {
-	return fetchText(`https://usher.ttvnw.net/vod/${videoId}.m3u8?${new URLSearchParams({
+	const url = `https://usher.ttvnw.net/vod/${videoId}.m3u8?${new URLSearchParams({
 		allow_source: "true",
 		allow_audio_only: "true",
 		allow_spectre: "true",
@@ -126,7 +126,8 @@ const getManifest = (videoId, accessToken) => {
 		sig: accessToken.signature,
 		supported_codecs: "av1,h265,h264",
 		token: accessToken.value
-	})}`, "video manifest");
+	})}`;
+	return fetchText(url, "video manifest");
 };
 const PRIVATE_VIDEO_INSTRUCTIONS = "This video might be private. Follow this article to download it: https://github.com/DmitryScaletta/twitch-dlp/blob/master/DOWNLOAD_PRIVATE_VIDEOS.md";
 const NO_TRY_UNMUTE_MESSAGE = "[unmute] The video is old, not trying to unmute";
@@ -257,9 +258,16 @@ const isInstalled = (cmd) => new Promise((resolve) => {
 const statsOrNull = async (path) => {
 	try {
 		return await fsp.stat(path);
-	} catch (e) {
+	} catch {
 		return null;
 	}
+};
+//#endregion
+//#region src/lib/unlinkIfAny.ts
+const unlinkIfAny = async (path) => {
+	try {
+		return await fsp.unlink(path);
+	} catch {}
 };
 //#endregion
 //#region src/utils/getPath.ts
@@ -318,8 +326,6 @@ const concatFrags = async (files, outputPath) => {
 			readStream.on("end", resolve);
 			readStream.on("error", reject);
 		});
-	} catch (error) {
-		throw error;
 	} finally {
 		writeStream.end();
 	}
@@ -428,7 +434,7 @@ const mergeFrags = async (method, frags, outputPath, keepFragments) => {
 		return 1;
 	}
 	if (method === FFCONCAT && frags.isFMp4) {
-		console.warn(`${util.styleText("yellow", "WARN:")} ${FFCONCAT} merge method is not supported for fMP4 streams. Using ${APPEND} instead`);
+		console.warn(`${util.styleText("yellow", "WARN:")} ${FFCONCAT} merge method is not supported for fMP4 streams. Using ${util.styleText("bold", APPEND)} instead`);
 		method = APPEND;
 	}
 	const fragFiles = frags.map((frag) => [getPath.frag(outputPath, frag.idx + 1), frag.duration]);
@@ -447,7 +453,7 @@ const mergeFrags = async (method, frags, outputPath, keepFragments) => {
 		console.warn(`${util.styleText("yellow", "WARN:")} Keeping fragments because merging failed with code ${retCode}`);
 		keepFrags = true;
 	}
-	if (!keepFrags) await Promise.all([...fragFiles.map(([filename]) => fsp.unlink(filename)), fsp.unlink(getPath.playlist(outputPath))]);
+	if (!keepFrags) await Promise.all([...fragFiles.map(([filename]) => unlinkIfAny(filename)), unlinkIfAny(getPath.playlist(outputPath))]);
 	return retCode;
 };
 //#endregion
@@ -712,7 +718,7 @@ const WRONG_LIMIT_RATE_SYNTAX = "Wrong --limit-rate syntax";
 const RATE_LIMIT_MULTIPLIER = {
 	B: 1,
 	K: 1024,
-	M: 1024 * 1024
+	M: 1048576
 };
 const parseRateLimit = (rateLimit) => {
 	const m = rateLimit.match(/^(?<value>\d+(?:\.\d+)?)(?<unit>[KM])?$/i);
@@ -727,7 +733,7 @@ const parseRateLimit = (rateLimit) => {
 const isUrlsAvailableFetch = async (urls, gzip) => {
 	try {
 		return (await Promise.all(urls.map((url) => fetch(url, { headers: { "Accept-Encoding": gzip ? "deflate, gzip" : "" } })))).map((res) => res.ok);
-	} catch (e) {
+	} catch {
 		return urls.map(() => false);
 	}
 };
@@ -742,7 +748,7 @@ const downloadFile$1 = async (url, destPath, rateLimit, gzip = true) => {
 		if (!res.ok) return RET_CODE.HTTP_RETURNED_ERROR;
 		await stream.promises.pipeline(stream.Readable.fromWeb(res.body), rateLimitN ? new ThrottleTransform(rateLimitN) : new stream.PassThrough(), fs.createWriteStream(destPath, { flags: "wx" }));
 		return RET_CODE.OK;
-	} catch (e) {
+	} catch {
 		return RET_CODE.UNKNOWN_ERROR;
 	}
 };
@@ -809,13 +815,6 @@ const isTsFile = async (filePath, packetsToCheck = 1) => {
 	}
 };
 //#endregion
-//#region src/lib/unlinkIfAny.ts
-const unlinkIfAny = async (path) => {
-	try {
-		return await fsp.unlink(path);
-	} catch {}
-};
-//#endregion
 //#region src/utils/downloadFrag.ts
 const CHECK_FILE_TYPE = {
 	any: () => true,
@@ -860,6 +859,21 @@ const getExistingFrags = (frags, outputPath, dir) => {
 	return existingFrags;
 };
 //#endregion
+//#region src/utils/getFormatsTable.ts
+const formatToTableRow = ({ format_id, width, height, frameRate, totalBitrate, source }) => {
+	const fmt = {};
+	fmt.format_id = format_id;
+	fmt.resolution = "unknown";
+	if (format_id === "Audio_Only") fmt.resolution = "audio only";
+	else if (width && height) fmt.resolution = `${width}x${height}`;
+	else if (height) fmt.resolution = `${height}p`;
+	fmt.fps = frameRate;
+	if (totalBitrate) fmt.total_bitrate = `${(totalBitrate / 1024).toFixed()}k`;
+	fmt.source = source;
+	return fmt;
+};
+const getFormatsTable = (formats) => [...formats].reverse().map(formatToTableRow);
+//#endregion
 //#region src/utils/getFragsForDownloading.ts
 const getFragsForDownloading = (playlistUrl, playlist, args) => {
 	const baseUrl = playlistUrl.split("/").slice(0, -1).join("/");
@@ -903,7 +917,7 @@ const getFragsForDownloading = (playlistUrl, playlist, args) => {
 };
 //#endregion
 //#region src/utils/getTryUnmute.ts
-const ONE_WEEK_MS = 10080 * 60 * 1e3;
+const ONE_WEEK_MS = 6048e5;
 const getTryUnmute = (videoInfo) => {
 	const videoDate = videoInfo.upload_date || videoInfo.release_date;
 	if (!videoDate) return null;
@@ -1004,22 +1018,6 @@ const processUnmutedFrags = async (frags, outputPath, dir, writeLog) => {
 //#region src/utils/readOutputDir.ts
 const readOutputDir = (outputPath) => fsp.readdir(path.parse(outputPath).dir || ".");
 //#endregion
-//#region src/utils/showFormats.ts
-const showFormats = (formats) => {
-	console.table([...formats].reverse().map(({ format_id, width, height, frameRate, totalBitrate, source }) => {
-		const fmt = {};
-		fmt.format_id = format_id;
-		fmt.resolution = "unknown";
-		if (format_id === "Audio_Only") fmt.resolution = "audio only";
-		else if (width && height) fmt.resolution = `${width}x${height}`;
-		else if (height) fmt.resolution = `${height}p`;
-		fmt.fps = frameRate;
-		if (totalBitrate) fmt.total_bitrate = `${(totalBitrate / 1024).toFixed()}k`;
-		fmt.source = source;
-		return fmt;
-	}));
-};
-//#endregion
 //#region src/utils/showProgress.ts
 const UNITS = [
 	"B",
@@ -1075,8 +1073,8 @@ const showProgress = (downloadedFrags, fragsCount) => {
 		util.styleText("yellow", timeFmt.format(estTimeLeftSec * 1e3)),
 		` (frag ${dlFrags.length}/${fragsCount})`
 	];
-	process.stdout.write(progress.join(""));
-	process.stdout.write(process.stdout.isTTY ? "\r" : "\n");
+	process.stdout.write("\r" + progress.join(""));
+	if (!process.stdout.isTTY) process.stdout.write("\n");
 };
 //#endregion
 //#region src/utils/downloadVideo.ts
@@ -1085,7 +1083,7 @@ const RETRY_MESSAGE = `Retry every ${WAIT_BETWEEN_CYCLES_SEC} second(s)`;
 const downloadVideo = async (formats, videoInfo, args) => {
 	if (formats.length === 0) throw new Error("Cannot get video formats");
 	if (args["list-formats"]) {
-		showFormats(formats);
+		console.table(getFormatsTable(formats));
 		process.exit();
 	}
 	if (!await isInstalled("ffmpeg")) throw new Error("ffmpeg is not installed. Install it from https://ffmpeg.org/");
@@ -1402,7 +1400,7 @@ const getVideoFormatsByFullVodPath = async (fullVodPath, broadcastType, videoId)
 	if (vodDomainIdx === -1) return [];
 	return getAvailableFormats(VOD_DOMAINS[vodDomainIdx], fullVodPath, broadcastType, videoId);
 };
-const THUMB_REGEX = /cf_vods\/(?<subdomain>[^\/]+)\/(?<fullVodPath>(?:[^\/]+|[^\/]+\/[^\/]+\/[^\/]+))\/?\/thumb\//;
+const THUMB_REGEX = /cf_vods\/(?<subdomain>[^/]+)\/(?<fullVodPath>(?:[^/]+|[^/]+\/[^/]+\/[^/]+))\/?\/thumb\//;
 const getVideoFormatsByThumbUrl = (broadcastType, videoId, thumbUrl) => {
 	const m = thumbUrl.match(THUMB_REGEX);
 	if (!m) return [];
@@ -1425,7 +1423,8 @@ const getLiveVideoInfo = async (streamMeta, channelLogin) => {
 	if (Date.now() - startTimestampMs > 9e4 && formats.length === 0) {
 		console.warn("[live-from-start] Recovering the playlist");
 		const startTimestamp = startTimestampMs / 1e3;
-		formats = await getVideoFormatsByFullVodPath(getFullVodPath(`${channelLogin}_${streamMeta.stream.id}_${startTimestamp}`));
+		const vodPath = `${channelLogin}_${streamMeta.stream.id}_${startTimestamp}`;
+		formats = await getVideoFormatsByFullVodPath(getFullVodPath(vodPath));
 		videoInfo = getVideoInfoByStreamMeta(streamMeta, channelLogin);
 	}
 	if (formats.length === 0 || !videoInfo) return null;
@@ -1443,10 +1442,12 @@ const downloadByChannelLogin = async (channelLogin, args) => {
 	while (true) {
 		const streamMeta = await getStreamMetadata(channelLogin);
 		const isLive = !!streamMeta?.stream;
-		if (!isLive) if (isRetry) console.log(`[retry-streams] Waiting for streams. Retry every ${delay} second(s)`);
-		else {
-			console.warn("[download] The channel is not currently live");
-			return;
+		if (!isLive) {
+			if (isRetry) console.log(`[retry-streams] Waiting for streams. Retry every ${delay} second(s)`);
+			else {
+				console.warn("[download] The channel is not currently live");
+				return;
+			}
 		}
 		if (isLive && !isLiveFromStart) await downloadWithStreamlink(`https://www.twitch.tv/${channelLogin}`, streamMeta, channelLogin, args);
 		if (isLive && isLiveFromStart) {
@@ -1494,7 +1495,9 @@ const getStandardSearch = async (query) => {
 	return (await fetch(url)).json();
 };
 const getChannelStreams = async (range, channelId, page = 0, pageSize = 100) => {
-	const url = `${BASE_URL}/tables/channeltables/streams/${range}/${channelId}/%20/${page + 1}/1/desc/${page * pageSize}/${pageSize}`;
+	const pageN = page + 1;
+	const start = page * pageSize;
+	const url = `${BASE_URL}/tables/channeltables/streams/${range}/${channelId}/%20/${pageN}/1/desc/${start}/${pageSize}`;
 	return (await fetch(url)).json();
 };
 //#endregion
@@ -1539,7 +1542,8 @@ const resolveExecutable = (executable, names, fallback_paths) => {
 };
 const launch = (executable, args, timeoutMs = null) => {
 	console.log(`[webbrowser] Launching web browser: ${executable}`);
-	console.log("[webbrowser] NOTE: If this browser is already running in the background, it will ignore the `--remote-debugging-*` flags and won't work");
+	const debugFlag = util.styleText("bold", "--remote-debugging-*");
+	console.log(`[webbrowser] NOTE: If this browser is already running in the background, it will ignore the ${debugFlag} flags and won't work.`);
 	const proc = childProcess.spawn(executable, args, { stdio: [
 		"ignore",
 		"pipe",
@@ -1814,7 +1818,8 @@ const downloadByVodPath = async (parsedLink, args) => {
 		const reasons = await getWhyCannotDownload();
 		throw new Error(`Cannot get video formats\n\n${reasons}`);
 	}
-	return downloadVideo(formats, getVideoInfoByVodPath(parsedLink), args);
+	const videoInfo = getVideoInfoByVodPath(parsedLink);
+	return downloadVideo(formats, videoInfo, args);
 };
 //#endregion
 //#region src/commands/downloadByStatsService.ts
@@ -1847,13 +1852,16 @@ const downloadByStatsService = async ({ channelLogin, streamId, service, url }, 
 	if (startDate === null) {
 		console.warn("[download] Cannot get a stream info");
 		if (!args.webbrowser) {
-			console.warn("[download] You can enable --webbrowser and try again");
+			console.warn(`[download] You can enable ${util.styleText("bold", "--webbrowser")} and try again`);
 			process.exit(1);
 		}
 		console.warn("[download] Using webbrowser. This feature is experimental and may not work");
-		if (service === "twitchtracker") startDate = getStreamInfo(await fetchHtmlWithBrowser(url, args)).created_at;
-		else if (service === "streamscharts") {
-			const comp = parseLivewireComponents(await fetchHtmlWithBrowser(url, args)).find((c) => c.serverMemo.data.stream);
+		if (service === "twitchtracker") {
+			const html = await fetchHtmlWithBrowser(url, args);
+			startDate = getStreamInfo(html).created_at;
+		} else if (service === "streamscharts") {
+			const html = await fetchHtmlWithBrowser(url, args);
+			const comp = parseLivewireComponents(html).find((c) => c.serverMemo.data.stream);
 			if (!comp) throw new Error("Cannot get a stream info");
 			startDate = comp.serverMemo.data.stream.stream_created_at + "+00:00";
 		} else if (service === "sullygnome") throw new Error(`Not implemented for ${service}`);
@@ -1908,7 +1916,7 @@ const downloadClip = async (slug, args) => {
 	const clipMeta = await getClipMetadata(slug);
 	if (!clipMeta) throw new Error("Clip not found");
 	const formats = getClipFormats(clipMeta);
-	if (args["list-formats"]) return showFormats(formats);
+	if (args["list-formats"]) return console.table(getFormatsTable(formats));
 	const dlFormat = getDlFormat(formats, args.format);
 	const destPath = getPath.output(args.output || "%(title)s [%(id)s].%(ext)s", getVideoInfoByClipMeta(clipMeta));
 	console.log(`[download] Destination: ${destPath}`);
@@ -1966,7 +1974,10 @@ const mergeFragments = async (outputPath, args) => {
 	const log = await getLog(logPath);
 	const writeLog = createLogger(logPath);
 	const dlInfo = getInitPayload(log || []);
-	const frags = getExistingFrags(getFragsForDownloading(dlInfo?.playlistUrl || "", parse(playlistContent), args), outputPath, dir);
+	const playlistUrl = dlInfo?.playlistUrl || "";
+	const playlist = parse(playlistContent);
+	const allFrags = getFragsForDownloading(playlistUrl, playlist, args);
+	const frags = getExistingFrags(allFrags, outputPath, dir);
 	if (log && dlInfo && args.unmute && args.unmute !== UNMUTE.OFF) {
 		const { videoInfo, formats } = dlInfo;
 		if (getTryUnmute(videoInfo)) await tryUnmuteFrags(outputPath, log, frags, formats, args, writeLog);
@@ -2242,10 +2253,13 @@ const main = async () => {
 	if (args.version) return showVersion();
 	if (args.help || positionals.length === 0) return showHelp();
 	if (positionals.length !== 1) throw new Error("Expected exactly one positional argument");
-	http.setGlobalProxyFromEnv?.(args.proxy ? {
-		http_proxy: args.proxy,
-		https_proxy: args.proxy
-	} : void 0);
+	if (args.proxy) {
+		if (http.setGlobalProxyFromEnv) http.setGlobalProxyFromEnv({
+			http_proxy: args.proxy,
+			https_proxy: args.proxy
+		});
+		else console.warn(`${util.styleText("yellow", "WARN:")} ${util.styleText("bold", "--proxy")} requires Node.js v25.4.0+. Proxy won't be applied. Use ${util.styleText("bold", "HTTPS_PROXY")} env variable instead.`);
+	}
 	if (args["merge-fragments"]) return mergeFragments(positionals[0], args);
 	const link = parseLink(positionals[0]);
 	if (link.type === "vodPath") return downloadByVodPath(link, args);
