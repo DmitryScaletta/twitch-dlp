@@ -129,6 +129,7 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
+ffmpeg/
 *.part-Frag*
 *.mp4
 *.mp4.part
