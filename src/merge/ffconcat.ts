@@ -57,9 +57,9 @@ const generateFfconcat = (files: FragFile[]) => {
       [
         `file '${file.replaceAll("'", "'\\''")}'`,
         'stream',
-        'exact_stream_id 0x100', // audio
-        'stream',
         'exact_stream_id 0x101', // video
+        'stream',
+        'exact_stream_id 0x100', // audio
         'stream',
         'exact_stream_id 0x102', // subtitles
         `duration ${duration}`,
