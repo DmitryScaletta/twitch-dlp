@@ -1,0 +1,79 @@
+[git]
+repository = "https://github.com/DmitryScaletta/twitch-dlp"
+
+[commit_parsers]
+"✨" = { group = "Features" }
+"🎉" = { group = "Features" }
+"🥚" = { group = "Features" }
+"👔" = { group = "Features" }
+"🚩" = { group = "Features" }
+"🐛" = { group = "Bug Fixes" }
+"🚑" = { group = "Bug Fixes" }
+"🩹" = { group = "Bug Fixes" }
+"🥅" = { group = "Bug Fixes" }
+"💥" = { group = "Breaking Changes" }
+"⚡" = { group = "Performance" }
+"✈" = { group = "Performance" }
+"🧵" = { group = "Performance" }
+"♻" = { group = "Refactoring" }
+"🏗" = { group = "Refactoring" }
+"🚚" = { group = "Refactoring" }
+"👽" = { group = "Compatibility" }
+"🦖" = { group = "Compatibility" }
+"🎨" = { group = "Style" }
+"💄" = { group = "Style" }
+"📱" = { group = "Style" }
+"💫" = { group = "Style" }
+"📝" = { group = "Documentation" }
+"✏" = { group = "Documentation" }
+"💡" = { group = "Documentation" }
+"✅" = { group = "Testing" }
+"🤡" = { group = "Testing" }
+"📸" = { group = "Testing" }
+"🧪" = { group = "Testing" }
+"🔒" = { group = "Security" }
+"🔐" = { group = "Security" }
+"🛂" = { group = "Security" }
+"⬇" = { group = "Dependencies" }
+"⬆" = { group = "Dependencies" }
+"📌" = { group = "Dependencies" }
+"➕" = { group = "Dependencies" }
+"➖" = { group = "Dependencies" }
+"💚" = { group = "CI" }
+"👷" = { group = "CI" }
+"🚀" = { group = "CI" }
+"🔧" = { group = "Configuration" }
+"🔨" = { group = "Tooling" }
+"📦" = { group = "Tooling" }
+"🧑💻" = { group = "Tooling" }
+"🏷" = { group = "Tooling" }
+"🌐" = { group = "Localization" }
+"💬" = { group = "Localization" }
+"🗃" = { group = "Database" }
+"🌱" = { group = "Database" }
+"🔊" = { group = "Logging" }
+"🔇" = { group = "Logging" }
+"🔥" = { group = "Cleanup" }
+"🗑" = { group = "Cleanup" }
+"⚰" = { group = "Cleanup" }
+"🙈" = { group = "Chores" }
+"👥" = { group = "Chores" }
+"💸" = { group = "Chores" }
+"🍱" = { group = "Chores" }
+"📄" = { group = "Chores" }
+"🚸" = { group = "Improvements" }
+"📈" = { group = "Improvements" }
+"🔍" = { group = "Improvements" }
+"🩺" = { group = "Improvements" }
+"🧱" = { group = "Improvements" }
+"♿" = { group = "Improvements" }
+"🧐" = { group = "Code Quality" }
+"🦺" = { group = "Code Quality" }
+"🚨" = { group = "Code Quality" }
+"⏪" = { group = "Reverts" }
+"🔖" = { skip = true }
+"🚧" = { skip = true }
+"💩" = { skip = true }
+"🍻" = { skip = true }
+"⚗" = { skip = true }
+"🔀" = { skip = true }

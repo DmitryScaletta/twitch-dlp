@@ -1,0 +1,42 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: orhun/git-cliff-action@v4
+        id: git-cliff
+        with:
+          config: cliff.toml
+          args: -vv --latest --no-exec --github-repo ${{ github.repository }}
+
+      - uses: pnpm/setup@v2
+        with:
+          runtime: node
+          cache: true
+      - run: pnpm i --frozen-lockfile
+      - run: pnpm build
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BODY: ${{ steps.git-cliff.outputs.content }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --title "${GITHUB_REF_NAME}" \
+            --notes "$BODY" \
+            twitch-dlp.js
