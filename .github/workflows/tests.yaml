@@ -16,12 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - name: Use Node.js 22
-        uses: actions/setup-node@v4
+      - uses: pnpm/setup@v2
         with:
-          node-version: 22
-          cache: 'pnpm'
+          runtime: node
+          cache: true
       - run: pnpm i --frozen-lockfile
       - run: pnpm test
       - run: pnpm test:types
