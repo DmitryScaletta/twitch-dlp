@@ -5,29 +5,34 @@ import type { FragFile } from './index.ts';
 
 const MAX_INT_STR = '2147483647';
 
+const handleFfmpegOutput = (stream: NodeJS.WriteStream) => {
+  let isInputSection = true;
+  let prevLinePart = '';
+
+  return (data: Buffer) => {
+    if (!isInputSection) return stream.write(data);
+
+    const lines = data.toString().split('\n');
+    lines[0] = prevLinePart + lines[0];
+    prevLinePart = lines.pop() || '';
+
+    for (const line of lines) {
+      if (isInputSection) {
+        if (line.startsWith('  ') && !line.startsWith('  Duration:')) continue;
+        if (line.startsWith('Stream mapping:')) isInputSection = false;
+      }
+      stream.write(`${line}\n`);
+    }
+
+    if (!isInputSection) stream.write(prevLinePart);
+  };
+};
+
 const spawnFfmpeg = (args: string[]): Promise<number> =>
   new Promise((resolve, reject) => {
-    let isInputSection = true;
-    let prevLinePart = '';
-    const handleFfmpegData = (stream: NodeJS.WriteStream) => (data: Buffer) => {
-      if (!isInputSection) return stream.write(data);
-
-      const lines = data.toString().split('\n');
-      lines[0] = prevLinePart + lines[0];
-      prevLinePart = lines.pop() || '';
-
-      for (const line of lines) {
-        if (line.startsWith('  Stream #')) continue;
-        if (line.startsWith('Stream mapping:')) isInputSection = false;
-        stream.write(line + '\n');
-      }
-
-      if (!isInputSection) stream.write(prevLinePart);
-    };
-
     const child = childProcess.spawn('ffmpeg', args);
-    child.stdout.on('data', handleFfmpegData(process.stdout));
-    child.stderr.on('data', handleFfmpegData(process.stderr));
+    child.stdout.on('data', handleFfmpegOutput(process.stdout));
+    child.stderr.on('data', handleFfmpegOutput(process.stderr));
     child.on('error', () => reject(1));
     child.on('close', (code) => resolve(code || 0));
   });
