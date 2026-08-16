@@ -341,7 +341,9 @@ const mergeFrags$2 = async (fragFiles, outputPath) => {
 		"-i",
 		`file:${outputPath}`,
 		"-map",
-		"0",
+		"0:v:0",
+		"-map",
+		"0:a:0",
 		"-dn",
 		"-ignore_unknown",
 		"-c",
@@ -361,24 +363,28 @@ const mergeFrags$2 = async (fragFiles, outputPath) => {
 //#endregion
 //#region src/merge/ffconcat.ts
 const MAX_INT_STR = "2147483647";
-const spawnFfmpeg = (args) => new Promise((resolve, reject) => {
+const handleFfmpegOutput = (stream) => {
 	let isInputSection = true;
 	let prevLinePart = "";
-	const handleFfmpegData = (stream) => (data) => {
+	return (data) => {
 		if (!isInputSection) return stream.write(data);
 		const lines = data.toString().split("\n");
 		lines[0] = prevLinePart + lines[0];
 		prevLinePart = lines.pop() || "";
 		for (const line of lines) {
-			if (line.startsWith("  Stream #")) continue;
-			if (line.startsWith("Stream mapping:")) isInputSection = false;
-			stream.write(line + "\n");
+			if (isInputSection) {
+				if (line.startsWith("  ") && !line.startsWith("  Duration:")) continue;
+				if (line.startsWith("Stream mapping:")) isInputSection = false;
+			}
+			stream.write(`${line}\n`);
 		}
 		if (!isInputSection) stream.write(prevLinePart);
 	};
+};
+const spawnFfmpeg = (args) => new Promise((resolve, reject) => {
 	const child = childProcess.spawn("ffmpeg", args);
-	child.stdout.on("data", handleFfmpegData(process.stdout));
-	child.stderr.on("data", handleFfmpegData(process.stderr));
+	child.stdout.on("data", handleFfmpegOutput(process.stdout));
+	child.stderr.on("data", handleFfmpegOutput(process.stderr));
 	child.on("error", () => reject(1));
 	child.on("close", (code) => resolve(code || 0));
 });
@@ -408,9 +414,9 @@ const generateFfconcat = (files) => {
 	ffconcat += files.map(([file, duration]) => [
 		`file '${file.replaceAll("'", "'\\''")}'`,
 		"stream",
-		"exact_stream_id 0x100",
-		"stream",
 		"exact_stream_id 0x101",
+		"stream",
+		"exact_stream_id 0x100",
 		"stream",
 		"exact_stream_id 0x102",
 		`duration ${duration}`
