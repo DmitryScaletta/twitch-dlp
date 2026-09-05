@@ -53,9 +53,16 @@ export const getLiveVideoInfo = async (
   // private VOD
   if (checkPrivateVod && formats.length === 0) {
     console.warn('[live-from-start] Recovering the playlist');
-    const startTimestamp = startTimestampMs / 1000;
-    const vodPath = `${channelLogin}_${streamMeta.stream.id}_${startTimestamp}`;
-    formats = await getVideoFormatsByFullVodPath(getFullVodPath(vodPath));
+    const baseTimestamp = Math.floor(startTimestampMs / 1000);
+    const offsets = [0, -1, 1];
+    for (const offset of offsets) {
+      const vodPath = `${channelLogin}_${streamMeta.stream.id}_${baseTimestamp + offset}`;
+      formats = await getVideoFormatsByFullVodPath(getFullVodPath(vodPath));
+
+      if (formats.length > 0) {
+        break;
+      }
+    }
     videoInfo = getVideoInfoByStreamMeta(streamMeta, channelLogin);
   }
 
