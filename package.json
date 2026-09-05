@@ -1,6 +1,6 @@
 {
   "name": "twitch-dlp",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "description": "Download any Twitch VODs from the start during a live broadcast",
   "license": "MIT",
   "author": "DmitryScaletta",

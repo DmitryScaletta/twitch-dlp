@@ -1428,9 +1428,12 @@ const getLiveVideoInfo = async (streamMeta, channelLogin) => {
 	}
 	if (Date.now() - startTimestampMs > 9e4 && formats.length === 0) {
 		console.warn("[live-from-start] Recovering the playlist");
-		const startTimestamp = startTimestampMs / 1e3;
-		const vodPath = `${channelLogin}_${streamMeta.stream.id}_${startTimestamp}`;
-		formats = await getVideoFormatsByFullVodPath(getFullVodPath(vodPath));
+		const startTimestamp = Math.floor(startTimestampMs / 1e3);
+		for (const timestamp of [startTimestamp, startTimestamp - 1]) {
+			const vodPath = `${channelLogin}_${streamMeta.stream.id}_${timestamp}`;
+			formats = await getVideoFormatsByFullVodPath(getFullVodPath(vodPath));
+			if (formats.length > 0) break;
+		}
 		videoInfo = getVideoInfoByStreamMeta(streamMeta, channelLogin);
 	}
 	if (formats.length === 0 || !videoInfo) return null;
