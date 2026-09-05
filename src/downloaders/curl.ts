@@ -64,7 +64,7 @@ export const downloadFile = async (
       '--limit-rate', rateLimit,
       '--fail',
       url,
-    ]
+    ];
     if (gzip) args.push('-H', 'Accept-Encoding: deflate, gzip');
     const child = childProcess.spawn('curl', args);
     child.on('error', () => resolve(RET_CODE.UNKNOWN_ERROR));

@@ -58,7 +58,7 @@ export const downloadFile = async (
       '--dir', dest.dir,
       '-o', dest.base,
       url,
-    ]
+    ];
     if (gzip) args.push('--http-accept-gzip');
     const child = childProcess.spawn('aria2c', args);
     child.on('error', () => resolve(RET_CODE.UNKNOWN_ERROR));
