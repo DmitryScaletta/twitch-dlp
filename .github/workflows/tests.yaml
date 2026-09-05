@@ -21,7 +21,8 @@ jobs:
           runtime: node
           cache: true
       - run: pnpm i --frozen-lockfile
-      - run: pnpm test
-      - run: pnpm test:types
-      - run: pnpm lint
-      - run: pnpm fmt:check
+      - parallel:
+          - run: pnpm test
+          - run: pnpm test:types
+          - run: pnpm lint
+          - run: pnpm fmt:check
