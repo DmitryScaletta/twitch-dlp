@@ -10,9 +10,17 @@ import os from "node:os";
 import stream from "node:stream";
 import crypto from "node:crypto";
 import assert from "node:assert/strict";
-//#region node_modules/.pnpm/twitch-gql-queries@0.1.25/node_modules/twitch-gql-queries/dist/index.js
-var CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
-var gqlRequest = async (queries, requestInit) => {
+//#region node_modules/.pnpm/twitch-gql-queries@1.0.1/node_modules/twitch-gql-queries/dist/index.mjs
+const getQuery = ([operationName, sha256Hash], variables) => ({
+	operationName,
+	variables: variables ?? {},
+	extensions: { persistedQuery: {
+		version: 1,
+		sha256Hash
+	} }
+});
+const CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko";
+const gqlRequest = async (queries, requestInit) => {
 	if (queries.length === 0) return [];
 	if (queries.length > 35) throw new Error(`Too many queries. Max: 35`);
 	const res = await fetch("https://gql.twitch.tv/gql", {
@@ -27,46 +35,11 @@ var gqlRequest = async (queries, requestInit) => {
 	if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
 	return res.json();
 };
-var getQueryFfzRecentBroadcasts = (variables) => ({
-	operationName: "FFZ_RecentBroadcasts",
-	variables,
-	extensions: { persistedQuery: {
-		version: 1,
-		sha256Hash: "a92c0ad34fdba9b3f5e6125dce4b0acc9373f2b2c06c74c92187749d12f73d4c"
-	} }
-});
-var getQueryPlaybackAccessToken = (variables) => ({
-	operationName: "PlaybackAccessToken",
-	variables,
-	extensions: { persistedQuery: {
-		version: 1,
-		sha256Hash: "ed230aa1e33e07eebb8928504583da78a5173989fadfb1ac94be06a04f3cdbe9"
-	} }
-});
-var getQueryShareClipRenderStatus = (variables) => ({
-	operationName: "ShareClipRenderStatus",
-	variables,
-	extensions: { persistedQuery: {
-		version: 1,
-		sha256Hash: "324783ea014524fa10a88739aa507de7a52f9624574dba9739a52b8c97d885cf"
-	} }
-});
-var getQueryStreamMetadata = (variables) => ({
-	operationName: "StreamMetadata",
-	variables,
-	extensions: { persistedQuery: {
-		version: 1,
-		sha256Hash: "b57f9b910f8cd1a4659d894fe7550ccc81ec9052c01e438b290fd66a040b9b93"
-	} }
-});
-var getQueryVideoMetadata = (variables) => ({
-	operationName: "VideoMetadata",
-	variables,
-	extensions: { persistedQuery: {
-		version: 1,
-		sha256Hash: "45111672eea2e507f8ba44d101a61862f9c56b11dee09a15634cb75cb9b9084d"
-	} }
-});
+const FFZRecentBroadcastsQuery = ["FFZ_RecentBroadcasts", "a92c0ad34fdba9b3f5e6125dce4b0acc9373f2b2c06c74c92187749d12f73d4c"];
+const PlaybackAccessTokenQuery = ["PlaybackAccessToken", "ed230aa1e33e07eebb8928504583da78a5173989fadfb1ac94be06a04f3cdbe9"];
+const ShareClipRenderStatusQuery = ["ShareClipRenderStatus", "3b8a97585364d461df8cf78982eb343117832a1d6c2920aa07567c95413e6920"];
+const StreamMetadataQuery = ["StreamMetadata", "8f3c9ee3a77ff7e648268ac5daad6b36f2add690c628ec819e2e26aebc5cb767"];
+const VideoMetadataQuery = ["VideoMetadata", "45111672eea2e507f8ba44d101a61862f9c56b11dee09a15634cb75cb9b9084d"];
 //#endregion
 //#region src/utils/fetchText.ts
 const fetchText = async (url, description = "metadata") => {
@@ -92,7 +65,7 @@ const apiRequest = async (query, resultKey, description = "metadata") => {
 		return null;
 	}
 };
-const getVideoAccessToken = (id) => apiRequest(getQueryPlaybackAccessToken({
+const getVideoAccessToken = (id) => apiRequest(getQuery(PlaybackAccessTokenQuery, {
 	isLive: false,
 	login: "",
 	isVod: true,
@@ -100,16 +73,13 @@ const getVideoAccessToken = (id) => apiRequest(getQueryPlaybackAccessToken({
 	playerType: "site",
 	platform: "web"
 }), "videoPlaybackAccessToken", "video access token");
-const getStreamMetadata = (channelLogin) => apiRequest(getQueryStreamMetadata({
-	channelLogin,
-	includeIsDJ: false
-}), "user", "stream metadata");
-const getVideoMetadata = (videoId) => apiRequest(getQueryVideoMetadata({
+const getStreamMetadata = (channelLogin) => apiRequest(getQuery(StreamMetadataQuery, { channelLogin }), "user", "stream metadata");
+const getVideoMetadata = (videoId) => apiRequest(getQuery(VideoMetadataQuery, {
 	channelLogin: "",
 	videoID: videoId
 }), "video", "video metadata");
-const getClipMetadata = (slug) => apiRequest(getQueryShareClipRenderStatus({ slug }), "clip", "clip metadata");
-const getRecentArchiveBroadcasts = (channelId) => apiRequest(getQueryFfzRecentBroadcasts({
+const getClipMetadata = (slug) => apiRequest(getQuery(ShareClipRenderStatusQuery, { slug }), "clip", "clip metadata");
+const getRecentArchiveBroadcasts = (channelId) => apiRequest(getQuery(FFZRecentBroadcastsQuery, {
 	id: channelId,
 	type: "ARCHIVE",
 	sort: "TIME",
@@ -1206,8 +1176,8 @@ const getVideoInfoByVideoMeta = (videoMeta) => ({
 	title: videoMeta.title || DEFAULT_TITLE,
 	description: videoMeta.description,
 	duration: videoMeta.lengthSeconds,
-	uploader: videoMeta.owner.displayName,
-	uploader_id: videoMeta.owner.login,
+	uploader: videoMeta.owner?.displayName ?? null,
+	uploader_id: videoMeta.owner?.login ?? null,
 	upload_date: videoMeta.createdAt,
 	release_date: videoMeta.publishedAt,
 	view_count: videoMeta.viewCount,
