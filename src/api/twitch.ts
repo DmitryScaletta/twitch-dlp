@@ -1,14 +1,15 @@
 import {
-  getQueryFfzRecentBroadcasts,
-  getQueryPlaybackAccessToken,
-  getQueryShareClipRenderStatus,
-  getQueryStreamMetadata,
-  getQueryVideoMetadata,
+  FFZRecentBroadcastsQuery,
+  getQuery,
   gqlRequest,
-  type FfzRecentBroadcastsUser,
-  type PlaybackAccessTokenVideo,
-  type ShareClipRenderStatusClip,
-  type StreamMetadataUser,
+  PlaybackAccessTokenQuery,
+  ShareClipRenderStatusQuery,
+  StreamMetadataQuery,
+  VideoMetadataQuery,
+  type FFZRecentBroadcastsData,
+  type PlaybackAccessTokenData,
+  type ShareClipRenderStatusData,
+  type StreamMetadataData,
   type VideoMetadataVideo,
 } from 'twitch-gql-queries';
 import { fetchText } from '../utils/fetchText.ts';
@@ -33,7 +34,7 @@ const apiRequest = async <
 
 export const getVideoAccessToken = (id: string) =>
   apiRequest(
-    getQueryPlaybackAccessToken({
+    getQuery(PlaybackAccessTokenQuery, {
       isLive: false,
       login: '',
       isVod: true,
@@ -45,13 +46,13 @@ export const getVideoAccessToken = (id: string) =>
     'video access token',
   );
 
-export type StreamMetadata = StreamMetadataUser;
+export type StreamMetadata = NonNullable<StreamMetadataData['user']>;
 
 export const getStreamMetadata = (
   channelLogin: string,
 ): Promise<StreamMetadata | null> =>
   apiRequest(
-    getQueryStreamMetadata({ channelLogin, includeIsDJ: false }),
+    getQuery(StreamMetadataQuery, { channelLogin }),
     'user',
     'stream metadata',
   );
@@ -62,21 +63,27 @@ export const getVideoMetadata = (
   videoId: string,
 ): Promise<VideoMetadata | null> =>
   apiRequest(
-    getQueryVideoMetadata({ channelLogin: '', videoID: videoId }),
+    getQuery(VideoMetadataQuery, { channelLogin: '', videoID: videoId }),
     'video',
     'video metadata',
   );
 
-export type ClipMetadata = ShareClipRenderStatusClip;
+export type ClipMetadata = NonNullable<ShareClipRenderStatusData['clip']>;
 
 export const getClipMetadata = (slug: string): Promise<ClipMetadata | null> =>
-  apiRequest(getQueryShareClipRenderStatus({ slug }), 'clip', 'clip metadata');
+  apiRequest(
+    getQuery(ShareClipRenderStatusQuery, { slug }),
+    'clip',
+    'clip metadata',
+  );
+
+type RecentArchiveBroadcasts = NonNullable<FFZRecentBroadcastsData['user']>;
 
 export const getRecentArchiveBroadcasts = (
   channelId: string,
-): Promise<FfzRecentBroadcastsUser | null> =>
+): Promise<RecentArchiveBroadcasts | null> =>
   apiRequest(
-    getQueryFfzRecentBroadcasts({
+    getQuery(FFZRecentBroadcastsQuery, {
       id: channelId,
       type: 'ARCHIVE',
       sort: 'TIME',
@@ -88,7 +95,7 @@ export const getRecentArchiveBroadcasts = (
 
 export const getManifest = (
   videoId: string,
-  accessToken: PlaybackAccessTokenVideo,
+  accessToken: NonNullable<PlaybackAccessTokenData['videoPlaybackAccessToken']>,
 ) => {
   const params = new URLSearchParams({
     allow_source: 'true',

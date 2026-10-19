@@ -1,6 +1,6 @@
 import * as api from '../api/twitch.ts';
 import { PRIVATE_VIDEO_INSTRUCTIONS } from '../constants.ts';
-import type { AppArgs } from '../types.ts';
+import type { AppArgs, BroadcastType } from '../types.ts';
 import { downloadVideo } from '../utils/downloadVideo.ts';
 import {
   getVideoFormats,
@@ -17,7 +17,7 @@ export const downloadByVideoId = async (videoId: string, args: AppArgs) => {
   if (formats.length === 0 && videoMeta !== null) {
     console.log('Trying to get playlist from video metadata');
     formats = await getVideoFormatsByThumbUrl(
-      videoMeta.broadcastType,
+      videoMeta.broadcastType as BroadcastType,
       videoMeta.id,
       videoMeta.previewThumbnailURL,
     );
