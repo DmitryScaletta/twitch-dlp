@@ -16,8 +16,8 @@
   "scripts": {
     "start": "node ./src/main.ts",
     "build": "pnpx rolldown src/main.ts --file twitch-dlp.js --platform node",
-    "test": "node --experimental-transform-types --test **/*.test.ts",
-    "test:watch": "node --experimental-transform-types --test --watch **/*.test.ts",
+    "test": "node --test **/*.test.ts",
+    "test:watch": "node --test --watch **/*.test.ts",
     "test:types": "tsc --noEmit",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
