@@ -46,12 +46,6 @@ export type FragMetadata = {
   time: number;
 };
 
-export type BroadcastType =
-  | 'ARCHIVE'
-  | 'HIGHLIGHT'
-  | 'PAST_PREMIERE'
-  | 'UPLOAD';
-
 export type DownloadFormat = {
   format_id: string;
   width?: number | null;

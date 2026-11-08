@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
+import type { BroadcastType } from 'twitch-gql-queries';
 import * as api from '../api/twitch.ts';
 import { VOD_DOMAINS } from '../constants.ts';
-import type { BroadcastType, DownloadFormat } from '../types.ts';
+import type { DownloadFormat } from '../types.ts';
 import { parseDownloadFormats } from './parseDownloadFormats.ts';
 
 const FORMATS = [
