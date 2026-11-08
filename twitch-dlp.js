@@ -10,7 +10,7 @@ import os from "node:os";
 import stream from "node:stream";
 import crypto from "node:crypto";
 import assert from "node:assert/strict";
-//#region node_modules/.pnpm/twitch-gql-queries@1.0.1/node_modules/twitch-gql-queries/dist/index.mjs
+// node_modules/.pnpm/twitch-gql-queries@1.0.6/node_modules/twitch-gql-queries/dist/index.mjs
 const getQuery = ([operationName, sha256Hash], variables) => ({
 	operationName,
 	variables: variables ?? {},
@@ -37,11 +37,10 @@ const gqlRequest = async (queries, requestInit) => {
 };
 const FFZRecentBroadcastsQuery = ["FFZ_RecentBroadcasts", "a92c0ad34fdba9b3f5e6125dce4b0acc9373f2b2c06c74c92187749d12f73d4c"];
 const PlaybackAccessTokenQuery = ["PlaybackAccessToken", "ed230aa1e33e07eebb8928504583da78a5173989fadfb1ac94be06a04f3cdbe9"];
-const ShareClipRenderStatusQuery = ["ShareClipRenderStatus", "3b8a97585364d461df8cf78982eb343117832a1d6c2920aa07567c95413e6920"];
+const ShareClipRenderStatusQuery = ["ShareClipRenderStatus", "caf6ca9230dbca3314a0bca6f290c44bb26dfd6014c132c8f4c359750f4a87a5"];
 const StreamMetadataQuery = ["StreamMetadata", "8f3c9ee3a77ff7e648268ac5daad6b36f2add690c628ec819e2e26aebc5cb767"];
-const VideoMetadataQuery = ["VideoMetadata", "45111672eea2e507f8ba44d101a61862f9c56b11dee09a15634cb75cb9b9084d"];
-//#endregion
-//#region src/utils/fetchText.ts
+const VideoMetadataQuery = ["VideoMetadata", "b3da056388e7d942c097815e6547094119d4c78400af72ca4ee045ba8b422690"];
+// src/utils/fetchText.ts
 const fetchText = async (url, description = "metadata") => {
 	console.log(`Downloading ${description}`);
 	try {
@@ -53,8 +52,7 @@ const fetchText = async (url, description = "metadata") => {
 		return null;
 	}
 };
-//#endregion
-//#region src/api/twitch.ts
+// src/api/twitch.ts
 const apiRequest = async (query, resultKey, description = "metadata") => {
 	console.log(`Downloading ${description}`);
 	try {
@@ -132,8 +130,7 @@ const RET_CODE = {
 	UNKNOWN_ERROR: 1,
 	HTTP_RETURNED_ERROR: 22
 };
-//#endregion
-//#region src/lib/hlsParser.ts
+// src/lib/hlsParser.ts
 const PLAYLIST_LINE_KV_REGEX = /(?<key>[A-Z-]+)=(?:"(?<stringValue>[^"]+)"|(?<value>[^,]+))/g;
 const MASTER_PLAYLIST_TAGS = ["EXT-X-STREAM-INF", "EXT-X-MEDIA"];
 const parseAttrs = (line) => {
@@ -216,15 +213,13 @@ const parse = (playlist) => {
 	const lines = playlist.split("\n").map((line) => line.trim()).filter(Boolean);
 	return MASTER_PLAYLIST_TAGS.some((s) => lines.some((line) => line.startsWith(`#${s}:`))) ? parseMasterPlaylist(lines) : parseMediaPlaylist(lines);
 };
-//#endregion
-//#region src/lib/isInstalled.ts
+// src/lib/isInstalled.ts
 const isInstalled = (cmd) => new Promise((resolve) => {
 	const child = childProcess.spawn(cmd);
 	child.on("error", (e) => resolve(e.code !== "ENOENT"));
 	child.on("close", () => resolve(true));
 });
-//#endregion
-//#region src/lib/statsOrNull.ts
+// src/lib/statsOrNull.ts
 const statsOrNull = async (path) => {
 	try {
 		return await fsp.stat(path);
@@ -232,15 +227,13 @@ const statsOrNull = async (path) => {
 		return null;
 	}
 };
-//#endregion
-//#region src/lib/unlinkIfAny.ts
+// src/lib/unlinkIfAny.ts
 const unlinkIfAny = async (path) => {
 	try {
 		return await fsp.unlink(path);
 	} catch {}
 };
-//#endregion
-//#region src/utils/getPath.ts
+// src/utils/getPath.ts
 const ILLEGAL_PATH_CHARS_MAP = {
 	"\\": "⧹",
 	"/": "⧸",
@@ -274,8 +267,7 @@ const getPath = {
 	frag: (filePath, i) => `${filePath}.part-Frag${i}`,
 	fragUnmuted: (fragPath) => `${fragPath}-unmuted`
 };
-//#endregion
-//#region src/lib/spawn.ts
+// src/lib/spawn.ts
 const spawn = (command, args = [], silent = false) => new Promise((resolve, reject) => {
 	const child = childProcess.spawn(command, args);
 	if (!silent) {
@@ -285,8 +277,7 @@ const spawn = (command, args = [], silent = false) => new Promise((resolve, reje
 	child.on("error", (err) => reject(err));
 	child.on("close", (code) => resolve(code || 0));
 });
-//#endregion
-//#region src/merge/append.ts
+// src/merge/append.ts
 const concatFrags = async (files, outputPath) => {
 	const writeStream = fs.createWriteStream(outputPath, { flags: "w" });
 	try {
@@ -330,8 +321,7 @@ const mergeFrags$2 = async (fragFiles, outputPath) => {
 	await fsp.rename(outputPathTmp, outputPath);
 	return retCode;
 };
-//#endregion
-//#region src/merge/ffconcat.ts
+// src/merge/ffconcat.ts
 const MAX_INT_STR = "2147483647";
 const handleFfmpegOutput = (stream) => {
 	let isInputSection = true;
@@ -401,8 +391,7 @@ const mergeFrags$1 = async (fragFiles, outputPath) => {
 	fsp.unlink(ffconcatPath);
 	return retCode;
 };
-//#endregion
-//#region src/merge/index.ts
+// src/merge/index.ts
 const [FFCONCAT, APPEND] = MERGE_METHODS;
 const mergeFrags = async (method, frags, outputPath, keepFragments) => {
 	if (frags.length === 0) {
@@ -432,16 +421,14 @@ const mergeFrags = async (method, frags, outputPath, keepFragments) => {
 	if (!keepFrags) await Promise.all([...fragFiles.map(([filename]) => unlinkIfAny(filename)), unlinkIfAny(getPath.playlist(outputPath))]);
 	return retCode;
 };
-//#endregion
-//#region src/lib/groupBy.ts
+// src/lib/groupBy.ts
 const groupBy = (array, getKey) => array.reduce((groups, item) => {
 	const key = getKey(item);
 	if (!groups[key]) groups[key] = [];
 	groups[key].push(item);
 	return groups;
 }, {});
-//#endregion
-//#region src/stats.ts
+// src/stats.ts
 const DL_EVENT = {
 	INIT: "INIT",
 	FETCH_PLAYLIST_SUCCESS: "FETCH_PLAYLIST_SUCCESS",
@@ -562,8 +549,7 @@ const showStats = async (logPath) => {
 		...statsUnmuted
 	} : stats);
 };
-//#endregion
-//#region src/downloaders/aria2c.ts
+// src/downloaders/aria2c.ts
 const isUrlsAvailableAria2c = (urls, urlsPath, gzip) => new Promise((resolve) => {
 	const args = [
 		"--dry-run",
@@ -609,8 +595,7 @@ const downloadFile$3 = async (url, destPath, rateLimit = "0", gzip = false) => n
 	child.on("error", () => resolve(RET_CODE.UNKNOWN_ERROR));
 	child.on("close", (code) => resolve(code || RET_CODE.OK));
 });
-//#endregion
-//#region src/downloaders/curl.ts
+// src/downloaders/curl.ts
 const getIsUrlsAvailableCurl = (urls, gzip) => new Promise((resolve) => {
 	const args = [
 		"--parallel",
@@ -661,8 +646,7 @@ const downloadFile$2 = async (url, destPath, retries, rateLimit = "0", gzip = fa
 	child.on("error", () => resolve(RET_CODE.UNKNOWN_ERROR));
 	child.on("close", (code) => resolve(code || RET_CODE.OK));
 });
-//#endregion
-//#region src/lib/throttleTransform.ts
+// src/lib/throttleTransform.ts
 var ThrottleTransform = class extends stream.Transform {
 	rateBps;
 	startTime;
@@ -688,8 +672,7 @@ var ThrottleTransform = class extends stream.Transform {
 		}
 	}
 };
-//#endregion
-//#region src/downloaders/fetch.ts
+// src/downloaders/fetch.ts
 const WRONG_LIMIT_RATE_SYNTAX = "Wrong --limit-rate syntax";
 const RATE_LIMIT_MULTIPLIER = {
 	B: 1,
@@ -728,8 +711,7 @@ const downloadFile$1 = async (url, destPath, rateLimit, gzip = true) => {
 		return RET_CODE.UNKNOWN_ERROR;
 	}
 };
-//#endregion
-//#region src/downloaders/index.ts
+// src/downloaders/index.ts
 const [ARIA2C$1, CURL$1, FETCH$1] = DOWNLOADERS;
 const downloadFile = async (downloader, url, destPath, rateLimit, gzip, retries = 5) => {
 	if (downloader === CURL$1) return downloadFile$2(url, destPath, retries, rateLimit, gzip);
@@ -748,8 +730,7 @@ const IS_URLS_AVAILABLE_MAP = {
 	[FETCH$1]: isUrlsAvailable$1
 };
 const isUrlsAvailable = async (downloader, urls) => IS_URLS_AVAILABLE_MAP[downloader](urls);
-//#endregion
-//#region src/lib/isFMp4MediaFile.ts
+// src/lib/isFMp4MediaFile.ts
 const isFMp4MediaFile = async (filePath) => {
 	const fd = await fsp.open(filePath, "r");
 	try {
@@ -762,8 +743,7 @@ const isFMp4MediaFile = async (filePath) => {
 		await fd.close();
 	}
 };
-//#endregion
-//#region src/lib/isMp4File.ts
+// src/lib/isMp4File.ts
 const isMp4File = async (filePath) => {
 	const fd = await fsp.open(filePath, "r");
 	try {
@@ -774,8 +754,7 @@ const isMp4File = async (filePath) => {
 		await fd.close();
 	}
 };
-//#endregion
-//#region src/lib/isTsFile.ts
+// src/lib/isTsFile.ts
 const PACKET_SIZE = 188;
 const TS_SYNC_BYTE = 71;
 const isTsFile = async (filePath, packetsToCheck = 1) => {
@@ -790,8 +769,7 @@ const isTsFile = async (filePath, packetsToCheck = 1) => {
 		await fd.close();
 	}
 };
-//#endregion
-//#region src/utils/downloadFrag.ts
+// src/utils/downloadFrag.ts
 const CHECK_FILE_TYPE = {
 	any: () => true,
 	ts: isTsFile,
@@ -820,22 +798,19 @@ const downloadFrag = async (downloader, url, destPath, limitRateArg, gzip, type 
 		time: endTime - startTime
 	};
 };
-//#endregion
-//#region src/utils/getDlFormat.ts
+// src/utils/getDlFormat.ts
 const getDlFormat = (formats, formatArg) => {
 	const dlFormat = formatArg === "best" ? formats[0] : formats.find((f) => f.format_id.toLowerCase() === formatArg.toLowerCase());
 	if (!dlFormat) throw new Error(`Wrong format: ${formatArg}`);
 	return dlFormat;
 };
-//#endregion
-//#region src/utils/getExistingFrags.ts
+// src/utils/getExistingFrags.ts
 const getExistingFrags = (frags, outputPath, dir) => {
 	const existingFrags = frags.filter((frag) => dir.includes(path.parse(getPath.frag(outputPath, frag.idx + 1)).base));
 	existingFrags.isFMp4 = frags.isFMp4;
 	return existingFrags;
 };
-//#endregion
-//#region src/utils/getFormatsTable.ts
+// src/utils/getFormatsTable.ts
 const formatToTableRow = ({ format_id, width, height, frameRate, totalBitrate, source }) => {
 	const fmt = {};
 	fmt.format_id = format_id;
@@ -849,8 +824,7 @@ const formatToTableRow = ({ format_id, width, height, frameRate, totalBitrate, s
 	return fmt;
 };
 const getFormatsTable = (formats) => [...formats].reverse().map(formatToTableRow);
-//#endregion
-//#region src/utils/getFragsForDownloading.ts
+// src/utils/getFragsForDownloading.ts
 const getFragsForDownloading = (playlistUrl, playlist, args) => {
 	const baseUrl = playlistUrl.split("/").slice(0, -1).join("/");
 	let frags = [];
@@ -891,8 +865,7 @@ const getFragsForDownloading = (playlistUrl, playlist, args) => {
 	dlFrags.isFMp4 = !!mapFrag;
 	return dlFrags;
 };
-//#endregion
-//#region src/utils/getTryUnmute.ts
+// src/utils/getTryUnmute.ts
 const ONE_WEEK_MS = 6048e5;
 const getTryUnmute = (videoInfo) => {
 	const videoDate = videoInfo.upload_date || videoInfo.release_date;
@@ -900,8 +873,7 @@ const getTryUnmute = (videoInfo) => {
 	const videoDateMs = new Date(videoDate).getTime();
 	return Date.now() - videoDateMs < ONE_WEEK_MS;
 };
-//#endregion
-//#region src/utils/getUnmutedFrag.ts
+// src/utils/getUnmutedFrag.ts
 const LOWER_AUDIO_QUALITY = ["160p30", "360p30"];
 const SAME_FORMAT_SLUGS = ["audio_only", ...LOWER_AUDIO_QUALITY];
 const getFormatSlug = (url) => url.split("/").at(-2);
@@ -949,8 +921,7 @@ const getUnmutedFrag = async (downloader, unmuteArg, fragUrl, formats) => {
 	}
 	throw new Error();
 };
-//#endregion
-//#region src/utils/processUnmutedFrags.ts
+// src/utils/processUnmutedFrags.ts
 const processUnmutedFrags = async (frags, outputPath, dir, writeLog) => {
 	for (const frag of frags) {
 		const fragPath = getPath.frag(outputPath, frag.idx + 1);
@@ -990,11 +961,9 @@ const processUnmutedFrags = async (frags, outputPath, dir, writeLog) => {
 		writeLog?.([DL_EVENT.FRAG_REPLACE_AUDIO_SUCCESS, frag.idx]);
 	}
 };
-//#endregion
-//#region src/utils/readOutputDir.ts
+// src/utils/readOutputDir.ts
 const readOutputDir = (outputPath) => fsp.readdir(path.parse(outputPath).dir || ".");
-//#endregion
-//#region src/utils/showProgress.ts
+// src/utils/showProgress.ts
 const UNITS = [
 	"B",
 	"KB",
@@ -1052,8 +1021,7 @@ const showProgress = (downloadedFrags, fragsCount) => {
 	process.stdout.write("\r" + progress.join(""));
 	if (!process.stdout.isTTY) process.stdout.write("\n");
 };
-//#endregion
-//#region src/utils/downloadVideo.ts
+// src/utils/downloadVideo.ts
 const WAIT_BETWEEN_CYCLES_SEC = 60;
 const RETRY_MESSAGE = `Retry every ${WAIT_BETWEEN_CYCLES_SEC} second(s)`;
 const downloadVideo = async (formats, videoInfo, args) => {
@@ -1168,8 +1136,7 @@ const downloadVideo = async (formats, videoInfo, args) => {
 	await showStats(logPath);
 	if (!args["keep-fragments"] && !args["keep-log"] && !retCode) await fsp.unlink(logPath);
 };
-//#endregion
-//#region src/utils/getVideoInfo.ts
+// src/utils/getVideoInfo.ts
 const DEFAULT_TITLE = "Untitled Broadcast";
 const getVideoInfoByVideoMeta = (videoMeta) => ({
 	id: `v${videoMeta.id}`,
@@ -1219,8 +1186,7 @@ const getVideoInfoByClipMeta = (clipMeta) => ({
 	view_count: clipMeta.viewCount,
 	ext: "mp4"
 });
-//#endregion
-//#region src/utils/downloadWithStreamlink.ts
+// src/utils/downloadWithStreamlink.ts
 const DEFAULT_STREAMLINK_ARGS = ["--twitch-force-client-integrity", "--twitch-access-token-param=playerType=frontpage"];
 const getDefaultOutputTemplate = () => {
 	return `%(uploader)s (live) ${(/* @__PURE__ */ new Date()).toISOString().slice(0, 16).replace("T", " ").replace(":", "_")} [%(id)s].%(ext)s`;
@@ -1248,8 +1214,7 @@ const downloadWithStreamlink = async (link, streamMeta, channelLogin, args) => {
 		...streamlinkArgs.length ? streamlinkArgs : DEFAULT_STREAMLINK_ARGS
 	]);
 };
-//#endregion
-//#region src/utils/parseDownloadFormats.ts
+// src/utils/parseDownloadFormats.ts
 const parseDownloadFormats = (playlistContent) => {
 	let formats = [];
 	const playlist = parse(playlistContent);
@@ -1311,8 +1276,7 @@ const parseDownloadFormats = (playlistContent) => {
 	});
 	return formats;
 };
-//#endregion
-//#region src/utils/getVideoFormats.ts
+// src/utils/getVideoFormats.ts
 const FORMATS = [
 	"chunked",
 	"1440p60",
@@ -1383,8 +1347,7 @@ const getVideoFormatsByThumbUrl = (broadcastType, videoId, thumbUrl) => {
 	const { fullVodPath } = m.groups;
 	return getVideoFormatsByFullVodPath(fullVodPath, broadcastType, videoId);
 };
-//#endregion
-//#region src/utils/getLiveVideoInfo.ts
+// src/utils/getLiveVideoInfo.ts
 const getLiveVideoInfo = async (streamMeta, channelLogin) => {
 	let formats = [];
 	let videoInfo = null;
@@ -1412,8 +1375,7 @@ const getLiveVideoInfo = async (streamMeta, channelLogin) => {
 		videoInfo
 	};
 };
-//#endregion
-//#region src/commands/downloadByChannelLogin.ts
+// src/commands/downloadByChannelLogin.ts
 const downloadByChannelLogin = async (channelLogin, args) => {
 	const delay = args["retry-streams"] || 0;
 	const isLiveFromStart = args["live-from-start"];
@@ -1449,8 +1411,7 @@ const downloadByChannelLogin = async (channelLogin, args) => {
 		await timers.setTimeout(delay * 1e3);
 	}
 };
-//#endregion
-//#region src/api/streamcharts.ts
+// src/api/streamcharts.ts
 const LIVEWIRE_COMPONENTS_REGEX = /<div\s+[^>]*wire:id="[^"]+"[^>]*wire:initial-data="(?<data>[^"]+)"[^>]*>/g;
 const parseLivewireComponents = (html) => {
 	const results = [];
@@ -1461,8 +1422,7 @@ const parseLivewireComponents = (html) => {
 	}
 	return results;
 };
-//#endregion
-//#region src/api/sullygnome.ts
+// src/api/sullygnome.ts
 const BASE_URL = "https://sullygnome.com/api";
 const STANDARD_SEARCH_ITEM_TYPE = {
 	CHANNEL: 1,
@@ -1479,8 +1439,7 @@ const getChannelStreams = async (range, channelId, page = 0, pageSize = 100) => 
 	const url = `${BASE_URL}/tables/channeltables/streams/${range}/${channelId}/%20/${pageN}/1/desc/${start}/${pageSize}`;
 	return (await fetch(url)).json();
 };
-//#endregion
-//#region src/api/twitchtracker.ts
+// src/api/twitchtracker.ts
 const parseEcs = (html) => {
 	const m = html.match(/<meta id="ecs" content="([^"]+)">/);
 	if (!m) throw new Error(`Element not found: meta#ecs`);
@@ -1491,8 +1450,7 @@ const parseEcs = (html) => {
 	return ecs;
 };
 const getStreamInfo = (html) => parseEcs(html);
-//#endregion
-//#region src/browsers/browser.ts
+// src/browsers/browser.ts
 const checkExecutable = (executable) => {
 	try {
 		fs.accessSync(executable);
@@ -1540,8 +1498,7 @@ const launch = (executable, args, timeoutMs = null) => {
 	proc.stderr?.on("data", () => {});
 	return proc;
 };
-//#endregion
-//#region src/browsers/chromium.ts
+// src/browsers/chromium.ts
 const isWin32 = process.platform === "win32";
 const isDarwin = process.platform === "darwin";
 const CHROMIUM_LAUNCH_ARGS = [
@@ -1643,8 +1600,7 @@ const getWsUrls = async (host, port) => {
 	}
 	throw new Error("[webbrowser] Failed to get websocket URL");
 };
-//#endregion
-//#region src/lib/cdp.ts
+// src/lib/cdp.ts
 var CDP = class CDP {
 	ws = null;
 	timeoutMs = null;
@@ -1705,8 +1661,7 @@ var CDP = class CDP {
 		this.ws?.close();
 	}
 };
-//#endregion
-//#region src/utils/fetchHtmlWithBrowser.ts
+// src/utils/fetchHtmlWithBrowser.ts
 const DOCUMENT_WAIT_TIMEOUT = 1e4;
 const cleanupBrowser = async (browser, browserExe, userDataDir) => {
 	console.log("[webbrowser] Closing browser");
@@ -1776,8 +1731,7 @@ const fetchHtmlWithBrowser = async (url, args) => {
 		await cleanupBrowser(browser, browserExe, userDataDir);
 	}
 };
-//#endregion
-//#region src/utils/getWhyCannotDownload.ts
+// src/utils/getWhyCannotDownload.ts
 const getWhyCannotDownload = async () => {
 	try {
 		const mdPath = path.resolve(import.meta.dirname, "DOWNLOAD_PRIVATE_VIDEOS.md");
@@ -1789,8 +1743,7 @@ const getWhyCannotDownload = async () => {
 		return "";
 	}
 };
-//#endregion
-//#region src/commands/downloadByVodPath.ts
+// src/commands/downloadByVodPath.ts
 const downloadByVodPath = async (parsedLink, args) => {
 	const formats = await getVideoFormatsByFullVodPath(getFullVodPath(parsedLink.vodPath));
 	if (formats.length === 0) {
@@ -1800,8 +1753,7 @@ const downloadByVodPath = async (parsedLink, args) => {
 	const videoInfo = getVideoInfoByVodPath(parsedLink);
 	return downloadVideo(formats, videoInfo, args);
 };
-//#endregion
-//#region src/commands/downloadByStatsService.ts
+// src/commands/downloadByStatsService.ts
 var StreamNotFoundError = class extends Error {
 	constructor(message) {
 		super(message);
@@ -1855,8 +1807,7 @@ const downloadByStatsService = async ({ channelLogin, streamId, service, url }, 
 		startTimestamp
 	}, args);
 };
-//#endregion
-//#region src/commands/downloadByVideoId.ts
+// src/commands/downloadByVideoId.ts
 const downloadByVideoId = async (videoId, args) => {
 	let [formats, videoMeta] = await Promise.all([getVideoFormats(videoId), getVideoMetadata(videoId)]);
 	if (formats.length === 0 && videoMeta !== null) {
@@ -1867,8 +1818,7 @@ const downloadByVideoId = async (videoId, args) => {
 	const videoInfo = getVideoInfoByVideoMeta(videoMeta);
 	return downloadVideo(formats, videoInfo, args);
 };
-//#endregion
-//#region src/commands/downloadClip.ts
+// src/commands/downloadClip.ts
 const getClipFormats = (clipMeta) => {
 	const formats = [];
 	const { signature: sig, value: token } = clipMeta.playbackAccessToken;
@@ -1909,8 +1859,7 @@ const downloadClip = async (slug, args) => {
 	if (!await downloadFrag(args.downloader, dlFormat.url, destPath, args["limit-rate"], void 0, "mp4")) throw new Error("[download] Download failed");
 	console.log("[download] Done");
 };
-//#endregion
-//#region src/commands/mergeFragments.ts
+// src/commands/mergeFragments.ts
 const tryUnmuteFrags = async (outputPath, log, frags, formats, args, writeLog) => {
 	const fragsInfo = getFragsInfo(log);
 	for (const frag of frags) {
@@ -1967,8 +1916,7 @@ const mergeFragments = async (outputPath, args) => {
 	await mergeFrags(args["merge-method"], frags, outputPath, true);
 	await showStats(logPath);
 };
-//#endregion
-//#region src/commands/showHelp.ts
+// src/commands/showHelp.ts
 const showHelp = async () => {
 	const readmePath = path.resolve(import.meta.dirname, "README.md");
 	const entries = (await fsp.readFile(readmePath, "utf8")).split(/\s## (.*)/g).slice(1);
@@ -1986,15 +1934,13 @@ const showHelp = async () => {
 	];
 	console.log(help.join("\n"));
 };
-//#endregion
-//#region src/commands/showVersion.ts
+// src/commands/showVersion.ts
 const showVersion = async () => {
 	const pkgPath = path.resolve(import.meta.dirname, "package.json");
 	const pkg = await fsp.readFile(pkgPath, "utf8");
 	console.log(JSON.parse(pkg).version);
 };
-//#endregion
-//#region src/utils/args/getDownloader.ts
+// src/utils/args/getDownloader.ts
 const [ARIA2C, CURL, FETCH] = DOWNLOADERS;
 const getDownloader = async (downloaderArg) => {
 	if (downloaderArg === FETCH) return FETCH;
@@ -2009,8 +1955,7 @@ const getDownloader = async (downloaderArg) => {
 	}
 	throw new Error(`Unknown downloader: ${downloaderArg}. Available: ${DOWNLOADERS.join(", ")}`);
 };
-//#endregion
-//#region src/utils/args/parseDownloadSectionsArg.ts
+// src/utils/args/parseDownloadSectionsArg.ts
 const DOWNLOAD_SECTIONS_ERROR = "Wrong --download-sections syntax";
 const DOWNLOAD_SECTIONS_REGEX = /^\*(?:(?:(?<startH>\d{1,2}):)?(?<startM>\d{1,2}):)?(?:(?<startS>\d{1,2}))-(?:(?:(?:(?<endH>\d{1,2}):)?(?<endM>\d{1,2}):)?(?:(?<endS>\d{1,2}))|(?<inf>inf))$/;
 const parseDownloadSectionsArg = (downloadSectionsArg) => {
@@ -2030,8 +1975,7 @@ const parseDownloadSectionsArg = (downloadSectionsArg) => {
 	if (startTime >= endTime) throw new Error(DOWNLOAD_SECTIONS_ERROR);
 	return [startTime, endTime];
 };
-//#endregion
-//#region src/utils/args/normalizeArgs.ts
+// src/utils/args/normalizeArgs.ts
 const BOOL_TRUE = [
 	"true",
 	"yes",
@@ -2087,8 +2031,7 @@ var CLIP_REGEX_EXACT = new RegExp(`^https?:\\/\\/(?:clips\\.twitch\\.tv\\/(?:emb
 var VIDEO_REGEX_EXACT = new RegExp(`^https?:\\/\\/(?:(?:(?:www|go|m)\\.)?twitch\\.tv\\/(?:videos|(?<channel>[^/]+)\\/v(?:ideo)?)\\/|player\\.twitch\\.tv\\/\\?.*?\\bvideo=v?|www\\.twitch\\.tv\\/(?:[^/]+)\\/schedule\\?vodID=)(?<id>\\d+)\\S*$`);
 var CHANNEL_REGEX_EXACT = new RegExp(`^https?:\\/\\/(?:(?:(?:www|go|m)\\.)?twitch\\.tv\\/|player\\.twitch\\.tv\\/\\?.*?\\bchannel=)(?<channel>\\w+)[^\\s/]*$`);
 new RegExp(`^https?:\\/\\/(?:(?:(?:www|go|m)\\.)?twitch\\.tv\\/collections\\/|player\\.twitch\\.tv\\/\\?.*?\\bcollection=)(?<id>[\\w-]+)\\S*$`);
-//#endregion
-//#region src/utils/args/parseLink.ts
+// src/utils/args/parseLink.ts
 const VOD_PATH_REGEX = /^video:(?<vodPath>(?<channelLogin>\w+)_(?<videoId>\d+)_(?<startTimestamp>\d+))$/;
 const TWITCHTRACKER_REGEX = /^(?:https:\/\/)?(?<service>twitchtracker)\.com\/(?<channelName>[^/]+)\/streams\/(?<streamId>\d+)$/;
 const STREAMSCHARTS_REGEX = /^(?:https:\/\/)?(?<service>streamscharts)\.com\/channels\/(?<channelName>[^/]+)\/streams\/(?<streamId>\d+)$/;
@@ -2136,8 +2079,7 @@ const parseLink = (link) => {
 	}
 	throw new Error("Wrong link");
 };
-//#endregion
-//#region src/main.ts
+// src/main.ts
 const getArgs = () => util.parseArgs({
 	args: process.argv.slice(2),
 	options: {
@@ -2248,5 +2190,4 @@ const main = async () => {
 	if (link.type === "statsService") return downloadByStatsService(link, args);
 };
 main().catch((e) => console.error(util.styleText("red", "ERROR:"), e.message));
-//#endregion
 export { getArgs };
